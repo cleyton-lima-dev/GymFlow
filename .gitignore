@@ -1,0 +1,20 @@
+# Visual Studio
+.vs/
+
+# Visual Studio Code
+.vscode/
+
+# .NET
+bin/
+obj/
+
+# Flutter
+.dart_tool/
+build/
+
+# Logs
+*.log
+
+# Sistema
+.DS_Store
+Thumbs.db
