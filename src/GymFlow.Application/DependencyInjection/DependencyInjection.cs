@@ -1,0 +1,15 @@
+﻿using GymFlow.Application.Services;
+using Microsoft.Extensions.DependencyInjection;
+
+namespace GymFlow.Application.DependencyInjection;
+
+public static class DependencyInjection
+{
+    public static IServiceCollection AddApplication(
+        this IServiceCollection services)
+    {
+        services.AddScoped<AuthenticationService>();
+
+        return services;
+    }
+}
