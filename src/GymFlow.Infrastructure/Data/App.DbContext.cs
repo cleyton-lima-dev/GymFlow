@@ -14,6 +14,8 @@ public class AppDbContext : DbContext
 
     public DbSet<Student> Students { get; set; }
 
+    public DbSet<Exercise> Exercises { get; set; }
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(AppDbContext).Assembly);
