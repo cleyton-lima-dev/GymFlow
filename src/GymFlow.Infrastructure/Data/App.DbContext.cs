@@ -11,10 +11,11 @@ public class AppDbContext : DbContext
     }
 
     public DbSet<User> Users { get; set; }
-
     public DbSet<Student> Students { get; set; }
-
     public DbSet<Exercise> Exercises { get; set; }
+    public DbSet<WorkoutTemplate> WorkoutTemplates { get; set; }
+    public DbSet<WorkoutTemplateDay> WorkoutTemplateDays { get; set; }
+    public DbSet<WorkoutTemplateExercise> WorkoutTemplateExercises { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
