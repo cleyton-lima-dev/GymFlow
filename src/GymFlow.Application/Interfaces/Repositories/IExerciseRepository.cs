@@ -14,6 +14,10 @@ public interface IExerciseRepository
     string? muscleGroup = null,
     bool? isActive = null);
 
+    Task<List<Exercise>> GetByIdsAsync(
+    IEnumerable<Guid> ids,
+    Guid gymId);
+
     Task<Exercise?> GetByNameAsync(string name, Guid gymId);
 
     Task UpdateAsync(Exercise exercise);

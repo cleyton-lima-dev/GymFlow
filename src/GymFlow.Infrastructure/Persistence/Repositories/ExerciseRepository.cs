@@ -78,4 +78,14 @@ public class ExerciseRepository : IExerciseRepository
         _context.Exercises.Update(exercise);
         await _context.SaveChangesAsync();
     }
+
+    public async Task<List<Exercise>> GetByIdsAsync(
+    IEnumerable<Guid> ids,
+    Guid gymId)
+    {
+        return await _context.Exercises
+            .AsNoTracking()
+            .Where(x => ids.Contains(x.Id) && x.GymId == gymId)
+            .ToListAsync();
+    }
 }
