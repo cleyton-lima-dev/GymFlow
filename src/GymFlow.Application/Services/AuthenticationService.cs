@@ -2,6 +2,7 @@
 using GymFlow.Application.Interfaces.Repositories;
 using GymFlow.Application.Interfaces.Security;
 using GymFlow.Domain.Entities;
+using GymFlow.Domain.Enums;
 
 namespace GymFlow.Application.Services;
 
@@ -47,9 +48,15 @@ public class AuthenticationService
             Token = token
         };
     }
-    public async Task<bool> RegisterAsync(RegisterRequest request)
+    public async Task<bool> RegisterAsync(
+    Guid gymId,
+    RegisterRequest request)
     {
-        var existingUser = await _userRepository.GetByEmailAsync(request.Email);
+        var normalizedEmail =
+            request.Email.Trim().ToLowerInvariant();
+
+        var existingUser =
+            await _userRepository.GetByEmailAsync(normalizedEmail);
 
         if (existingUser is not null)
             return false;
@@ -57,11 +64,14 @@ public class AuthenticationService
         var user = new User
         {
             Id = Guid.NewGuid(),
-            GymId = request.GymId,
-            Name = request.Name,
-            Email = request.Email.Trim().ToLowerInvariant(),
-            PasswordHash = _passwordHasher.Hash(request.Password),
-            Role = request.Role,
+            GymId = gymId,
+            Name = request.Name.Trim(),
+            Email = normalizedEmail,
+            PasswordHash =
+                _passwordHasher.Hash(request.Password),
+
+            Role = UserRole.Professor,
+
             IsActive = true,
             CreatedAt = DateTime.UtcNow
         };
