@@ -43,4 +43,16 @@ public class StudentRepository : IStudentRepository
     {
         await _context.SaveChangesAsync();
     }
+
+    public async Task<Student?> GetByUserIdAndGymIdAsync(
+    Guid userId,
+    Guid gymId)
+    {
+        return await _context.Students
+            .AsNoTracking()
+            .Include(x => x.User)
+            .FirstOrDefaultAsync(x =>
+                x.UserId == userId &&
+                x.User.GymId == gymId);
+    }
 }

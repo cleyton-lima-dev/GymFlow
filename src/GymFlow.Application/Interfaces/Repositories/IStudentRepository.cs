@@ -11,4 +11,8 @@ public interface IStudentRepository
     Task<Student?> GetByIdAndGymIdAsync(Guid studentId, Guid gymId);
 
     Task UpdateAsync(Student student);
+
+    Task<Student?> GetByUserIdAndGymIdAsync(
+         Guid userId,
+         Guid gymId);
 }

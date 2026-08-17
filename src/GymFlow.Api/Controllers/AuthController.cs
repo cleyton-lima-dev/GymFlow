@@ -32,10 +32,17 @@ public class AuthController : ControllerBase
         return Ok(result);
     }
 
+    [Authorize(Roles = "Admin")]
     [HttpPost("register")]
-    public async Task<IActionResult> Register(RegisterRequest request)
+    public async Task<IActionResult> Register(
+    RegisterRequest request)
     {
-        var created = await _authenticationService.RegisterAsync(request);
+        if (!TryGetGymId(out var gymId))
+            return Unauthorized();
+
+        var created =
+            await _authenticationService
+                .RegisterAsync(gymId, request);
 
         if (!created)
         {
@@ -47,9 +54,11 @@ public class AuthController : ControllerBase
 
         return StatusCode(201, new
         {
-            message = "Usuário criado com sucesso."
+            message = "Professor criado com sucesso."
         });
     }
+
+
     [Authorize]
     [HttpGet("me")]
     public IActionResult Me()
@@ -68,5 +77,15 @@ public class AuthController : ControllerBase
         {
             message = "Acesso de administrador autorizado."
         });
+    }
+
+    private bool TryGetGymId(out Guid gymId)
+    {
+        var gymIdClaim =
+            User.FindFirst("gym_id")?.Value;
+
+        return Guid.TryParse(
+            gymIdClaim,
+            out gymId);
     }
 }
