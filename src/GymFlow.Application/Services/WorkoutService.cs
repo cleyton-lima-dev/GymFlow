@@ -1,4 +1,5 @@
-﻿using GymFlow.Application.DTOs.Workouts;
+﻿using GymFlow.Application.DTOs.Common;
+using GymFlow.Application.DTOs.Workouts;
 using GymFlow.Application.Interfaces.Repositories;
 using GymFlow.Domain.Entities;
 
@@ -341,11 +342,27 @@ public class WorkoutService
                 "Dia de treino não encontrado no treino ativo do aluno.");
         }
 
+        var now = DateTime.UtcNow;
+        var executionDate = DateOnly.FromDateTime(now);
+
+        var alreadyCompleted =
+            await _workoutExecutionRepository
+                .ExistsForWorkoutDayOnDateAsync(
+                    workoutDayId,
+                    now);
+
+        if (alreadyCompleted)
+        {
+            throw new InvalidOperationException(
+                "Este treino já foi concluído hoje.");
+        }
+
         var execution = new WorkoutExecution
         {
             Id = Guid.NewGuid(),
             WorkoutDayId = workoutDayId,
-            CompletedAt = DateTime.UtcNow
+            ExecutionDate = executionDate,
+            CompletedAt = now
         };
 
         await _workoutExecutionRepository
@@ -362,12 +379,11 @@ public class WorkoutService
         };
     }
 
-    public async Task<List<WorkoutHistoryItemResponse>>
-    GetHistoryByStudentAsync(
-        Guid gymId,
-        Guid studentId,
-        int page = 1,
-        int pageSize = 20)
+    public async Task<PagedResponse<WorkoutHistoryItemResponse>> GetHistoryAsync(
+    Guid gymId,
+    Guid studentId,
+    int page,
+    int pageSize)
     {
         if (page <= 0)
         {
@@ -389,35 +405,37 @@ public class WorkoutService
 
         var skip = (page - 1) * pageSize;
 
-        var executions =
-            await _workoutExecutionRepository
-                .GetHistoryByStudentAsync(
-                    studentId,
-                    gymId,
-                    skip,
-                    pageSize);
+        var executions = await _workoutExecutionRepository
+            .GetHistoryByStudentAsync(
+                studentId,
+                gymId,
+                skip,
+                pageSize);
 
-        return executions
-            .Select(x => new WorkoutHistoryItemResponse
+        var totalCount = await _workoutExecutionRepository
+            .CountHistoryByStudentAsync(
+                studentId,
+                gymId);
+
+        var items = executions
+            .Select(execution => new WorkoutHistoryItemResponse
             {
-                ExecutionId = x.Id,
-
-                WorkoutId =
-                    x.WorkoutDay.WorkoutId,
-
-                WorkoutName =
-                    x.WorkoutDay.Workout.Name,
-
-                WorkoutDayId =
-                    x.WorkoutDayId,
-
-                WorkoutDayName =
-                    x.WorkoutDay.Name,
-
-                CompletedAt =
-                    x.CompletedAt
+                ExecutionId = execution.Id,
+                WorkoutId = execution.WorkoutDay.Workout.Id,
+                WorkoutName = execution.WorkoutDay.Workout.Name,
+                WorkoutDayId = execution.WorkoutDayId,
+                WorkoutDayName = execution.WorkoutDay.Name,
+                CompletedAt = execution.CompletedAt
             })
             .ToList();
+
+        return new PagedResponse<WorkoutHistoryItemResponse>
+        {
+            Items = items,
+            Page = page,
+            PageSize = pageSize,
+            TotalCount = totalCount
+        };
     }
 
     public async Task<WorkoutDetailResponse?> GetActiveForUserAsync(
@@ -452,12 +470,11 @@ public class WorkoutService
             workoutDayId);
     }
 
-    public async Task<List<WorkoutHistoryItemResponse>>
-    GetHistoryForUserAsync(
-        Guid gymId,
-        Guid userId,
-        int page = 1,
-        int pageSize = 20)
+    public async Task<PagedResponse<WorkoutHistoryItemResponse>> GetHistoryForUserAsync(
+    Guid gymId,
+    Guid userId,
+    int page,
+    int pageSize)
     {
         var student = await _studentRepository
             .GetByUserIdAndGymIdAsync(userId, gymId);
@@ -465,7 +482,7 @@ public class WorkoutService
         if (student is null)
             throw new ArgumentException("Aluno não encontrado.");
 
-        return await GetHistoryByStudentAsync(
+        return await GetHistoryAsync(
             gymId,
             student.Id,
             page,
@@ -622,18 +639,33 @@ public class WorkoutService
         if (workout is null)
             return null;
 
-        return MapToDetailResponse(workout);
+        var workoutDayIds = workout.Days
+            .Select(x => x.Id)
+            .ToList();
+
+        var latestExecutions = await _workoutExecutionRepository
+            .GetLatestByWorkoutDayIdsAsync(workoutDayIds);
+
+        return MapToDetailResponse(
+            workout,
+            latestExecutions);
     }
 
     private static WorkoutDetailResponse MapToDetailResponse(
-    Workout workout)
+    Workout workout,
+    List<WorkoutExecution>? latestExecutions = null)
     {
+        var executionsByDay = latestExecutions?
+            .ToDictionary(
+                x => x.WorkoutDayId,
+                x => x)
+            ?? new Dictionary<Guid, WorkoutExecution>();
+
         return new WorkoutDetailResponse
         {
             Id = workout.Id,
             StudentId = workout.StudentId,
-            SourceWorkoutTemplateId =
-                workout.SourceWorkoutTemplateId,
+            SourceWorkoutTemplateId = workout.SourceWorkoutTemplateId,
             Name = workout.Name,
             Description = workout.Description,
             IsActive = workout.IsActive,
@@ -648,35 +680,33 @@ public class WorkoutService
                     Name = day.Name,
                     Order = day.Order,
 
+                    CompletedToday =
+                        executionsByDay.TryGetValue(
+                            day.Id,
+                            out var execution) &&
+                        execution.CompletedAt.Date == DateTime.UtcNow.Date,
+
+                    LastCompletedAt =
+                        executionsByDay.TryGetValue(
+                            day.Id,
+                            out var lastExecution)
+                                ? lastExecution.CompletedAt
+                                : null,
+
                     Exercises = day.Exercises
                         .OrderBy(x => x.Order)
-                        .Select(exercise =>
-                            new WorkoutExerciseResponse
-                            {
-                                Id = exercise.Id,
-                                ExerciseId =
-                                    exercise.ExerciseId,
-
-                                ExerciseName =
-                                    exercise.Exercise.Name,
-
-                                MuscleGroup =
-                                    exercise.Exercise.MuscleGroup,
-
-                                Sets = exercise.Sets,
-
-                                Repetitions =
-                                    exercise.Repetitions,
-
-                                RestSeconds =
-                                    exercise.RestSeconds,
-
-                                Notes =
-                                    exercise.Notes,
-
-                                Order =
-                                    exercise.Order
-                            })
+                        .Select(exercise => new WorkoutExerciseResponse
+                        {
+                            Id = exercise.Id,
+                            ExerciseId = exercise.ExerciseId,
+                            ExerciseName = exercise.Exercise.Name,
+                            MuscleGroup = exercise.Exercise.MuscleGroup,
+                            Sets = exercise.Sets,
+                            Repetitions = exercise.Repetitions,
+                            RestSeconds = exercise.RestSeconds,
+                            Notes = exercise.Notes,
+                            Order = exercise.Order
+                        })
                         .ToList()
                 })
                 .ToList()

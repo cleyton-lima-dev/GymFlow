@@ -60,4 +60,49 @@ public class WorkoutExecutionRepository
             .Take(take)
             .ToListAsync();
     }
+
+    public async Task<List<WorkoutExecution>> GetLatestByWorkoutDayIdsAsync(
+    IEnumerable<Guid> workoutDayIds)
+    {
+        var ids = workoutDayIds.ToList();
+
+        if (ids.Count == 0)
+            return new List<WorkoutExecution>();
+
+        return await _context.WorkoutExecutions
+            .AsNoTracking()
+            .Where(x => ids.Contains(x.WorkoutDayId))
+            .GroupBy(x => x.WorkoutDayId)
+            .Select(group => group
+                .OrderByDescending(x => x.CompletedAt)
+                .First())
+            .ToListAsync();
+    }
+
+    public async Task<bool> ExistsForWorkoutDayOnDateAsync(
+    Guid workoutDayId,
+    DateTime date)
+    {
+        var start = date.Date;
+        var end = start.AddDays(1);
+
+        return await _context.WorkoutExecutions
+            .AsNoTracking()
+            .AnyAsync(x =>
+                x.WorkoutDayId == workoutDayId &&
+                x.CompletedAt >= start &&
+                x.CompletedAt < end);
+    }
+
+    public async Task<int> CountHistoryByStudentAsync(
+    Guid studentId,
+    Guid gymId)
+    {
+        return await _context.WorkoutExecutions
+            .AsNoTracking()
+            .Where(execution =>
+                execution.WorkoutDay.Workout.StudentId == studentId &&
+                execution.WorkoutDay.Workout.GymId == gymId)
+            .CountAsync();
+    }
 }

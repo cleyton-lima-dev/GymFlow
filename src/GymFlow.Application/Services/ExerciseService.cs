@@ -1,6 +1,7 @@
 ﻿using GymFlow.Application.DTOs.Exercises;
 using GymFlow.Application.Interfaces.Repositories;
 using GymFlow.Domain.Entities;
+using GymFlow.Application.DTOs.Common;
 
 namespace GymFlow.Application.Services;
 
@@ -49,19 +50,38 @@ public class ExerciseService
         return true;
     }
 
-    public async Task<List<ExerciseResponse>> ListAsync(
+    public async Task<PagedResponse<ExerciseResponse>> ListAsync(
     Guid gymId,
     string? search = null,
     string? muscleGroup = null,
-    bool? isActive = null)
+    bool? isActive = null,
+    int page = 1,
+    int pageSize = 20)
     {
-        var exercises = await _exerciseRepository.GetAllByGymAsync(
-            gymId,
-            search,
-            muscleGroup,
-            isActive);
+        if (page < 1)
+        {
+            throw new ArgumentException(
+                "A página deve ser maior ou igual a 1.");
+        }
 
-        return exercises
+        if (pageSize < 1 || pageSize > 100)
+        {
+            throw new ArgumentException(
+                "O tamanho da página deve estar entre 1 e 100.");
+        }
+
+        var skip = (page - 1) * pageSize;
+
+        var (exercises, totalCount) =
+            await _exerciseRepository.GetPagedByGymAsync(
+                gymId,
+                search,
+                muscleGroup,
+                isActive,
+                skip,
+                pageSize);
+
+        var items = exercises
             .Select(exercise => new ExerciseResponse
             {
                 Id = exercise.Id,
@@ -73,6 +93,14 @@ public class ExerciseService
                 UpdatedAt = exercise.UpdatedAt
             })
             .ToList();
+
+        return new PagedResponse<ExerciseResponse>
+        {
+            Items = items,
+            Page = page,
+            PageSize = pageSize,
+            TotalCount = totalCount
+        };
     }
 
     public async Task<bool> UpdateAsync(

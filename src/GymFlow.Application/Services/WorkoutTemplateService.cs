@@ -1,6 +1,7 @@
 ﻿using GymFlow.Application.DTOs.WorkoutTemplates;
 using GymFlow.Application.Interfaces.Repositories;
 using GymFlow.Domain.Entities;
+using GymFlow.Application.DTOs.Common;
 
 namespace GymFlow.Application.Services;
 
@@ -124,13 +125,36 @@ public class WorkoutTemplateService
         };
     }
 
-    public async Task<List<WorkoutTemplateListItemResponse>> GetAllAsync(
-    Guid gymId)
+    public async Task<PagedResponse<WorkoutTemplateListItemResponse>> GetAllAsync(
+    Guid gymId,
+    string? search,
+    bool? isActive,
+    int page,
+    int pageSize)
     {
-        var templates = await _workoutTemplateRepository
-            .GetAllByGymAsync(gymId);
+        if (page < 1)
+        {
+            throw new ArgumentException(
+                "A página deve ser maior ou igual a 1.");
+        }
 
-        return templates
+        if (pageSize < 1 || pageSize > 100)
+        {
+            throw new ArgumentException(
+                "O tamanho da página deve estar entre 1 e 100.");
+        }
+
+        var skip = (page - 1) * pageSize;
+
+        var (templates, totalCount) =
+            await _workoutTemplateRepository.GetPagedByGymAsync(
+                gymId,
+                search,
+                isActive,
+                skip,
+                pageSize);
+        
+        var items = templates
             .Select(x => new WorkoutTemplateListItemResponse
             {
                 Id = x.Id,
@@ -140,6 +164,14 @@ public class WorkoutTemplateService
                 CreatedAt = x.CreatedAt
             })
             .ToList();
+
+        return new PagedResponse<WorkoutTemplateListItemResponse>
+        {
+            Items = items,
+            Page = page,
+            PageSize = pageSize,
+            TotalCount = totalCount
+        };
     }
 
     public async Task<WorkoutTemplateDetailResponse?> GetByIdAsync(

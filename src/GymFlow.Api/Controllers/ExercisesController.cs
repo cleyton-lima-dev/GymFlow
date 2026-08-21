@@ -7,7 +7,7 @@ namespace GymFlow.Api.Controllers;
 
 [ApiController]
 [Route("api/exercises")]
-[Authorize(Roles = "Admin")]
+[Authorize(Roles = "Admin,Professor")]
 public class ExercisesController : ControllerBase
 {
     private readonly ExerciseService _exerciseService;
@@ -17,6 +17,7 @@ public class ExercisesController : ControllerBase
         _exerciseService = exerciseService;
     }
 
+    [Authorize(Roles = "Admin,Professor")]
     [HttpPost]
     public async Task<IActionResult> Create(CreateExerciseRequest request)
     {
@@ -40,25 +41,43 @@ public class ExercisesController : ControllerBase
             message = "Exercício criado com sucesso."
         });
     }
-
+    
+    
+    [Authorize(Roles = "Admin,Professor")]
     [HttpGet]
     public async Task<IActionResult> GetAll(
-        [FromQuery] string? search,
-        [FromQuery] string? muscleGroup,
-        [FromQuery] bool? isActive)
+    [FromQuery] string? search,
+    [FromQuery] string? muscleGroup,
+    [FromQuery] bool? isActive,
+    [FromQuery] int page = 1,
+    [FromQuery] int pageSize = 20)
     {
         if (!TryGetGymId(out var gymId))
             return Unauthorized();
 
-        var exercises = await _exerciseService.ListAsync(
-            gymId,
-            search,
-            muscleGroup,
-            isActive);
+        try
+        {
+            var exercises = await _exerciseService.ListAsync(
+                gymId,
+                search,
+                muscleGroup,
+                isActive,
+                page,
+                pageSize);
 
-        return Ok(exercises);
+            return Ok(exercises);
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new
+            {
+                message = ex.Message
+            });
+        }
     }
-
+    
+    
+    [Authorize(Roles = "Admin,Professor")]
     [HttpPut("{id:guid}")]
     public async Task<IActionResult> Update(
         Guid id,
@@ -82,7 +101,9 @@ public class ExercisesController : ControllerBase
 
         return NoContent();
     }
-
+    
+    
+    [Authorize(Roles = "Admin")]
     [HttpPatch("{id:guid}/status")]
     public async Task<IActionResult> UpdateStatus(
         Guid id,

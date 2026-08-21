@@ -8,11 +8,13 @@ public interface IExerciseRepository
 
     Task<Exercise?> GetByIdAsync(Guid id, Guid gymId);
 
-    Task<List<Exercise>> GetAllByGymAsync(
+    Task<(List<Exercise> Items, int TotalCount)> GetPagedByGymAsync(
     Guid gymId,
-    string? search = null,
-    string? muscleGroup = null,
-    bool? isActive = null);
+    string? search,
+    string? muscleGroup,
+    bool? isActive,
+    int skip,
+    int take);
 
     Task<List<Exercise>> GetByIdsAsync(
     IEnumerable<Guid> ids,

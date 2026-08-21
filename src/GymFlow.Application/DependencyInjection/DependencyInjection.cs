@@ -13,6 +13,7 @@ public static class DependencyInjection
         services.AddScoped<ExerciseService>();
         services.AddScoped<WorkoutTemplateService>();
         services.AddScoped<WorkoutService>();
+        services.AddScoped<PhysicalAssessmentService>();
 
 
         return services;

@@ -7,7 +7,7 @@ namespace GymFlow.Api.Controllers;
 
 [ApiController]
 [Route("api/workout-templates")]
-[Authorize]
+[Authorize(Roles = "Admin,Professor")]
 public class WorkoutTemplatesController : ControllerBase
 {
     private readonly WorkoutTemplateService _workoutTemplateService;
@@ -48,17 +48,36 @@ public class WorkoutTemplatesController : ControllerBase
     }
 
     [HttpGet]
-    public async Task<IActionResult> GetAll()
+    public async Task<IActionResult> GetAll(
+    [FromQuery] string? search,
+    [FromQuery] bool? isActive,
+    [FromQuery] int page = 1,
+    [FromQuery] int pageSize = 20)
     {
         var gymId = GetGymId();
 
         if (gymId is null)
             return Unauthorized();
 
-        var result = await _workoutTemplateService
-            .GetAllAsync(gymId.Value);
+        try
+        {
+            var result = await _workoutTemplateService
+                .GetAllAsync(
+                    gymId.Value,
+                    search,
+                    isActive,
+                    page,
+                    pageSize);
 
-        return Ok(result);
+            return Ok(result);
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new
+            {
+                message = ex.Message
+            });
+        }
     }
 
     [HttpGet("{id:guid}")]

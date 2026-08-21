@@ -6,7 +6,12 @@ public interface IStudentRepository
 {
     Task AddAsync(User user, Student student);
 
-    Task<List<Student>> GetAllByGymIdAsync(Guid gymId);
+    Task<(List<Student> Items, int TotalCount)> GetPagedByGymIdAsync(
+    Guid gymId,
+    string? search,
+    bool? isActive,
+    int skip,
+    int take);
 
     Task<Student?> GetByIdAndGymIdAsync(Guid studentId, Guid gymId);
 
