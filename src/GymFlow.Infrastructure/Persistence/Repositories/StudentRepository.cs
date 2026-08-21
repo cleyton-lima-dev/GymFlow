@@ -22,12 +22,54 @@ public class StudentRepository : IStudentRepository
         await _context.SaveChangesAsync();
     }
 
-    public async Task<List<Student>> GetAllByGymIdAsync(Guid gymId)
+    public async Task<(List<Student> Items, int TotalCount)> GetPagedByGymIdAsync(
+    Guid gymId,
+    string? search,
+    bool? isActive,
+    int skip,
+    int take)
     {
-        return await _context.Students
+        var query = _context.Students
+            .AsNoTracking()
             .Include(student => student.User)
             .Where(student => student.User.GymId == gymId)
+            .AsQueryable();
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var searchTerm = search.Trim();
+
+            query = query.Where(student =>
+                EF.Functions.ILike(
+                    student.User.Name,
+                    $"%{searchTerm}%") ||
+                EF.Functions.ILike(
+                    student.User.Email,
+                    $"%{searchTerm}%") ||
+                (
+                    student.Phone != null &&
+                    EF.Functions.ILike(
+                        student.Phone,
+                        $"%{searchTerm}%")
+                ));
+        }
+
+        if (isActive.HasValue)
+        {
+            query = query.Where(student =>
+                student.User.IsActive == isActive.Value);
+        }
+
+        var totalCount = await query.CountAsync();
+
+        var items = await query
+            .OrderBy(student => student.User.Name)
+            .ThenBy(student => student.Id)
+            .Skip(skip)
+            .Take(take)
             .ToListAsync();
+
+        return (items, totalCount);
     }
 
     public async Task<Student?> GetByIdAndGymIdAsync(Guid studentId, Guid gymId)

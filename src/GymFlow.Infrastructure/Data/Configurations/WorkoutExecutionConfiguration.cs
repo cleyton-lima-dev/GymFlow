@@ -19,5 +19,12 @@ public class WorkoutExecutionConfiguration
         builder.HasIndex(x => x.WorkoutDayId);
 
         builder.HasIndex(x => x.CompletedAt);
+        
+        builder.HasIndex(x => new
+        {
+            x.WorkoutDayId,
+            x.ExecutionDate
+        })
+.IsUnique();
     }
 }

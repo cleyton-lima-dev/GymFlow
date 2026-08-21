@@ -17,5 +17,16 @@ public interface IWorkoutExecutionRepository
     int skip,
     int take);
 
+    Task<int> CountHistoryByStudentAsync(
+    Guid studentId,
+    Guid gymId);
+
+    Task<List<WorkoutExecution>> GetLatestByWorkoutDayIdsAsync(
+    IEnumerable<Guid> workoutDayIds);
+
     Task SaveChangesAsync();
+
+    Task<bool> ExistsForWorkoutDayOnDateAsync(
+    Guid workoutDayId,
+    DateTime date);
 }

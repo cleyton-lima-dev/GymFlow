@@ -8,7 +8,12 @@ public interface IWorkoutTemplateRepository
 
     Task<WorkoutTemplate?> GetByIdAsync(Guid id, Guid gymId);
 
-    Task<List<WorkoutTemplate>> GetAllByGymAsync(Guid gymId);
+    Task<(List<WorkoutTemplate> Items, int TotalCount)> GetPagedByGymAsync(
+    Guid gymId,
+    string? search,
+    bool? isActive,
+    int skip,
+    int take);
 
     Task<bool> ExistsByNameAsync(Guid gymId, string name, Guid? ignoreId = null);
 

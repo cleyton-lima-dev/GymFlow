@@ -28,13 +28,16 @@ public class ExerciseRepository : IExerciseRepository
                 exercise.GymId == gymId);
     }
 
-    public async Task<List<Exercise>> GetAllByGymAsync(
+    public async Task<(List<Exercise> Items, int TotalCount)> GetPagedByGymAsync(
     Guid gymId,
-    string? search = null,
-    string? muscleGroup = null,
-    bool? isActive = null)
+    string? search,
+    string? muscleGroup,
+    bool? isActive,
+    int skip,
+    int take)
     {
         var query = _context.Exercises
+            .AsNoTracking()
             .Where(exercise => exercise.GymId == gymId)
             .AsQueryable();
 
@@ -43,7 +46,9 @@ public class ExerciseRepository : IExerciseRepository
             var searchTerm = search.Trim();
 
             query = query.Where(exercise =>
-                EF.Functions.ILike(exercise.Name, $"%{searchTerm}%"));
+                EF.Functions.ILike(
+                    exercise.Name,
+                    $"%{searchTerm}%"));
         }
 
         if (!string.IsNullOrWhiteSpace(muscleGroup))
@@ -51,7 +56,9 @@ public class ExerciseRepository : IExerciseRepository
             var muscleGroupTerm = muscleGroup.Trim();
 
             query = query.Where(exercise =>
-                EF.Functions.ILike(exercise.MuscleGroup, muscleGroupTerm));
+                EF.Functions.ILike(
+                    exercise.MuscleGroup,
+                    muscleGroupTerm));
         }
 
         if (isActive.HasValue)
@@ -60,9 +67,16 @@ public class ExerciseRepository : IExerciseRepository
                 exercise.IsActive == isActive.Value);
         }
 
-        return await query
+        var totalCount = await query.CountAsync();
+
+        var items = await query
             .OrderBy(exercise => exercise.Name)
+            .ThenBy(exercise => exercise.Id)
+            .Skip(skip)
+            .Take(take)
             .ToListAsync();
+
+        return (items, totalCount);
     }
 
     public async Task<Exercise?> GetByNameAsync(string name, Guid gymId)

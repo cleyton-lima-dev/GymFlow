@@ -3,6 +3,7 @@ using System;
 using GymFlow.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace GymFlow.Infrastructure.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260819141521_AddWorkoutExecutionDate")]
+    partial class AddWorkoutExecutionDate
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -63,90 +66,6 @@ namespace GymFlow.Infrastructure.Migrations
                         .IsUnique();
 
                     b.ToTable("Exercises", (string)null);
-                });
-
-            modelBuilder.Entity("GymFlow.Domain.Entities.PhysicalAssessment", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<decimal?>("AbdomenCm")
-                        .HasPrecision(5, 2)
-                        .HasColumnType("numeric(5,2)");
-
-                    b.Property<DateOnly>("AssessmentDate")
-                        .HasColumnType("date");
-
-                    b.Property<decimal?>("BodyFatPercentage")
-                        .HasPrecision(5, 2)
-                        .HasColumnType("numeric(5,2)");
-
-                    b.Property<decimal?>("ChestCm")
-                        .HasPrecision(5, 2)
-                        .HasColumnType("numeric(5,2)");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<decimal>("HeightCm")
-                        .HasPrecision(5, 2)
-                        .HasColumnType("numeric(5,2)");
-
-                    b.Property<decimal?>("HipCm")
-                        .HasPrecision(5, 2)
-                        .HasColumnType("numeric(5,2)");
-
-                    b.Property<decimal?>("LeftArmCm")
-                        .HasPrecision(5, 2)
-                        .HasColumnType("numeric(5,2)");
-
-                    b.Property<decimal?>("LeftCalfCm")
-                        .HasPrecision(5, 2)
-                        .HasColumnType("numeric(5,2)");
-
-                    b.Property<decimal?>("LeftThighCm")
-                        .HasPrecision(5, 2)
-                        .HasColumnType("numeric(5,2)");
-
-                    b.Property<string>("Notes")
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
-
-                    b.Property<decimal?>("RightArmCm")
-                        .HasPrecision(5, 2)
-                        .HasColumnType("numeric(5,2)");
-
-                    b.Property<decimal?>("RightCalfCm")
-                        .HasPrecision(5, 2)
-                        .HasColumnType("numeric(5,2)");
-
-                    b.Property<decimal?>("RightThighCm")
-                        .HasPrecision(5, 2)
-                        .HasColumnType("numeric(5,2)");
-
-                    b.Property<Guid>("StudentId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<decimal?>("WaistCm")
-                        .HasPrecision(5, 2)
-                        .HasColumnType("numeric(5,2)");
-
-                    b.Property<decimal>("WeightKg")
-                        .HasPrecision(5, 2)
-                        .HasColumnType("numeric(5,2)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("StudentId");
-
-                    b.HasIndex("StudentId", "AssessmentDate")
-                        .IsUnique();
-
-                    b.ToTable("PhysicalAssessments", (string)null);
                 });
 
             modelBuilder.Entity("GymFlow.Domain.Entities.Student", b =>
@@ -472,17 +391,6 @@ namespace GymFlow.Infrastructure.Migrations
                         .IsUnique();
 
                     b.ToTable("WorkoutTemplateExercises", (string)null);
-                });
-
-            modelBuilder.Entity("GymFlow.Domain.Entities.PhysicalAssessment", b =>
-                {
-                    b.HasOne("GymFlow.Domain.Entities.Student", "Student")
-                        .WithMany()
-                        .HasForeignKey("StudentId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Student");
                 });
 
             modelBuilder.Entity("GymFlow.Domain.Entities.Student", b =>

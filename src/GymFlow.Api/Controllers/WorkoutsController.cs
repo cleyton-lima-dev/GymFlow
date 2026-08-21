@@ -217,6 +217,7 @@ public class WorkoutsController : ControllerBase
 
             return Ok(result);
         }
+       
         catch (ArgumentException ex)
         {
             return BadRequest(new
@@ -251,6 +252,38 @@ public class WorkoutsController : ControllerBase
                 .GetHistoryForUserAsync(
                     gymId,
                     userId,
+                    page,
+                    pageSize);
+
+            return Ok(result);
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new
+            {
+                message = ex.Message
+            });
+        }
+    }
+
+    [Authorize(Roles = "Admin,Professor")]
+    [HttpGet("students/{studentId:guid}/history")]
+    public async Task<IActionResult> GetStudentHistory(
+    Guid studentId,
+    [FromQuery] int page = 1,
+    [FromQuery] int pageSize = 20)
+    {
+        if (!TryGetGymId(out var gymId))
+        {
+            return Unauthorized();
+        }
+
+        try
+        {
+            var result = await _workoutService
+                .GetHistoryAsync(
+                    gymId,
+                    studentId,
                     page,
                     pageSize);
 

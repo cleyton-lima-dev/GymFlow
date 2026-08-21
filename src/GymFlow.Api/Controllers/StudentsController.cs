@@ -2,12 +2,13 @@
 using GymFlow.Application.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using System.Security.Claims;
 
 namespace GymFlow.Api.Controllers;
 
 [ApiController]
 [Route("api/students")]
-[Authorize(Roles = "Admin")]
+[Authorize]
 public class StudentsController : ControllerBase
 {
     private readonly StudentService _studentService;
@@ -17,6 +18,8 @@ public class StudentsController : ControllerBase
         _studentService = studentService;
     }
 
+
+    [Authorize(Roles = "Admin")]
     [HttpPost]
     public async Task<IActionResult> Create(CreateStudentRequest request)
     {
@@ -39,17 +42,40 @@ public class StudentsController : ControllerBase
         });
     }
 
+
+    [Authorize(Roles = "Admin,Professor")]
     [HttpGet]
-    public async Task<IActionResult> GetAll()
+    public async Task<IActionResult> GetAll(
+    [FromQuery] string? search,
+    [FromQuery] bool? isActive,
+    [FromQuery] int page = 1,
+    [FromQuery] int pageSize = 20)
     {
         if (!TryGetGymId(out var gymId))
             return Unauthorized();
 
-        var students = await _studentService.GetAllAsync(gymId);
+        try
+        {
+            var students = await _studentService.GetAllAsync(
+                gymId,
+                search,
+                isActive,
+                page,
+                pageSize);
 
-        return Ok(students);
+            return Ok(students);
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new
+            {
+                message = ex.Message
+            });
+        }
     }
 
+
+    [Authorize(Roles = "Admin,Professor")]
     [HttpGet("{id:guid}")]
     public async Task<IActionResult> GetById(Guid id)
     {
@@ -68,7 +94,9 @@ public class StudentsController : ControllerBase
 
         return Ok(student);
     }
-
+    
+    
+    [Authorize(Roles = "Admin")]
     [HttpPut("{id:guid}")]
     public async Task<IActionResult> Update(
         Guid id,
@@ -99,7 +127,9 @@ public class StudentsController : ControllerBase
             _ => StatusCode(500)
         };
     }
-
+    
+    
+    [Authorize(Roles = "Admin")]
     [HttpPatch("{id:guid}/status")]
     public async Task<IActionResult> UpdateStatus(
         Guid id,
@@ -124,10 +154,45 @@ public class StudentsController : ControllerBase
         return NoContent();
     }
 
+    [Authorize(Roles = "Student")]
+    [HttpGet("me")]
+    public async Task<IActionResult> GetMe()
+    {
+        if (!TryGetGymId(out var gymId) ||
+            !TryGetUserId(out var userId))
+        {
+            return Unauthorized();
+        }
+
+        var student = await _studentService
+            .GetMeAsync(userId, gymId);
+
+        if (student is null)
+        {
+            return NotFound(new
+            {
+                message = "Aluno não encontrado."
+            });
+        }
+
+        return Ok(student);
+    }
+
     private bool TryGetGymId(out Guid gymId)
     {
         var gymIdClaim = User.FindFirst("gym_id")?.Value;
 
         return Guid.TryParse(gymIdClaim, out gymId);
+    }
+
+    private bool TryGetUserId(out Guid userId)
+    {
+        var userIdClaim = User
+            .FindFirst(ClaimTypes.NameIdentifier)
+            ?.Value;
+
+        return Guid.TryParse(
+            userIdClaim,
+            out userId);
     }
 }

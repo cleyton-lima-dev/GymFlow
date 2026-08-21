@@ -32,13 +32,44 @@ public class WorkoutTemplateRepository : IWorkoutTemplateRepository
                 x.GymId == gymId);
     }
 
-    public async Task<List<WorkoutTemplate>> GetAllByGymAsync(Guid gymId)
+    public async Task<(List<WorkoutTemplate> Items, int TotalCount)> GetPagedByGymAsync(
+    Guid gymId,
+    string? search,
+    bool? isActive,
+    int skip,
+    int take)
     {
-        return await _context.WorkoutTemplates
+        var query = _context.WorkoutTemplates
             .AsNoTracking()
             .Where(x => x.GymId == gymId)
+            .AsQueryable();
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var searchTerm = search.Trim();
+
+            query = query.Where(x =>
+                EF.Functions.ILike(
+                    x.Name,
+                    $"%{searchTerm}%"));
+        }
+
+        if (isActive.HasValue)
+        {
+            query = query.Where(x =>
+                x.IsActive == isActive.Value);
+        }
+
+        var totalCount = await query.CountAsync();
+
+        var items = await query
             .OrderBy(x => x.Name)
+            .ThenBy(x => x.Id)
+            .Skip(skip)
+            .Take(take)
             .ToListAsync();
+
+        return (items, totalCount);
     }
 
     public async Task<bool> ExistsByNameAsync(

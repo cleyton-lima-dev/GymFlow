@@ -3,6 +3,7 @@ using GymFlow.Application.Interfaces.Repositories;
 using GymFlow.Application.Interfaces.Security;
 using GymFlow.Domain.Entities;
 using GymFlow.Domain.Enums;
+using GymFlow.Application.DTOs.Common;
 
 
 namespace GymFlow.Application.Services;
@@ -64,11 +65,32 @@ public class StudentService
         return true;
     }
 
-    public async Task<List<StudentResponse>> GetAllAsync(Guid gymId)
+    public async Task<PagedResponse<StudentResponse>> GetAllAsync(
+    Guid gymId,
+    string? search,
+    bool? isActive,
+    int page,
+    int pageSize)
     {
-        var students = await _studentRepository.GetAllByGymIdAsync(gymId);
+        if (page < 1)
+            throw new ArgumentException(
+                "A página deve ser maior ou igual a 1.");
 
-        return students
+        if (pageSize < 1 || pageSize > 100)
+            throw new ArgumentException(
+                "O tamanho da página deve estar entre 1 e 100.");
+
+        var skip = (page - 1) * pageSize;
+
+        var (students, totalCount) =
+             await _studentRepository.GetPagedByGymIdAsync(
+            gymId,
+            search,
+            isActive,
+            skip,
+            pageSize);
+
+        var items = students
             .Select(student => new StudentResponse
             {
                 Id = student.Id,
@@ -80,6 +102,14 @@ public class StudentService
                 CreatedAt = student.CreatedAt
             })
             .ToList();
+
+        return new PagedResponse<StudentResponse>
+        {
+            Items = items,
+            Page = page,
+            PageSize = pageSize,
+            TotalCount = totalCount
+        };
     }
 
     public async Task<StudentResponse?> GetByIdAsync(
@@ -165,5 +195,27 @@ public class StudentService
         await _studentRepository.UpdateAsync(student);
 
         return true;
+    }
+
+    public async Task<StudentResponse?> GetMeAsync(
+    Guid userId,
+    Guid gymId)
+    {
+        var student = await _studentRepository
+            .GetByUserIdAndGymIdAsync(userId, gymId);
+
+        if (student is null)
+            return null;
+
+        return new StudentResponse
+        {
+            Id = student.Id,
+            Name = student.User.Name,
+            Email = student.User.Email,
+            Phone = student.Phone,
+            BirthDate = student.BirthDate,
+            IsActive = student.User.IsActive,
+            CreatedAt = student.CreatedAt
+        };
     }
 }

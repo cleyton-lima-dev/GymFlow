@@ -9,4 +9,8 @@ public class WorkoutDayResponse
     public int Order { get; set; }
 
     public List<WorkoutExerciseResponse> Exercises { get; set; } = new();
+
+    public bool CompletedToday { get; set; }
+
+    public DateTime? LastCompletedAt { get; set; }
 }
