@@ -68,11 +68,13 @@ public class AuthController : ControllerBase
         var name = User.FindFirst(ClaimTypes.Name)?.Value;
         var email = User.FindFirst(ClaimTypes.Email)?.Value;
         var role = User.FindFirst(ClaimTypes.Role)?.Value;
+        var gymId = User.FindFirst("gym_id")?.Value;
 
         if (string.IsNullOrWhiteSpace(userId) ||
             string.IsNullOrWhiteSpace(name) ||
             string.IsNullOrWhiteSpace(email) ||
-            string.IsNullOrWhiteSpace(role))
+            string.IsNullOrWhiteSpace(role) ||
+            string.IsNullOrWhiteSpace(gymId))
         {
             return Unauthorized();
         }
@@ -80,6 +82,7 @@ public class AuthController : ControllerBase
         return Ok(new
         {
             userId,
+            gymId,
             name,
             email,
             role

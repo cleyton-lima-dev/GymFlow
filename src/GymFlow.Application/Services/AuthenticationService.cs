@@ -42,6 +42,7 @@ public class AuthenticationService
         return new LoginResponse
         {
             UserId = user.Id,
+            GymId = user.GymId,
             Name = user.Name,
             Email = user.Email,
             Role = user.Role.ToString(),

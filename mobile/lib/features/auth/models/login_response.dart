@@ -1,6 +1,7 @@
 class LoginResponse {
   const LoginResponse({
     required this.userId,
+    required this.gymId,
     required this.name,
     required this.email,
     required this.role,
@@ -8,6 +9,7 @@ class LoginResponse {
   });
 
   final String userId;
+  final String gymId;
   final String name;
   final String email;
   final String role;
@@ -16,6 +18,7 @@ class LoginResponse {
   factory LoginResponse.fromJson(Map<String, dynamic> json) {
     return LoginResponse(
       userId: json['userId'] as String,
+      gymId: json['gymId'] as String,
       name: json['name'] as String,
       email: json['email'] as String,
       role: json['role'] as String,

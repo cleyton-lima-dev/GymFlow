@@ -35,6 +35,7 @@ class SessionController extends ChangeNotifier {
 
       _user = SessionUser(
         userId: currentUser.userId,
+        gymId: currentUser.gymId,
         name: currentUser.name,
         email: currentUser.email,
         role: AppRole.fromApiValue(currentUser.role),
@@ -68,6 +69,7 @@ class SessionController extends ChangeNotifier {
     await startSession(
       user: SessionUser(
         userId: response.userId,
+        gymId: response.gymId,
         name: response.name,
         email: response.email,
         role: AppRole.fromApiValue(response.role),
