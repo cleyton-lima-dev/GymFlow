@@ -4,6 +4,7 @@ import 'package:gymflow/core/storage/token_storage.dart';
 import 'package:gymflow/features/auth/data/auth_service.dart';
 import 'package:gymflow/app/session/session_user.dart';
 import 'package:gymflow/core/network/api_exception.dart';
+import 'package:gymflow/app/session/app_role.dart';
 
 class SessionController extends ChangeNotifier {
   SessionController(
@@ -36,7 +37,7 @@ class SessionController extends ChangeNotifier {
         userId: currentUser.userId,
         name: currentUser.name,
         email: currentUser.email,
-        role: currentUser.role,
+        role: AppRole.fromApiValue(currentUser.role),
       );
 
       _status = SessionStatus.authenticated;
@@ -69,7 +70,7 @@ class SessionController extends ChangeNotifier {
         userId: response.userId,
         name: response.name,
         email: response.email,
-        role: response.role,
+        role: AppRole.fromApiValue(response.role),
       ),
       token: response.token,
     );

@@ -1,3 +1,5 @@
+import 'package:gymflow/app/session/app_role.dart';
+
 class SessionUser {
   const SessionUser({
     required this.userId,
@@ -9,5 +11,5 @@ class SessionUser {
   final String userId;
   final String name;
   final String email;
-  final String role;
+  final AppRole role;
 }
