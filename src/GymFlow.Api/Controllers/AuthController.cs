@@ -2,6 +2,7 @@
 using GymFlow.Application.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
+using System.Security.Claims;
 
 namespace GymFlow.Api.Controllers;
 
@@ -63,9 +64,25 @@ public class AuthController : ControllerBase
     [HttpGet("me")]
     public IActionResult Me()
     {
+        var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        var name = User.FindFirst(ClaimTypes.Name)?.Value;
+        var email = User.FindFirst(ClaimTypes.Email)?.Value;
+        var role = User.FindFirst(ClaimTypes.Role)?.Value;
+
+        if (string.IsNullOrWhiteSpace(userId) ||
+            string.IsNullOrWhiteSpace(name) ||
+            string.IsNullOrWhiteSpace(email) ||
+            string.IsNullOrWhiteSpace(role))
+        {
+            return Unauthorized();
+        }
+
         return Ok(new
         {
-            message = "Usuário autenticado com sucesso."
+            userId,
+            name,
+            email,
+            role
         });
     }
 
