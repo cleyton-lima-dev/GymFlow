@@ -12,18 +12,17 @@ import 'package:gymflow/app/theme/default_branding.dart';
 import 'package:gymflow/app/theme/local_branding_repository.dart';
 import 'package:gymflow/app/session/session_status.dart';
 import 'package:gymflow/app/theme/ac_power_gym_branding.dart';
+import 'package:gymflow/app/config/app_config.dart';
 
 void main() {
-  const apiBaseUrl = String.fromEnvironment('API_BASE_URL');
-
-  if (apiBaseUrl.isEmpty) {
-    throw StateError('API_BASE_URL was not provided.');
-  }
+  final config = AppConfig.fromEnvironment();
 
   const secureStorage = FlutterSecureStorage();
 
   final tokenStorage = TokenStorage(secureStorage);
-  final apiClient = ApiClient(baseUrl: apiBaseUrl);
+  final apiClient = ApiClient(
+    baseUrl: config.apiBaseUrl,
+  );
   final authService = AuthService(apiClient);
 
   final sessionController = SessionController(
