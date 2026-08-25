@@ -189,13 +189,23 @@ public class WorkoutService
                 "Não é possível utilizar um modelo de treino inativo.");
         }
 
-        if (template.Days.Count == 0)
+        var name = request.Name.Trim();
+
+        if (string.IsNullOrWhiteSpace(name))
         {
-            throw new InvalidOperationException(
-                "O modelo de treino não possui dias.");
+            throw new ArgumentException(
+                "O nome do treino é obrigatório.");
         }
 
-        var exerciseIds = template.Days
+        if (request.Days.Count == 0)
+        {
+            throw new ArgumentException(
+                "O treino deve possuir pelo menos um dia.");
+        }
+
+        ValidateDays(request.Days);
+
+        var exerciseIds = request.Days
             .SelectMany(x => x.Exercises)
             .Select(x => x.ExerciseId)
             .Distinct()
@@ -204,25 +214,30 @@ public class WorkoutService
         var exercises = await _exerciseRepository
             .GetByIdsAsync(exerciseIds, gymId);
 
+        var foundExerciseIds = exercises
+            .Select(x => x.Id)
+            .ToHashSet();
+
+        var missingExerciseId = exerciseIds
+            .FirstOrDefault(x => !foundExerciseIds.Contains(x));
+
+        if (missingExerciseId != Guid.Empty)
+        {
+            throw new ArgumentException(
+                $"Exercício '{missingExerciseId}' não encontrado.");
+        }
+
+        var inactiveExercise = exercises
+            .FirstOrDefault(x => !x.IsActive);
+
+        if (inactiveExercise is not null)
+        {
+            throw new InvalidOperationException(
+                $"O exercício '{inactiveExercise.Name}' está inativo.");
+        }
+
         var exercisesById = exercises
             .ToDictionary(x => x.Id);
-
-        foreach (var exerciseId in exerciseIds)
-        {
-            if (!exercisesById.TryGetValue(
-                    exerciseId,
-                    out var exercise))
-            {
-                throw new InvalidOperationException(
-                    $"O exercício '{exerciseId}' do modelo não foi encontrado.");
-            }
-
-            if (!exercise.IsActive)
-            {
-                throw new InvalidOperationException(
-                    $"O exercício '{exercise.Name}' do modelo está inativo.");
-            }
-        }
 
         var currentWorkout = await _workoutRepository
             .GetActiveForUpdateAsync(request.StudentId, gymId);
@@ -241,51 +256,49 @@ public class WorkoutService
 
             SourceWorkoutTemplateId = template.Id,
 
-            Name = template.Name,
-            Description = template.Description,
+            Name = name,
+            Description = request.Description?.Trim(),
 
             IsActive = true,
             CreatedAt = DateTime.UtcNow
         };
 
-        foreach (var templateDay in
-                 template.Days.OrderBy(x => x.Order))
+        foreach (var dayRequest in
+                 request.Days.OrderBy(x => x.Order))
         {
             var workoutDay = new WorkoutDay
             {
                 Id = Guid.NewGuid(),
                 WorkoutId = workout.Id,
-                Name = templateDay.Name,
-                Order = templateDay.Order
+                Name = dayRequest.Name.Trim(),
+                Order = dayRequest.Order
             };
 
-            foreach (var templateExercise in
-                     templateDay.Exercises.OrderBy(x => x.Order))
+            foreach (var exerciseRequest in
+                     dayRequest.Exercises.OrderBy(x => x.Order))
             {
+                var exercise =
+                    exercisesById[exerciseRequest.ExerciseId];
+
                 workoutDay.Exercises.Add(
                     new WorkoutExercise
                     {
                         Id = Guid.NewGuid(),
-
                         WorkoutDayId = workoutDay.Id,
+                        ExerciseId = exercise.Id,
 
-                        ExerciseId =
-                            templateExercise.ExerciseId,
-
-                        Sets =
-                            templateExercise.Sets,
+                        Sets = exerciseRequest.Sets,
 
                         Repetitions =
-                            templateExercise.Repetitions,
+                            exerciseRequest.Repetitions.Trim(),
 
                         RestSeconds =
-                            templateExercise.RestSeconds,
+                            exerciseRequest.RestSeconds,
 
                         Notes =
-                            templateExercise.Notes,
+                            exerciseRequest.Notes?.Trim(),
 
-                        Order =
-                            templateExercise.Order
+                        Order = exerciseRequest.Order
                     });
             }
 
@@ -490,9 +503,9 @@ public class WorkoutService
     }
 
     public async Task<WorkoutResponse> UpdateAsync(
-    Guid gymId,
-    Guid workoutId,
-    UpdateWorkoutRequest request)
+     Guid gymId,
+     Guid workoutId,
+     UpdateWorkoutRequest request)
     {
         var workout = await _workoutRepository
             .GetForUpdateAsync(workoutId, gymId);
@@ -500,15 +513,25 @@ public class WorkoutService
         if (workout is null)
             throw new ArgumentException("Treino não encontrado.");
 
+        if (!workout.IsActive)
+        {
+            throw new InvalidOperationException(
+                "Não é possível editar uma versão histórica do treino.");
+        }
+
         var name = request.Name.Trim();
 
         if (string.IsNullOrWhiteSpace(name))
+        {
             throw new ArgumentException(
                 "O nome do treino é obrigatório.");
+        }
 
         if (request.Days.Count == 0)
+        {
             throw new ArgumentException(
                 "O treino deve possuir pelo menos um dia.");
+        }
 
         ValidateUpdateDays(request.Days);
 
@@ -541,12 +564,108 @@ public class WorkoutService
             }
         }
 
+        var hasExecutions = workout.Days
+            .Any(x => x.Executions.Count > 0);
+
+        if (hasExecutions)
+        {
+            var now = DateTime.UtcNow;
+
+            workout.IsActive = false;
+            workout.UpdatedAt = now;
+
+            var newWorkout = new Workout
+            {
+                Id = Guid.NewGuid(),
+                StudentId = workout.StudentId,
+                GymId = workout.GymId,
+
+                SourceWorkoutTemplateId =
+                    workout.SourceWorkoutTemplateId,
+
+                Name = name,
+                Description = request.Description?.Trim(),
+
+                IsActive = true,
+                CreatedAt = now
+            };
+
+            foreach (var dayRequest in
+                     request.Days.OrderBy(x => x.Order))
+            {
+                var newDay = new WorkoutDay
+                {
+                    Id = Guid.NewGuid(),
+                    WorkoutId = newWorkout.Id,
+                    Name = dayRequest.Name.Trim(),
+                    Order = dayRequest.Order
+                };
+
+                foreach (var exerciseRequest in
+                         dayRequest.Exercises
+                             .OrderBy(x => x.Order))
+                {
+                    var exercise =
+                        exercisesById[
+                            exerciseRequest.ExerciseId];
+
+                    newDay.Exercises.Add(
+                        new WorkoutExercise
+                        {
+                            Id = Guid.NewGuid(),
+
+                            WorkoutDayId = newDay.Id,
+
+                            ExerciseId = exercise.Id,
+
+                            Sets =
+                                exerciseRequest.Sets,
+
+                            Repetitions =
+                                exerciseRequest
+                                    .Repetitions
+                                    .Trim(),
+
+                            RestSeconds =
+                                exerciseRequest
+                                    .RestSeconds,
+
+                            Notes =
+                                exerciseRequest
+                                    .Notes
+                                    ?.Trim(),
+
+                            Order =
+                                exerciseRequest.Order
+                        });
+                }
+
+                newWorkout.Days.Add(newDay);
+            }
+
+            await _workoutRepository
+                .AddAsync(newWorkout);
+
+            await _workoutRepository
+                .SaveChangesAsync();
+
+            return new WorkoutResponse
+            {
+                Id = newWorkout.Id,
+                StudentId = newWorkout.StudentId,
+
+                SourceWorkoutTemplateId =
+                    newWorkout.SourceWorkoutTemplateId,
+
+                Name = newWorkout.Name,
+                Description = newWorkout.Description,
+                IsActive = newWorkout.IsActive,
+                CreatedAt = newWorkout.CreatedAt
+            };
+        }
+
         var existingDaysById = workout.Days
             .ToDictionary(x => x.Id);
-
-        ValidateExecutedDaysCannotChange(
-            workout,
-            request);
 
         var requestedExistingDayIds = request.Days
             .Where(x => x.Id.HasValue)
@@ -554,17 +673,13 @@ public class WorkoutService
             .ToHashSet();
 
         var daysToRemove = workout.Days
-            .Where(x => !requestedExistingDayIds.Contains(x.Id))
+            .Where(
+                x => !requestedExistingDayIds.Contains(
+                    x.Id))
             .ToList();
 
         foreach (var day in daysToRemove)
         {
-            if (day.Executions.Count > 0)
-            {
-                throw new InvalidOperationException(
-                    $"O dia '{day.Name}' possui histórico de execução e não pode ser removido.");
-            }
-
             workout.Days.Remove(day);
         }
 
@@ -614,8 +729,10 @@ public class WorkoutService
         {
             Id = workout.Id,
             StudentId = workout.StudentId,
+
             SourceWorkoutTemplateId =
                 workout.SourceWorkoutTemplateId,
+
             Name = workout.Name,
             Description = workout.Description,
             IsActive = workout.IsActive,
@@ -861,69 +978,7 @@ public class WorkoutService
         }
     }
 
-    private static void ValidateExecutedDaysCannotChange(
-    Workout workout,
-    UpdateWorkoutRequest request)
-    {
-        var requestedDaysById = request.Days
-            .Where(x => x.Id.HasValue)
-            .ToDictionary(x => x.Id!.Value);
-
-        foreach (var existingDay in
-                 workout.Days.Where(x => x.Executions.Count > 0))
-        {
-            if (!requestedDaysById.TryGetValue(
-                    existingDay.Id,
-                    out var requestedDay))
-            {
-                throw new InvalidOperationException(
-                    $"O dia '{existingDay.Name}' já possui execuções e não pode ser removido.");
-            }
-
-            if (existingDay.Name != requestedDay.Name.Trim() ||
-                existingDay.Order != requestedDay.Order)
-            {
-                throw new InvalidOperationException(
-                    $"O dia '{existingDay.Name}' já possui execuções e não pode ter nome ou ordem alterados.");
-            }
-
-            var existingExercises = existingDay.Exercises
-                .OrderBy(x => x.Order)
-                .ToList();
-
-            var requestedExercises =
-                requestedDay.Exercises
-                    .OrderBy(x => x.Order)
-                    .ToList();
-
-            if (existingExercises.Count !=
-                requestedExercises.Count)
-            {
-                throw new InvalidOperationException(
-                    $"O dia '{existingDay.Name}' já possui execuções e não pode ter seus exercícios alterados.");
-            }
-
-            for (var i = 0;
-                 i < existingExercises.Count;
-                 i++)
-            {
-                var existing = existingExercises[i];
-                var requested = requestedExercises[i];
-
-                if (requested.Id != existing.Id ||
-                    requested.ExerciseId != existing.ExerciseId ||
-                    requested.Sets != existing.Sets ||
-                    requested.Repetitions.Trim() != existing.Repetitions ||
-                    requested.RestSeconds != existing.RestSeconds ||
-                    requested.Notes?.Trim() != existing.Notes ||
-                    requested.Order != existing.Order)
-                {
-                    throw new InvalidOperationException(
-                        $"O dia '{existingDay.Name}' já possui execuções e não pode ter sua prescrição alterada.");
-                }
-            }
-        }
-    }
+    
 
     private readonly IWorkoutExecutionRepository
     _workoutExecutionRepository;

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:gymflow/app/session/session_controller.dart';
 import 'package:provider/provider.dart';
+import 'package:gymflow/app/session/session_status.dart';
 
 class SessionLoadingPage extends StatefulWidget {
   const SessionLoadingPage({super.key});
@@ -27,8 +28,14 @@ class _SessionLoadingPageState extends State<SessionLoadingPage> {
       _hasError = false;
     });
 
+    final sessionController = context.read<SessionController>();
+
+    if (sessionController.status != SessionStatus.unknown) {
+      return;
+    }
+
     try {
-      await context.read<SessionController>().bootstrap();
+      await sessionController.bootstrap();
     } catch (_) {
       if (!mounted) {
         return;

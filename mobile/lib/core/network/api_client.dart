@@ -20,25 +20,44 @@ class ApiClient {
   final http.Client _client;
   final Duration requestTimeout;
 
+  String? _accessToken;
+  Future<void> Function()? _onUnauthorized;
+
   Uri buildUri(String path) {
     return _baseUri.resolve(path);
+  }
+
+  void setAccessToken(String token) {
+    _accessToken = token;
+  }
+
+  void clearAccessToken() {
+    _accessToken = null;
+  }
+
+  void setUnauthorizedHandler(Future<void> Function() handler) {
+    _onUnauthorized = handler;
   }
 
   Future<Object?> get(
       String path, {
         Map<String, String>? headers,
+        bool authenticated = true,
       }) async {
     final response = await _client
         .get(
       buildUri(path),
-      headers: {
-        ..._jsonHeaders,
-        ...?headers,
-      },
+      headers: _buildHeaders(
+        headers: headers,
+        authenticated: authenticated,
+      ),
     )
         .timeout(requestTimeout);
 
-    final validatedResponse = _validateResponse(response);
+    final validatedResponse = await _validateResponse(
+      response,
+      authenticated: authenticated,
+    );
 
     return decodeJson(validatedResponse);
   }
@@ -47,26 +66,99 @@ class ApiClient {
       String path, {
         Map<String, String>? headers,
         required Map<String, dynamic> body,
+        bool authenticated = true,
       }) async {
     final response = await _client
         .post(
       buildUri(path),
-      headers: {
-        ..._jsonHeaders,
-        ...?headers,
-      },
+      headers: _buildHeaders(
+        headers: headers,
+        authenticated: authenticated,
+      ),
       body: jsonEncode(body),
     )
         .timeout(requestTimeout);
 
-    final validatedResponse = _validateResponse(response);
+    final validatedResponse = await _validateResponse(
+      response,
+      authenticated: authenticated,
+    );
 
     return decodeJson(validatedResponse);
   }
 
-  http.Response _validateResponse(http.Response response) {
+  Future<Object?> put(
+      String path, {
+        Map<String, String>? headers,
+        required Map<String, dynamic> body,
+        bool authenticated = true,
+      }) async {
+    final response = await _client
+        .put(
+      buildUri(path),
+      headers: _buildHeaders(
+        headers: headers,
+        authenticated: authenticated,
+      ),
+      body: jsonEncode(body),
+    )
+        .timeout(requestTimeout);
+
+    final validatedResponse = await _validateResponse(
+      response,
+      authenticated: authenticated,
+    );
+
+    return decodeJson(validatedResponse);
+  }
+
+  Future<Object?> patch(
+      String path, {
+        Map<String, String>? headers,
+        required Map<String, dynamic> body,
+        bool authenticated = true,
+      }) async {
+    final response = await _client
+        .patch(
+      buildUri(path),
+      headers: _buildHeaders(
+        headers: headers,
+        authenticated: authenticated,
+      ),
+      body: jsonEncode(body),
+    )
+        .timeout(requestTimeout);
+
+    final validatedResponse = await _validateResponse(
+      response,
+      authenticated: authenticated,
+    );
+
+    return decodeJson(validatedResponse);
+  }
+
+  Map<String, String> _buildHeaders({
+    Map<String, String>? headers,
+    required bool authenticated,
+  }) {
+    return {
+      ..._jsonHeaders,
+      if (authenticated && _accessToken != null)
+        'Authorization': 'Bearer $_accessToken',
+      ...?headers,
+    };
+  }
+
+  Future<http.Response> _validateResponse(
+      http.Response response, {
+        required bool authenticated,
+      }) async {
     if (response.statusCode >= 200 && response.statusCode < 300) {
       return response;
+    }
+
+    if (authenticated && response.statusCode == 401) {
+      await _onUnauthorized?.call();
     }
 
     throw ApiException(
