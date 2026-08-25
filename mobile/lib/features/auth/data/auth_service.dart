@@ -7,13 +7,8 @@ class AuthService {
 
   final ApiClient _apiClient;
 
-  Future<CurrentUserResponse> getCurrentUser(String token) async {
-    final response = await _apiClient.get(
-      'api/auth/me',
-      headers: {
-        'Authorization': 'Bearer $token',
-      },
-    );
+  Future<CurrentUserResponse> getCurrentUser() async {
+    final response = await _apiClient.get('api/auth/me');
 
     if (response is! Map<String, dynamic>) {
       throw const FormatException('Invalid current user response.');
@@ -28,6 +23,7 @@ class AuthService {
   }) async {
     final response = await _apiClient.post(
       'api/auth/login',
+      authenticated: false,
       body: {
         'email': email,
         'password': password,

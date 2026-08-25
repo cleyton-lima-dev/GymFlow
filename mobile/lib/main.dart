@@ -28,7 +28,10 @@ void main() {
   final sessionController = SessionController(
     tokenStorage,
     authService,
+    apiClient,
   );
+
+  apiClient.setUnauthorizedHandler(sessionController.invalidateSession);
 
   const brandingRepository = LocalBrandingRepository({
     '11111111-1111-1111-1111-111111111111': acPowerGymBranding,
@@ -66,6 +69,7 @@ void main() {
     GymFlowApp(
       sessionController: sessionController,
       brandingController: brandingController,
+      apiClient: apiClient,
       router: appRouter.router,
     ),
   );

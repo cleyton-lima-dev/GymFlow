@@ -234,6 +234,7 @@ public class WorkoutsController : ControllerBase
         }
     }
 
+
     [Authorize(Roles = "Student")]
     [HttpGet("me/history")]
     public async Task<IActionResult> GetMyHistory(

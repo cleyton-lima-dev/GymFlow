@@ -5,15 +5,18 @@ import 'package:gymflow/features/auth/data/auth_service.dart';
 import 'package:gymflow/app/session/session_user.dart';
 import 'package:gymflow/core/network/api_exception.dart';
 import 'package:gymflow/app/session/app_role.dart';
+import 'package:gymflow/core/network/api_client.dart';
 
 class SessionController extends ChangeNotifier {
   SessionController(
       this._tokenStorage,
       this._authService,
+      this._apiClient,
       );
 
   final TokenStorage _tokenStorage;
   final AuthService _authService;
+  final ApiClient _apiClient;
 
   SessionStatus _status = SessionStatus.unknown;
   SessionUser? _user;
@@ -29,9 +32,10 @@ class SessionController extends ChangeNotifier {
       notifyListeners();
       return;
     }
+    _apiClient.setAccessToken(token);
 
     try {
-      final currentUser = await _authService.getCurrentUser(token);
+      final currentUser = await _authService.getCurrentUser();
 
       _user = SessionUser(
         userId: currentUser.userId,
@@ -83,6 +87,7 @@ class SessionController extends ChangeNotifier {
     required String token,
   }) async {
     await _tokenStorage.saveToken(token);
+    _apiClient.setAccessToken(token);
 
     _user = user;
     _status = SessionStatus.authenticated;
@@ -90,13 +95,22 @@ class SessionController extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> logout() async {
+  Future<void> invalidateSession() async {
+    _apiClient.clearAccessToken();
     await _tokenStorage.deleteToken();
 
-    _user = null;
+    final shouldNotify =
+        _user != null || _status != SessionStatus.unauthenticated;
 
+    _user = null;
     _status = SessionStatus.unauthenticated;
 
-    notifyListeners();
+    if (shouldNotify) {
+      notifyListeners();
+    }
+  }
+
+  Future<void> logout() {
+    return invalidateSession();
   }
 }
