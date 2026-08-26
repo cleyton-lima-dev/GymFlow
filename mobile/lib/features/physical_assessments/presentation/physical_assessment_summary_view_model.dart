@@ -7,13 +7,14 @@ import 'package:gymflow/features/physical_assessments/models/physical_assessment
 import 'package:http/http.dart' as http;
 
 class PhysicalAssessmentSummaryViewModel extends ChangeNotifier {
-  PhysicalAssessmentSummaryViewModel(
-      this._service,
-      this._studentId,
-      );
+  PhysicalAssessmentSummaryViewModel(this._service, String studentId)
+    : _studentId = studentId;
+
+  PhysicalAssessmentSummaryViewModel.forCurrentUser(this._service)
+    : _studentId = null;
 
   final PhysicalAssessmentsService _service;
-  final String _studentId;
+  final String? _studentId;
 
   PhysicalAssessment? _latest;
   bool _isLoading = false;
@@ -25,8 +26,7 @@ class PhysicalAssessmentSummaryViewModel extends ChangeNotifier {
 
   bool get hasAssessment => _latest != null;
 
-  bool get isReassessmentDue =>
-      _latest?.isReassessmentDue ?? false;
+  bool get isReassessmentDue => _latest?.isReassessmentDue ?? false;
 
   Future<void> load() async {
     if (_isLoading) {
@@ -38,21 +38,23 @@ class PhysicalAssessmentSummaryViewModel extends ChangeNotifier {
     notifyListeners();
 
     try {
-      _latest = await _service.getLatest(_studentId);
+      final studentId = _studentId;
+
+      _latest = studentId == null
+          ? await _service.getMyLatest()
+          : await _service.getLatest(studentId);
     } on ApiException catch (exception) {
       _errorMessage = _messageFromApiException(exception);
     } on TimeoutException {
       _errorMessage =
-      'A avaliação física demorou mais que o esperado para carregar.';
+          'A avaliação física demorou mais que o esperado para carregar.';
     } on http.ClientException {
-      _errorMessage =
-      'Não foi possível carregar a avaliação física.';
+      _errorMessage = 'Não foi possível carregar a avaliação física.';
     } on FormatException {
       _errorMessage =
-      'Não foi possível interpretar os dados da avaliação física.';
+          'Não foi possível interpretar os dados da avaliação física.';
     } catch (_) {
-      _errorMessage =
-      'Não foi possível carregar a avaliação física.';
+      _errorMessage = 'Não foi possível carregar a avaliação física.';
     } finally {
       _isLoading = false;
       notifyListeners();

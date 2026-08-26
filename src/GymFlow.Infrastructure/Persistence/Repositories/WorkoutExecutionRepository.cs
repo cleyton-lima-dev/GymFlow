@@ -80,18 +80,14 @@ public class WorkoutExecutionRepository
     }
 
     public async Task<bool> ExistsForWorkoutDayOnDateAsync(
-    Guid workoutDayId,
-    DateTime date)
+     Guid workoutDayId,
+     DateOnly executionDate)
     {
-        var start = date.Date;
-        var end = start.AddDays(1);
-
         return await _context.WorkoutExecutions
             .AsNoTracking()
             .AnyAsync(x =>
                 x.WorkoutDayId == workoutDayId &&
-                x.CompletedAt >= start &&
-                x.CompletedAt < end);
+                x.ExecutionDate == executionDate);
     }
 
     public async Task<int> CountHistoryByStudentAsync(

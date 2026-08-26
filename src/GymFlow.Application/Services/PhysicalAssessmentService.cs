@@ -2,6 +2,7 @@
 using GymFlow.Application.DTOs.PhysicalAssessments;
 using GymFlow.Application.Interfaces.Repositories;
 using GymFlow.Domain.Entities;
+using GymFlow.Application.Interfaces.Time;
 
 namespace GymFlow.Application.Services;
 
@@ -9,13 +10,16 @@ public class PhysicalAssessmentService
 {
     private readonly IPhysicalAssessmentRepository _physicalAssessmentRepository;
     private readonly IStudentRepository _studentRepository;
+    private readonly IGymTimeZoneProvider _gymTimeZoneProvider;
 
     public PhysicalAssessmentService(
-        IPhysicalAssessmentRepository physicalAssessmentRepository,
-        IStudentRepository studentRepository)
+    IPhysicalAssessmentRepository physicalAssessmentRepository,
+    IStudentRepository studentRepository,
+    IGymTimeZoneProvider gymTimeZoneProvider)
     {
         _physicalAssessmentRepository = physicalAssessmentRepository;
         _studentRepository = studentRepository;
+        _gymTimeZoneProvider = gymTimeZoneProvider;
     }
 
     public async Task<CreatePhysicalAssessmentResult> CreateAsync(
@@ -29,7 +33,7 @@ public class PhysicalAssessmentService
         if (student is null)
             return CreatePhysicalAssessmentResult.StudentNotFound;
 
-        ValidateRequest(request);
+        ValidateRequest(request, gymId);
 
         var existsForDate =
             await _physicalAssessmentRepository.ExistsForDateAsync(
@@ -93,7 +97,7 @@ public class PhysicalAssessmentService
 
         return assessment is null
             ? null
-            : MapToResponse(assessment);
+            : MapToResponse(assessment, gymId);
     }
 
     public async Task<PhysicalAssessmentResponse?> GetByIdAsync(
@@ -108,8 +112,8 @@ public class PhysicalAssessmentService
                 gymId);
 
         return assessment is null
-            ? null
-            : MapToResponse(assessment);
+            ? null:
+            MapToResponse(assessment, gymId);
     }
 
     public async Task<PagedResponse<PhysicalAssessmentHistoryItemResponse>>
@@ -143,7 +147,9 @@ public class PhysicalAssessmentService
                 studentId,
                 gymId);
 
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var today = GetGymDate(
+                gymId,
+                DateTime.UtcNow);
 
         var items = assessments
             .Select(assessment =>
@@ -228,10 +234,13 @@ public class PhysicalAssessmentService
             gymId);
     }
 
-    private static PhysicalAssessmentResponse MapToResponse(
-        PhysicalAssessment assessment)
+    private PhysicalAssessmentResponse MapToResponse(
+    PhysicalAssessment assessment,
+    Guid gymId)
     {
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var today = GetGymDate(
+            gymId,
+            DateTime.UtcNow);
 
         var nextAssessmentDate =
             assessment.AssessmentDate.AddMonths(2);
@@ -270,11 +279,29 @@ public class PhysicalAssessmentService
         };
     }
 
-    private static void ValidateRequest(
-        CreatePhysicalAssessmentRequest request)
+    private DateOnly GetGymDate(
+    Guid gymId,
+    DateTime utcDateTime)
     {
-        var today =
-            DateOnly.FromDateTime(DateTime.UtcNow);
+        var timeZone =
+            _gymTimeZoneProvider.GetTimeZone(gymId);
+
+        var localDateTime =
+            TimeZoneInfo.ConvertTimeFromUtc(
+                utcDateTime,
+                timeZone);
+
+        return DateOnly.FromDateTime(
+            localDateTime);
+    }
+
+    private void ValidateRequest(
+    CreatePhysicalAssessmentRequest request,
+    Guid gymId)
+    {
+        var today = GetGymDate(
+            gymId,
+            DateTime.UtcNow);
 
         if (request.AssessmentDate > today)
         {

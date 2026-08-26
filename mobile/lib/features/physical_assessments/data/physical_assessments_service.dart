@@ -9,13 +9,17 @@ class PhysicalAssessmentsService {
 
   final ApiClient _apiClient;
 
-  Future<PhysicalAssessment?> getLatest(
-      String studentId,
-      ) async {
+  Future<PhysicalAssessment?> getLatest(String studentId) {
+    return _getLatest('api/students/$studentId/physical-assessments/latest');
+  }
+
+  Future<PhysicalAssessment?> getMyLatest() {
+    return _getLatest('api/physical-assessments/me/latest');
+  }
+
+  Future<PhysicalAssessment?> _getLatest(String path) async {
     try {
-      final response = await _apiClient.get(
-        'api/students/$studentId/physical-assessments/latest',
-      );
+      final response = await _apiClient.get(path);
 
       if (response is! Map) {
         throw const FormatException(
@@ -23,9 +27,7 @@ class PhysicalAssessmentsService {
         );
       }
 
-      return PhysicalAssessment.fromJson(
-        Map<String, dynamic>.from(response),
-      );
+      return PhysicalAssessment.fromJson(Map<String, dynamic>.from(response));
     } on ApiException catch (exception) {
       if (exception.statusCode == 404) {
         return null;
@@ -39,10 +41,32 @@ class PhysicalAssessmentsService {
     required String studentId,
     int page = 1,
     int pageSize = 20,
+  }) {
+    return _getHistory(
+      'api/students/$studentId/physical-assessments',
+      page: page,
+      pageSize: pageSize,
+    );
+  }
+
+  Future<PagedPhysicalAssessmentsResponse> getMyHistory({
+    int page = 1,
+    int pageSize = 20,
+  }) {
+    return _getHistory(
+      'api/physical-assessments/me',
+      page: page,
+      pageSize: pageSize,
+    );
+  }
+
+  Future<PagedPhysicalAssessmentsResponse> _getHistory(
+    String path, {
+    required int page,
+    required int pageSize,
   }) async {
     final response = await _apiClient.get(
-      'api/students/$studentId/physical-assessments'
-          '?page=$page&pageSize=$pageSize',
+      '$path?page=$page&pageSize=$pageSize',
     );
 
     if (response is! Map) {
@@ -59,21 +83,26 @@ class PhysicalAssessmentsService {
   Future<PhysicalAssessment> getById({
     required String studentId,
     required String assessmentId,
-  }) async {
-    final response = await _apiClient.get(
+  }) {
+    return _getById(
       'api/students/$studentId/physical-assessments/$assessmentId',
     );
+  }
+
+  Future<PhysicalAssessment> getMyById({required String assessmentId}) {
+    return _getById('api/physical-assessments/me/$assessmentId');
+  }
+
+  Future<PhysicalAssessment> _getById(String path) async {
+    final response = await _apiClient.get(path);
 
     if (response is! Map) {
-      throw const FormatException(
-        'Invalid physical assessment response.',
-      );
+      throw const FormatException('Invalid physical assessment response.');
     }
 
-    return PhysicalAssessment.fromJson(
-      Map<String, dynamic>.from(response),
-    );
+    return PhysicalAssessment.fromJson(Map<String, dynamic>.from(response));
   }
+
   Future<void> create({
     required String studentId,
     required CreatePhysicalAssessmentRequest request,

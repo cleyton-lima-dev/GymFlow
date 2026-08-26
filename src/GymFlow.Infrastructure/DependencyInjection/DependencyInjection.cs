@@ -6,6 +6,8 @@ using GymFlow.Application.Interfaces.Security;
 using GymFlow.Infrastructure.Security;
 using GymFlow.Application.Interfaces.Repositories;
 using GymFlow.Infrastructure.Persistence.Repositories;
+using GymFlow.Application.Interfaces.Time;
+using GymFlow.Infrastructure.Time;
 
 
 namespace GymFlow.Infrastructure.DependencyInjection;
@@ -33,6 +35,9 @@ public static class DependencyInjection
             IWorkoutExecutionRepository,
             WorkoutExecutionRepository>();
         services.AddScoped<ITokenService, JwtTokenService>();
+        services.AddSingleton<
+            IGymTimeZoneProvider,
+            ConfigurationGymTimeZoneProvider>();
 
         return services;
 

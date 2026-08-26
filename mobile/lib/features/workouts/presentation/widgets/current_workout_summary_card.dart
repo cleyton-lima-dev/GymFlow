@@ -15,15 +15,13 @@ class CurrentWorkoutSummaryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final viewModel =
-    context.watch<CurrentWorkoutViewModel>();
+    final viewModel = context.watch<CurrentWorkoutViewModel>();
 
     if (viewModel.isLoading && !viewModel.hasLoaded) {
       return const _LoadingCard();
     }
 
-    if (viewModel.errorMessage != null &&
-        !viewModel.hasWorkout) {
+    if (viewModel.errorMessage != null && !viewModel.hasWorkout) {
       return _ErrorCard(
         message: viewModel.errorMessage!,
         onRetry: viewModel.load,
@@ -33,23 +31,15 @@ class CurrentWorkoutSummaryCard extends StatelessWidget {
     final workout = viewModel.workout;
 
     if (workout == null) {
-      return _EmptyWorkoutCard(
-        onCreateWorkoutTap: onCreateWorkoutTap,
-      );
+      return _EmptyWorkoutCard(onCreateWorkoutTap: onCreateWorkoutTap);
     }
 
-    return _WorkoutCard(
-      workout: workout,
-      onEditWorkoutTap: onEditWorkoutTap,
-    );
+    return _WorkoutCard(workout: workout, onEditWorkoutTap: onEditWorkoutTap);
   }
 }
 
 class _WorkoutCard extends StatelessWidget {
-  const _WorkoutCard({
-    required this.workout,
-    required this.onEditWorkoutTap,
-  });
+  const _WorkoutCard({required this.workout, required this.onEditWorkoutTap});
 
   final WorkoutDetails workout;
   final VoidCallback? onEditWorkoutTap;
@@ -59,14 +49,11 @@ class _WorkoutCard extends StatelessWidget {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
 
-    final days = [...workout.days]
-      ..sort(
-            (a, b) => a.order.compareTo(b.order),
-      );
+    final days = [...workout.days]..sort((a, b) => a.order.compareTo(b.order));
 
     final totalExercises = days.fold<int>(
       0,
-          (total, day) => total + day.exercises.length,
+      (total, day) => total + day.exercises.length,
     );
 
     return Container(
@@ -74,36 +61,27 @@ class _WorkoutCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: colorScheme.surface,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color:
-          colorScheme.outlineVariant.withAlpha(120),
-        ),
+        border: Border.all(color: colorScheme.outlineVariant.withAlpha(120)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Row(
             children: [
-              Icon(
-                Icons.fitness_center_rounded,
-                color: colorScheme.primary,
-              ),
+              Icon(Icons.fitness_center_rounded, color: colorScheme.primary),
 
               const SizedBox(width: 10),
 
               Expanded(
                 child: Text(
                   'Treino atual',
-                  style:
-                  theme.textTheme.titleLarge?.copyWith(
+                  style: theme.textTheme.titleLarge?.copyWith(
                     fontWeight: FontWeight.w800,
                   ),
                 ),
               ),
 
-              _StatusBadge(
-                isActive: workout.isActive,
-              ),
+              _StatusBadge(isActive: workout.isActive),
             ],
           ),
 
@@ -114,29 +92,23 @@ class _WorkoutCard extends StatelessWidget {
             children: [
               Expanded(
                 child: Column(
-                  crossAxisAlignment:
-                  CrossAxisAlignment.start,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
                       workout.name,
-                      style:
-                      theme.textTheme.titleLarge?.copyWith(
+                      style: theme.textTheme.titleLarge?.copyWith(
                         fontWeight: FontWeight.w800,
                       ),
                     ),
 
                     if (workout.description != null &&
-                        workout.description!
-                            .trim()
-                            .isNotEmpty) ...[
+                        workout.description!.trim().isNotEmpty) ...[
                       const SizedBox(height: 6),
 
                       Text(
                         workout.description!.trim(),
-                        style:
-                        theme.textTheme.bodyMedium?.copyWith(
-                          color:
-                          colorScheme.onSurfaceVariant,
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
                           height: 1.4,
                         ),
                       ),
@@ -151,9 +123,7 @@ class _WorkoutCard extends StatelessWidget {
                 IconButton(
                   tooltip: 'Editar treino',
                   onPressed: onEditWorkoutTap,
-                  icon: const Icon(
-                    Icons.edit_outlined,
-                  ),
+                  icon: const Icon(Icons.edit_outlined),
                 ),
               ],
             ],
@@ -167,9 +137,7 @@ class _WorkoutCard extends StatelessWidget {
                 child: _Metric(
                   icon: Icons.view_day_outlined,
                   value: '${days.length}',
-                  label: days.length == 1
-                      ? 'Dia'
-                      : 'Dias',
+                  label: days.length == 1 ? 'Dia' : 'Dias',
                 ),
               ),
 
@@ -179,9 +147,7 @@ class _WorkoutCard extends StatelessWidget {
                 child: _Metric(
                   icon: Icons.fitness_center_rounded,
                   value: '$totalExercises',
-                  label: totalExercises == 1
-                      ? 'Exercício'
-                      : 'Exercícios',
+                  label: totalExercises == 1 ? 'Exercício' : 'Exercícios',
                 ),
               ),
             ],
@@ -193,21 +159,14 @@ class _WorkoutCard extends StatelessWidget {
             Text(
               'Nenhuma divisão foi configurada neste treino.',
               style: theme.textTheme.bodyMedium?.copyWith(
-                color:
-                colorScheme.onSurfaceVariant,
+                color: colorScheme.onSurfaceVariant,
               ),
             )
           else
-            for (var index = 0;
-            index < days.length;
-            index++) ...[
-              _WorkoutDayCard(
-                day: days[index],
-                position: index + 1,
-              ),
+            for (var index = 0; index < days.length; index++) ...[
+              _WorkoutDayCard(day: days[index], position: index + 1),
 
-              if (index < days.length - 1)
-                const SizedBox(height: 12),
+              if (index < days.length - 1) const SizedBox(height: 12),
             ],
         ],
       ),
@@ -216,10 +175,7 @@ class _WorkoutCard extends StatelessWidget {
 }
 
 class _WorkoutDayCard extends StatelessWidget {
-  const _WorkoutDayCard({
-    required this.day,
-    required this.position,
-  });
+  const _WorkoutDayCard({required this.day, required this.position});
 
   final WorkoutDayDetails day;
   final int position;
@@ -230,19 +186,14 @@ class _WorkoutDayCard extends StatelessWidget {
     final colorScheme = theme.colorScheme;
 
     final exercises = [...day.exercises]
-      ..sort(
-            (a, b) => a.order.compareTo(b.order),
-      );
+      ..sort((a, b) => a.order.compareTo(b.order));
 
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: colorScheme.surfaceContainerLow,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color:
-          colorScheme.outlineVariant.withAlpha(90),
-        ),
+        border: Border.all(color: colorScheme.outlineVariant.withAlpha(90)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -255,8 +206,7 @@ class _WorkoutDayCard extends StatelessWidget {
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color:
-                  colorScheme.primary.withAlpha(18),
+                  color: colorScheme.primary.withAlpha(18),
                 ),
                 child: Text(
                   '$position',
@@ -271,13 +221,11 @@ class _WorkoutDayCard extends StatelessWidget {
 
               Expanded(
                 child: Column(
-                  crossAxisAlignment:
-                  CrossAxisAlignment.start,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
                       day.name,
-                      style:
-                      theme.textTheme.titleMedium?.copyWith(
+                      style: theme.textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.w800,
                       ),
                     ),
@@ -285,21 +233,16 @@ class _WorkoutDayCard extends StatelessWidget {
                     const SizedBox(height: 3),
 
                     Text(
-                      _exerciseCountLabel(
-                        exercises.length,
-                      ),
-                      style:
-                      theme.textTheme.bodySmall?.copyWith(
-                        color:
-                        colorScheme.onSurfaceVariant,
+                      _exerciseCountLabel(exercises.length),
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
                       ),
                     ),
                   ],
                 ),
               ),
 
-              if (day.completedToday)
-                const _CompletedTodayBadge(),
+              if (day.completedToday) const _CompletedTodayBadge(),
             ],
           ),
 
@@ -308,10 +251,9 @@ class _WorkoutDayCard extends StatelessWidget {
 
             Text(
               'Última conclusão: '
-                  '${_formatDateTime(day.lastCompletedAt!)}',
+              '${_formatDateTime(day.lastCompletedAt!)}',
               style: theme.textTheme.bodySmall?.copyWith(
-                color:
-                colorScheme.onSurfaceVariant,
+                color: colorScheme.onSurfaceVariant,
               ),
             ),
           ],
@@ -321,15 +263,10 @@ class _WorkoutDayCard extends StatelessWidget {
             const Divider(height: 1),
             const SizedBox(height: 12),
 
-            for (var index = 0;
-            index < exercises.length;
-            index++) ...[
-              _ExerciseRow(
-                exercise: exercises[index],
-              ),
+            for (var index = 0; index < exercises.length; index++) ...[
+              _ExerciseRow(exercise: exercises[index]),
 
-              if (index < exercises.length - 1)
-                const SizedBox(height: 12),
+              if (index < exercises.length - 1) const SizedBox(height: 12),
             ],
           ],
         ],
@@ -339,9 +276,7 @@ class _WorkoutDayCard extends StatelessWidget {
 }
 
 class _ExerciseRow extends StatelessWidget {
-  const _ExerciseRow({
-    required this.exercise,
-  });
+  const _ExerciseRow({required this.exercise});
 
   final WorkoutExerciseDetails exercise;
 
@@ -363,13 +298,11 @@ class _ExerciseRow extends StatelessWidget {
 
         Expanded(
           child: Column(
-            crossAxisAlignment:
-            CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
                 exercise.exerciseName,
-                style:
-                theme.textTheme.bodyMedium?.copyWith(
+                style: theme.textTheme.bodyMedium?.copyWith(
                   fontWeight: FontWeight.w700,
                 ),
               ),
@@ -378,10 +311,8 @@ class _ExerciseRow extends StatelessWidget {
 
               Text(
                 exercise.muscleGroup,
-                style:
-                theme.textTheme.bodySmall?.copyWith(
-                  color:
-                  colorScheme.onSurfaceVariant,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: colorScheme.onSurfaceVariant,
                 ),
               ),
 
@@ -389,28 +320,22 @@ class _ExerciseRow extends StatelessWidget {
 
               Text(
                 '${exercise.sets} séries • '
-                    '${exercise.repetitions} reps • '
-                    '${_restText(exercise.restSeconds)}',
-                style:
-                theme.textTheme.bodySmall?.copyWith(
-                  color:
-                  colorScheme.onSurfaceVariant,
+                '${exercise.repetitions} reps • '
+                '${_restText(exercise.restSeconds)}',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: colorScheme.onSurfaceVariant,
                   fontWeight: FontWeight.w600,
                 ),
               ),
 
               if (exercise.notes != null &&
-                  exercise.notes!
-                      .trim()
-                      .isNotEmpty) ...[
+                  exercise.notes!.trim().isNotEmpty) ...[
                 const SizedBox(height: 4),
 
                 Text(
                   exercise.notes!.trim(),
-                  style:
-                  theme.textTheme.bodySmall?.copyWith(
-                    color:
-                    colorScheme.onSurfaceVariant,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
                   ),
                 ),
               ],
@@ -423,11 +348,7 @@ class _ExerciseRow extends StatelessWidget {
 }
 
 class _Metric extends StatelessWidget {
-  const _Metric({
-    required this.icon,
-    required this.value,
-    required this.label,
-  });
+  const _Metric({required this.icon, required this.value, required this.label});
 
   final IconData icon;
   final String value;
@@ -446,31 +367,23 @@ class _Metric extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Icon(
-            icon,
-            size: 20,
-            color: colorScheme.primary,
-          ),
+          Icon(icon, size: 20, color: colorScheme.primary),
 
           const SizedBox(width: 10),
 
           Column(
-            crossAxisAlignment:
-            CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
                 value,
-                style:
-                theme.textTheme.titleMedium?.copyWith(
+                style: theme.textTheme.titleMedium?.copyWith(
                   fontWeight: FontWeight.w800,
                 ),
               ),
               Text(
                 label,
-                style:
-                theme.textTheme.bodySmall?.copyWith(
-                  color:
-                  colorScheme.onSurfaceVariant,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: colorScheme.onSurfaceVariant,
                 ),
               ),
             ],
@@ -482,9 +395,7 @@ class _Metric extends StatelessWidget {
 }
 
 class _StatusBadge extends StatelessWidget {
-  const _StatusBadge({
-    required this.isActive,
-  });
+  const _StatusBadge({required this.isActive});
 
   final bool isActive;
 
@@ -492,15 +403,10 @@ class _StatusBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     final color = isActive
         ? const Color(0xFF22C55E)
-        : Theme.of(context)
-        .colorScheme
-        .onSurfaceVariant;
+        : Theme.of(context).colorScheme.onSurfaceVariant;
 
     return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: 10,
-        vertical: 5,
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
         color: color.withAlpha(20),
         borderRadius: BorderRadius.circular(999),
@@ -525,10 +431,7 @@ class _CompletedTodayBadge extends StatelessWidget {
     const color = Color(0xFF22C55E);
 
     return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: 9,
-        vertical: 5,
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
       decoration: BoxDecoration(
         color: color.withAlpha(20),
         borderRadius: BorderRadius.circular(999),
@@ -546,9 +449,7 @@ class _CompletedTodayBadge extends StatelessWidget {
 }
 
 class _EmptyWorkoutCard extends StatelessWidget {
-  const _EmptyWorkoutCard({
-    required this.onCreateWorkoutTap,
-  });
+  const _EmptyWorkoutCard({required this.onCreateWorkoutTap});
 
   final VoidCallback? onCreateWorkoutTap;
 
@@ -562,28 +463,20 @@ class _EmptyWorkoutCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: colorScheme.surface,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color:
-          colorScheme.outlineVariant.withAlpha(120),
-        ),
+        border: Border.all(color: colorScheme.outlineVariant.withAlpha(120)),
       ),
       child: Column(
-        crossAxisAlignment:
-        CrossAxisAlignment.stretch,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Row(
             children: [
-              Icon(
-                Icons.fitness_center_rounded,
-                color: colorScheme.primary,
-              ),
+              Icon(Icons.fitness_center_rounded, color: colorScheme.primary),
 
               const SizedBox(width: 10),
 
               Text(
                 'Treino atual',
-                style:
-                theme.textTheme.titleLarge?.copyWith(
+                style: theme.textTheme.titleLarge?.copyWith(
                   fontWeight: FontWeight.w800,
                 ),
               ),
@@ -592,19 +485,14 @@ class _EmptyWorkoutCard extends StatelessWidget {
 
           const SizedBox(height: 20),
 
-          Icon(
-            Icons.assignment_outlined,
-            size: 38,
-            color: colorScheme.primary,
-          ),
+          Icon(Icons.assignment_outlined, size: 38, color: colorScheme.primary),
 
           const SizedBox(height: 12),
 
           Text(
             'Nenhum treino ativo',
             textAlign: TextAlign.center,
-            style:
-            theme.textTheme.titleMedium?.copyWith(
+            style: theme.textTheme.titleMedium?.copyWith(
               fontWeight: FontWeight.w800,
             ),
           ),
@@ -614,10 +502,8 @@ class _EmptyWorkoutCard extends StatelessWidget {
           Text(
             'Este aluno ainda não possui um treino ativo.',
             textAlign: TextAlign.center,
-            style:
-            theme.textTheme.bodyMedium?.copyWith(
-              color:
-              colorScheme.onSurfaceVariant,
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: colorScheme.onSurfaceVariant,
             ),
           ),
 
@@ -626,12 +512,8 @@ class _EmptyWorkoutCard extends StatelessWidget {
 
             FilledButton.icon(
               onPressed: onCreateWorkoutTap,
-              icon: const Icon(
-                Icons.add_rounded,
-              ),
-              label: const Text(
-                'Criar ou atribuir treino',
-              ),
+              icon: const Icon(Icons.add_rounded),
+              label: const Text('Criar ou atribuir treino'),
             ),
           ],
         ],
@@ -645,18 +527,14 @@ class _LoadingCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme =
-        Theme.of(context).colorScheme;
+    final colorScheme = Theme.of(context).colorScheme;
 
     return Container(
       height: 150,
       decoration: BoxDecoration(
         color: colorScheme.surface,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color:
-          colorScheme.outlineVariant.withAlpha(120),
-        ),
+        border: Border.all(color: colorScheme.outlineVariant.withAlpha(120)),
       ),
       alignment: Alignment.center,
       child: const CircularProgressIndicator(),
@@ -665,10 +543,7 @@ class _LoadingCard extends StatelessWidget {
 }
 
 class _ErrorCard extends StatelessWidget {
-  const _ErrorCard({
-    required this.message,
-    required this.onRetry,
-  });
+  const _ErrorCard({required this.message, required this.onRetry});
 
   final String message;
   final VoidCallback onRetry;
@@ -683,33 +558,21 @@ class _ErrorCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: colorScheme.surface,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color:
-          colorScheme.outlineVariant.withAlpha(120),
-        ),
+        border: Border.all(color: colorScheme.outlineVariant.withAlpha(120)),
       ),
       child: Column(
         children: [
-          Icon(
-            Icons.error_outline_rounded,
-            size: 36,
-            color: colorScheme.error,
-          ),
+          Icon(Icons.error_outline_rounded, size: 36, color: colorScheme.error),
 
           const SizedBox(height: 12),
 
-          Text(
-            message,
-            textAlign: TextAlign.center,
-          ),
+          Text(message, textAlign: TextAlign.center),
 
           const SizedBox(height: 16),
 
           OutlinedButton(
             onPressed: onRetry,
-            child: const Text(
-              'Tentar novamente',
-            ),
+            child: const Text('Tentar novamente'),
           ),
         ],
       ),
@@ -718,12 +581,14 @@ class _ErrorCard extends StatelessWidget {
 }
 
 String _exerciseCountLabel(int count) {
-  return count == 1
-      ? '1 exercício'
-      : '$count exercícios';
+  return count == 1 ? '1 exercício' : '$count exercícios';
 }
 
-String _restText(int seconds) {
+String _restText(int? seconds) {
+  if (seconds == null) {
+    return 'Descanso não informado';
+  }
+
   if (seconds < 60) {
     return '${seconds}s descanso';
   }
@@ -731,9 +596,7 @@ String _restText(int seconds) {
   if (seconds % 60 == 0) {
     final minutes = seconds ~/ 60;
 
-    return minutes == 1
-        ? '1 min descanso'
-        : '$minutes min descanso';
+    return minutes == 1 ? '1 min descanso' : '$minutes min descanso';
   }
 
   final minutes = seconds ~/ 60;
@@ -745,15 +608,11 @@ String _restText(int seconds) {
 String _formatDateTime(DateTime date) {
   final local = date.toLocal();
 
-  final day =
-  local.day.toString().padLeft(2, '0');
-  final month =
-  local.month.toString().padLeft(2, '0');
+  final day = local.day.toString().padLeft(2, '0');
+  final month = local.month.toString().padLeft(2, '0');
 
-  final hour =
-  local.hour.toString().padLeft(2, '0');
-  final minute =
-  local.minute.toString().padLeft(2, '0');
+  final hour = local.hour.toString().padLeft(2, '0');
+  final minute = local.minute.toString().padLeft(2, '0');
 
   return '$day/$month/${local.year} às $hour:$minute';
 }

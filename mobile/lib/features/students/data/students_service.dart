@@ -20,30 +20,20 @@ class StudentsService {
       'pageSize': pageSize.toString(),
       if (normalizedSearch != null && normalizedSearch.isNotEmpty)
         'search': normalizedSearch,
-      if (isActive != null)
-        'isActive': isActive.toString(),
+      if (isActive != null) 'isActive': isActive.toString(),
     };
 
-    final query = Uri(
-      queryParameters: queryParameters,
-    ).query;
+    final query = Uri(queryParameters: queryParameters).query;
 
-    final response = await _apiClient.get(
-      'api/students?$query',
-    );
+    final response = await _apiClient.get('api/students?$query');
 
     if (response is! Map) {
-      throw const FormatException(
-        'Invalid students response.',
-      );
+      throw const FormatException('Invalid students response.');
     }
 
-
-    return PagedStudentsResponse.fromJson(
-      Map<String, dynamic>.from(response),
-    );
-
+    return PagedStudentsResponse.fromJson(Map<String, dynamic>.from(response));
   }
+
   Future<void> createStudent({
     required String name,
     required String email,
@@ -62,9 +52,7 @@ class StudentsService {
         'phone': normalizedPhone == null || normalizedPhone.isEmpty
             ? null
             : normalizedPhone,
-        'birthDate': birthDate == null
-            ? null
-            : _formatDateOnly(birthDate),
+        'birthDate': birthDate == null ? null : _formatDateOnly(birthDate),
       },
     );
   }
@@ -76,22 +64,25 @@ class StudentsService {
 
     return '$year-$month-$day';
   }
-  Future<StudentSummary> getStudentById(
-      String studentId,
-      ) async {
-    final response = await _apiClient.get(
-      'api/students/$studentId',
-    );
+
+  Future<StudentSummary> getStudentById(String studentId) async {
+    final response = await _apiClient.get('api/students/$studentId');
 
     if (response is! Map) {
-      throw const FormatException(
-        'Invalid student response.',
-      );
+      throw const FormatException('Invalid student response.');
     }
 
-    return StudentSummary.fromJson(
-      Map<String, dynamic>.from(response),
-    );
+    return StudentSummary.fromJson(Map<String, dynamic>.from(response));
+  }
+
+  Future<StudentSummary> getMe() async {
+    final response = await _apiClient.get('api/students/me');
+
+    if (response is! Map) {
+      throw const FormatException('Invalid student profile response.');
+    }
+
+    return StudentSummary.fromJson(Map<String, dynamic>.from(response));
   }
 
   Future<void> updateStudent({
@@ -111,9 +102,7 @@ class StudentsService {
         'phone': normalizedPhone == null || normalizedPhone.isEmpty
             ? null
             : normalizedPhone,
-        'birthDate': birthDate == null
-            ? null
-            : _formatDateOnly(birthDate),
+        'birthDate': birthDate == null ? null : _formatDateOnly(birthDate),
       },
     );
   }
@@ -124,10 +113,7 @@ class StudentsService {
   }) async {
     await _apiClient.patch(
       'api/students/$studentId/status',
-      body: {
-        'isActive': isActive,
-      },
+      body: {'isActive': isActive},
     );
   }
-
 }
