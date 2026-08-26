@@ -8,13 +8,18 @@ import 'package:http/http.dart' as http;
 
 class PhysicalAssessmentDetailsViewModel extends ChangeNotifier {
   PhysicalAssessmentDetailsViewModel(
-      this._service,
-      this._studentId,
-      this._assessmentId,
-      );
+    this._service,
+    String studentId,
+    this._assessmentId,
+  ) : _studentId = studentId;
+
+  PhysicalAssessmentDetailsViewModel.forCurrentUser(
+    this._service,
+    this._assessmentId,
+  ) : _studentId = null;
 
   final PhysicalAssessmentsService _service;
-  final String _studentId;
+  final String? _studentId;
   final String _assessmentId;
 
   PhysicalAssessment? _assessment;
@@ -37,29 +42,31 @@ class PhysicalAssessmentDetailsViewModel extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final assessment = await _service.getById(
-        studentId: _studentId,
-        assessmentId: _assessmentId,
-      );
+      final studentId = _studentId;
 
-      final latest = await _service.getLatest(_studentId);
+      final assessment = studentId == null
+          ? await _service.getMyById(assessmentId: _assessmentId)
+          : await _service.getById(
+              studentId: studentId,
+              assessmentId: _assessmentId,
+            );
+
+      final latest = studentId == null
+          ? await _service.getMyLatest()
+          : await _service.getLatest(studentId);
 
       _assessment = assessment;
       _isLatest = latest?.id == assessment.id;
     } on ApiException catch (exception) {
       _errorMessage = _messageFromApiException(exception);
     } on TimeoutException {
-      _errorMessage =
-      'A avaliação demorou mais que o esperado para carregar.';
+      _errorMessage = 'A avaliação demorou mais que o esperado para carregar.';
     } on http.ClientException {
-      _errorMessage =
-      'Não foi possível conectar ao servidor.';
+      _errorMessage = 'Não foi possível conectar ao servidor.';
     } on FormatException {
-      _errorMessage =
-      'Não foi possível interpretar os dados da avaliação.';
+      _errorMessage = 'Não foi possível interpretar os dados da avaliação.';
     } catch (_) {
-      _errorMessage =
-      'Não foi possível carregar a avaliação física.';
+      _errorMessage = 'Não foi possível carregar a avaliação física.';
     } finally {
       _isLoading = false;
       notifyListeners();

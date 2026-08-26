@@ -1,5 +1,5 @@
 import 'package:go_router/go_router.dart';
-import 'package:gymflow/app/router/role_destination_page.dart';
+import 'package:gymflow/features/home/presentation/student_home_page.dart';
 import 'package:gymflow/features/auth/presentation/login_page.dart';
 import 'package:gymflow/app/router/session_loading_page.dart';
 import 'package:gymflow/app/session/session_controller.dart';
@@ -32,6 +32,13 @@ import 'package:gymflow/features/workouts/presentation/edit_workout_page.dart';
 import 'package:gymflow/features/workouts/models/workout_details.dart';
 import 'package:gymflow/features/workouts/presentation/workout_history_page.dart';
 import 'package:gymflow/features/home/presentation/more_page.dart';
+import 'package:gymflow/features/workouts/presentation/student_workout_day_page.dart';
+import 'package:gymflow/features/workouts/presentation/student_workout_history_page.dart';
+import 'package:gymflow/features/home/presentation/student_more_page.dart';
+import 'package:gymflow/features/students/presentation/student_personal_data_page.dart';
+import 'package:gymflow/features/physical_assessments/presentation/student_physical_assessment_page.dart';
+import 'package:gymflow/features/physical_assessments/presentation/student_physical_assessment_details_page.dart';
+import 'package:gymflow/features/physical_assessments/presentation/student_physical_assessment_history_page.dart';
 
 
 class AppRouter {
@@ -297,8 +304,64 @@ class AppRouter {
       ),
       GoRoute(
         path: '/student',
+        builder: (context, state) => const StudentHomePage(),
+      ),
+      GoRoute(
+        path: '/student/workout/day',
+        builder: (context, state) {
+          final arguments = state.extra;
+
+          if (arguments is! StudentWorkoutDayArguments) {
+            return const StudentHomePage();
+          }
+
+          return StudentWorkoutDayPage(
+            arguments: arguments,
+          );
+        },
+      ),
+      GoRoute(
+        path: '/student/history',
         builder: (context, state) =>
-        const RoleDestinationPage(title: 'Aluno'),
+        const StudentWorkoutHistoryPage(),
+      ),
+      GoRoute(
+        path: '/student/more',
+        builder: (context, state) =>
+        const StudentMorePage(),
+      ),
+      GoRoute(
+        path: '/student/profile',
+        builder: (context, state) =>
+        const StudentPersonalDataPage(),
+      ),
+      GoRoute(
+        path: '/student/physical-assessment',
+        builder: (context, state) =>
+        const StudentPhysicalAssessmentPage(),
+      ),
+      GoRoute(
+        path: '/student/physical-assessment/history',
+        builder: (context, state) =>
+        const StudentPhysicalAssessmentHistoryPage(),
+      ),
+
+      GoRoute(
+        path:
+        '/student/physical-assessment/:assessmentId',
+        builder: (context, state) {
+          final assessmentId =
+          state.pathParameters['assessmentId'];
+
+          if (assessmentId == null ||
+              assessmentId.isEmpty) {
+            return const StudentPhysicalAssessmentPage();
+          }
+
+          return StudentPhysicalAssessmentDetailsPage(
+            assessmentId: assessmentId,
+          );
+        },
       ),
       GoRoute(
         path: '/admin/students',

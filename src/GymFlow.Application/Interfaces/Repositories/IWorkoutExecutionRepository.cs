@@ -28,5 +28,5 @@ public interface IWorkoutExecutionRepository
 
     Task<bool> ExistsForWorkoutDayOnDateAsync(
     Guid workoutDayId,
-    DateTime date);
+    DateOnly executionDate);
 }

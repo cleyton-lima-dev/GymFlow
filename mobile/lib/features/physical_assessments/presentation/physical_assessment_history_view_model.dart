@@ -9,15 +9,16 @@ import 'package:gymflow/features/physical_assessments/models/physical_assessment
 import 'package:http/http.dart' as http;
 
 class PhysicalAssessmentHistoryViewModel extends ChangeNotifier {
-  PhysicalAssessmentHistoryViewModel(
-      this._service,
-      this._studentId,
-      );
+  PhysicalAssessmentHistoryViewModel(this._service, String studentId)
+    : _studentId = studentId;
+
+  PhysicalAssessmentHistoryViewModel.forCurrentUser(this._service)
+    : _studentId = null;
 
   static const int _pageSize = 20;
 
   final PhysicalAssessmentsService _service;
-  final String _studentId;
+  final String? _studentId;
 
   List<PhysicalAssessmentHistoryItem> _items = [];
   PhysicalAssessment? _latest;
@@ -56,29 +57,21 @@ class PhysicalAssessmentHistoryViewModel extends ChangeNotifier {
     notifyListeners();
 
     try {
-      _latest = await _service.getLatest(_studentId);
+      _latest = await _fetchLatest();
 
-      final response = await _service.getHistory(
-        studentId: _studentId,
-        page: 1,
-        pageSize: _pageSize,
-      );
+      final response = await _fetchHistory(page: 1);
 
       _applyResponse(response);
     } on ApiException catch (exception) {
       _errorMessage = _messageFromApiException(exception);
     } on TimeoutException {
-      _errorMessage =
-      'O histórico demorou mais que o esperado para carregar.';
+      _errorMessage = 'O histórico demorou mais que o esperado para carregar.';
     } on http.ClientException {
-      _errorMessage =
-      'Não foi possível conectar ao servidor.';
+      _errorMessage = 'Não foi possível conectar ao servidor.';
     } on FormatException {
-      _errorMessage =
-      'Não foi possível interpretar o histórico de avaliações.';
+      _errorMessage = 'Não foi possível interpretar o histórico de avaliações.';
     } catch (_) {
-      _errorMessage =
-      'Não foi possível carregar o histórico de avaliações.';
+      _errorMessage = 'Não foi possível carregar o histórico de avaliações.';
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -111,38 +104,52 @@ class PhysicalAssessmentHistoryViewModel extends ChangeNotifier {
     notifyListeners();
 
     try {
-      _latest = await _service.getLatest(_studentId);
+      _latest = await _fetchLatest();
 
-      final response = await _service.getHistory(
-        studentId: _studentId,
-        page: requestedPage,
-        pageSize: _pageSize,
-      );
+      final response = await _fetchHistory(page: requestedPage);
 
       _applyResponse(response);
     } on ApiException catch (exception) {
       _errorMessage = _messageFromApiException(exception);
     } on TimeoutException {
-      _errorMessage =
-      'O histórico demorou mais que o esperado para carregar.';
+      _errorMessage = 'O histórico demorou mais que o esperado para carregar.';
     } on http.ClientException {
-      _errorMessage =
-      'Não foi possível conectar ao servidor.';
+      _errorMessage = 'Não foi possível conectar ao servidor.';
     } on FormatException {
-      _errorMessage =
-      'Não foi possível interpretar o histórico de avaliações.';
+      _errorMessage = 'Não foi possível interpretar o histórico de avaliações.';
     } catch (_) {
-      _errorMessage =
-      'Não foi possível carregar o histórico de avaliações.';
+      _errorMessage = 'Não foi possível carregar o histórico de avaliações.';
     } finally {
       _isChangingPage = false;
       notifyListeners();
     }
   }
 
-  void _applyResponse(
-      PagedPhysicalAssessmentsResponse response,
-      ) {
+  Future<PhysicalAssessment?> _fetchLatest() {
+    final studentId = _studentId;
+
+    if (studentId == null) {
+      return _service.getMyLatest();
+    }
+
+    return _service.getLatest(studentId);
+  }
+
+  Future<PagedPhysicalAssessmentsResponse> _fetchHistory({required int page}) {
+    final studentId = _studentId;
+
+    if (studentId == null) {
+      return _service.getMyHistory(page: page, pageSize: _pageSize);
+    }
+
+    return _service.getHistory(
+      studentId: studentId,
+      page: page,
+      pageSize: _pageSize,
+    );
+  }
+
+  void _applyResponse(PagedPhysicalAssessmentsResponse response) {
     _items = response.items;
     _page = response.page;
     _totalPages = response.totalPages;

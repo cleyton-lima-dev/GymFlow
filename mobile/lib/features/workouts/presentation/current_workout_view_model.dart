@@ -7,13 +7,12 @@ import 'package:gymflow/features/workouts/models/workout_details.dart';
 import 'package:http/http.dart' as http;
 
 class CurrentWorkoutViewModel extends ChangeNotifier {
-  CurrentWorkoutViewModel(
-      this._service,
-      this._studentId,
-      );
+  CurrentWorkoutViewModel(this._service, this._studentId);
+
+  CurrentWorkoutViewModel.forCurrentUser(this._service) : _studentId = null;
 
   final WorkoutsService _service;
-  final String _studentId;
+  final String? _studentId;
 
   WorkoutDetails? _workout;
 
@@ -41,26 +40,23 @@ class CurrentWorkoutViewModel extends ChangeNotifier {
     notifyListeners();
 
     try {
-      _workout = await _service.getCurrentWorkout(
-        studentId: _studentId,
-      );
+      final studentId = _studentId;
+
+      _workout = studentId == null
+          ? await _service.getMyCurrentWorkout()
+          : await _service.getCurrentWorkout(studentId: studentId);
 
       _hasLoaded = true;
     } on ApiException catch (exception) {
-      _errorMessage =
-          _messageFromApiException(exception);
+      _errorMessage = _messageFromApiException(exception);
     } on TimeoutException {
-      _errorMessage =
-      'O treino demorou mais que o esperado para carregar.';
+      _errorMessage = 'O treino demorou mais que o esperado para carregar.';
     } on http.ClientException {
-      _errorMessage =
-      'Não foi possível conectar ao servidor.';
+      _errorMessage = 'Não foi possível conectar ao servidor.';
     } on FormatException {
-      _errorMessage =
-      'Não foi possível interpretar os dados do treino.';
+      _errorMessage = 'Não foi possível interpretar os dados do treino.';
     } catch (_) {
-      _errorMessage =
-      'Não foi possível carregar o treino atual.';
+      _errorMessage = 'Não foi possível carregar o treino atual.';
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -71,9 +67,7 @@ class CurrentWorkoutViewModel extends ChangeNotifier {
     await load();
   }
 
-  String _messageFromApiException(
-      ApiException exception,
-      ) {
+  String _messageFromApiException(ApiException exception) {
     if (exception.statusCode == 403) {
       return 'Você não possui permissão para acessar este treino.';
     }

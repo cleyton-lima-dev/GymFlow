@@ -2,6 +2,7 @@
 using GymFlow.Application.DTOs.Workouts;
 using GymFlow.Application.Interfaces.Repositories;
 using GymFlow.Domain.Entities;
+using GymFlow.Application.Interfaces.Time;
 
 namespace GymFlow.Application.Services;
 
@@ -12,18 +13,23 @@ public class WorkoutService
     private readonly IExerciseRepository _exerciseRepository;
     private readonly IWorkoutTemplateRepository _workoutTemplateRepository;
 
+    private readonly IGymTimeZoneProvider
+    _gymTimeZoneProvider;
+
     public WorkoutService(
-        IWorkoutRepository workoutRepository,
-        IStudentRepository studentRepository,
-        IExerciseRepository exerciseRepository,
-        IWorkoutTemplateRepository workoutTemplateRepository,
-        IWorkoutExecutionRepository workoutExecutionRepository)
+    IWorkoutRepository workoutRepository,
+    IStudentRepository studentRepository,
+    IExerciseRepository exerciseRepository,
+    IWorkoutTemplateRepository workoutTemplateRepository,
+    IWorkoutExecutionRepository workoutExecutionRepository,
+    IGymTimeZoneProvider gymTimeZoneProvider)
     {
         _workoutRepository = workoutRepository;
         _studentRepository = studentRepository;
         _exerciseRepository = exerciseRepository;
         _workoutTemplateRepository = workoutTemplateRepository;
         _workoutExecutionRepository = workoutExecutionRepository;
+        _gymTimeZoneProvider = gymTimeZoneProvider;
     }
 
     public async Task<WorkoutResponse> CreateManualAsync(
@@ -355,14 +361,17 @@ public class WorkoutService
                 "Dia de treino não encontrado no treino ativo do aluno.");
         }
 
-        var now = DateTime.UtcNow;
-        var executionDate = DateOnly.FromDateTime(now);
+        var nowUtc = DateTime.UtcNow;
+
+        var executionDate = GetGymDate(
+            gymId,
+            nowUtc);
 
         var alreadyCompleted =
             await _workoutExecutionRepository
                 .ExistsForWorkoutDayOnDateAsync(
                     workoutDayId,
-                    now);
+                    executionDate);
 
         if (alreadyCompleted)
         {
@@ -375,7 +384,7 @@ public class WorkoutService
             Id = Guid.NewGuid(),
             WorkoutDayId = workoutDayId,
             ExecutionDate = executionDate,
-            CompletedAt = now
+            CompletedAt = nowUtc
         };
 
         await _workoutExecutionRepository
@@ -763,14 +772,20 @@ public class WorkoutService
         var latestExecutions = await _workoutExecutionRepository
             .GetLatestByWorkoutDayIdsAsync(workoutDayIds);
 
+        var today = GetGymDate(
+            gymId,
+            DateTime.UtcNow);
+
         return MapToDetailResponse(
             workout,
-            latestExecutions);
+            latestExecutions,
+            today);
     }
 
     private static WorkoutDetailResponse MapToDetailResponse(
     Workout workout,
-    List<WorkoutExecution>? latestExecutions = null)
+    List<WorkoutExecution>? latestExecutions,
+    DateOnly today)
     {
         var executionsByDay = latestExecutions?
             .ToDictionary(
@@ -801,7 +816,7 @@ public class WorkoutService
                         executionsByDay.TryGetValue(
                             day.Id,
                             out var execution) &&
-                        execution.CompletedAt.Date == DateTime.UtcNow.Date,
+                        execution.ExecutionDate == today,
 
                     LastCompletedAt =
                         executionsByDay.TryGetValue(
@@ -828,6 +843,22 @@ public class WorkoutService
                 })
                 .ToList()
         };
+    }
+
+    private DateOnly GetGymDate(
+    Guid gymId,
+    DateTime utcDateTime)
+    {
+        var timeZone =
+            _gymTimeZoneProvider.GetTimeZone(gymId);
+
+        var localDateTime =
+            TimeZoneInfo.ConvertTimeFromUtc(
+                utcDateTime,
+                timeZone);
+
+        return DateOnly.FromDateTime(
+            localDateTime);
     }
 
     private static void UpdateExercises(
