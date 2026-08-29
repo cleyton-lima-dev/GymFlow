@@ -7,4 +7,6 @@ public class WorkoutExecutionResponse
     public Guid WorkoutDayId { get; set; }
 
     public DateTime CompletedAt { get; set; }
+
+    public int CompletedAtUtcOffsetMinutes { get; set; }
 }

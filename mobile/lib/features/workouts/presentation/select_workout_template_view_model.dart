@@ -7,17 +7,17 @@ import 'package:gymflow/features/workout_templates/models/workout_template_summa
 import 'package:http/http.dart' as http;
 import 'package:gymflow/features/workout_templates/models/workout_template_details.dart';
 
-class SelectWorkoutTemplateViewModel
-    extends ChangeNotifier {
-  SelectWorkoutTemplateViewModel(
-      this._templatesService,
-      );
+class SelectWorkoutTemplateViewModel extends ChangeNotifier {
+  SelectWorkoutTemplateViewModel(this._templatesService);
 
   final WorkoutTemplatesService _templatesService;
 
   final List<WorkoutTemplateSummary> _items = [];
 
   Timer? _searchDebounce;
+
+  int _requestVersion = 0;
+  bool _isDisposed = false;
 
   String _search = '';
 
@@ -32,8 +32,7 @@ class SelectWorkoutTemplateViewModel
   String? _submittingTemplateId;
   String? _errorMessage;
 
-  List<WorkoutTemplateSummary> get items =>
-      List.unmodifiable(_items);
+  List<WorkoutTemplateSummary> get items => List.unmodifiable(_items);
 
   int get totalCount => _totalCount;
 
@@ -41,30 +40,39 @@ class SelectWorkoutTemplateViewModel
   bool get isLoadingMore => _isLoadingMore;
   bool get isSubmitting => _isSubmitting;
 
-  String? get submittingTemplateId =>
-      _submittingTemplateId;
+  String? get submittingTemplateId => _submittingTemplateId;
 
   String? get errorMessage => _errorMessage;
 
   bool get hasNextPage => _page < _totalPages;
 
-  Future<void> loadInitial() async {
-    if (_isLoading) {
+  Future<void> loadInitial() {
+    return _loadInitial(++_requestVersion);
+  }
+
+  Future<void> _loadInitial(int requestVersion) async {
+    if (_isStale(requestVersion)) {
       return;
     }
 
+    final search = _search;
+
     _isLoading = true;
+    _isLoadingMore = false;
     _errorMessage = null;
-    notifyListeners();
+    _notifySafely();
 
     try {
-      final response =
-      await _templatesService.getTemplates(
-        search: _search,
+      final response = await _templatesService.getTemplates(
+        search: search,
         isActive: true,
         page: 1,
         pageSize: 20,
       );
+
+      if (_isStale(requestVersion)) {
+        return;
+      }
 
       _items
         ..clear()
@@ -74,35 +82,60 @@ class SelectWorkoutTemplateViewModel
       _totalPages = response.totalPages;
       _totalCount = response.totalCount;
     } on ApiException catch (exception) {
-      _errorMessage =
-          _messageFromApiException(exception);
+      if (_isStale(requestVersion)) {
+        return;
+      }
+
+      _errorMessage = _messageFromApiException(exception);
     } on TimeoutException {
-      _errorMessage =
-      'A busca demorou mais que o esperado.';
+      if (_isStale(requestVersion)) {
+        return;
+      }
+
+      _errorMessage = 'A busca demorou mais que o esperado.';
     } on http.ClientException {
-      _errorMessage =
-      'Não foi possível conectar ao servidor.';
+      if (_isStale(requestVersion)) {
+        return;
+      }
+
+      _errorMessage = 'Não foi possível conectar ao servidor.';
     } on FormatException {
-      _errorMessage =
-      'Não foi possível interpretar os modelos.';
+      if (_isStale(requestVersion)) {
+        return;
+      }
+
+      _errorMessage = 'Não foi possível interpretar os modelos.';
     } catch (_) {
-      _errorMessage =
-      'Não foi possível carregar os modelos de treino.';
+      if (_isStale(requestVersion)) {
+        return;
+      }
+
+      _errorMessage = 'Não foi possível carregar os modelos de treino.';
     } finally {
-      _isLoading = false;
-      notifyListeners();
+      if (!_isStale(requestVersion)) {
+        _isLoading = false;
+        _isLoadingMore = false;
+        notifyListeners();
+      }
     }
   }
 
   void setSearch(String value) {
-    _search = value.trim();
+    final normalized = value.trim();
+
+    if (_search == normalized) {
+      return;
+    }
+
+    _search = normalized;
 
     _searchDebounce?.cancel();
 
-    _searchDebounce = Timer(
-      const Duration(milliseconds: 400),
-      loadInitial,
-    );
+    final requestVersion = ++_requestVersion;
+
+    _searchDebounce = Timer(const Duration(milliseconds: 400), () {
+      _loadInitial(requestVersion);
+    });
   }
 
   Future<void> refresh() async {
@@ -110,24 +143,29 @@ class SelectWorkoutTemplateViewModel
   }
 
   Future<void> loadMore() async {
-    if (_isLoading ||
-        _isLoadingMore ||
-        !hasNextPage) {
+    if (_isLoading || _isLoadingMore || !hasNextPage) {
       return;
     }
 
+    final requestVersion = _requestVersion;
+    final search = _search;
+    final nextPage = _page + 1;
+
     _isLoadingMore = true;
     _errorMessage = null;
-    notifyListeners();
+    _notifySafely();
 
     try {
-      final response =
-      await _templatesService.getTemplates(
-        search: _search,
+      final response = await _templatesService.getTemplates(
+        search: search,
         isActive: true,
-        page: _page + 1,
+        page: nextPage,
         pageSize: 20,
       );
+
+      if (_isStale(requestVersion)) {
+        return;
+      }
 
       _items.addAll(response.items);
 
@@ -135,29 +173,46 @@ class SelectWorkoutTemplateViewModel
       _totalPages = response.totalPages;
       _totalCount = response.totalCount;
     } on ApiException catch (exception) {
-      _errorMessage =
-          _messageFromApiException(exception);
+      if (_isStale(requestVersion)) {
+        return;
+      }
+
+      _errorMessage = _messageFromApiException(exception);
     } on TimeoutException {
-      _errorMessage =
-      'A busca demorou mais que o esperado.';
+      if (_isStale(requestVersion)) {
+        return;
+      }
+
+      _errorMessage = 'A busca demorou mais que o esperado.';
     } on http.ClientException {
-      _errorMessage =
-      'Não foi possível conectar ao servidor.';
+      if (_isStale(requestVersion)) {
+        return;
+      }
+
+      _errorMessage = 'Não foi possível conectar ao servidor.';
     } on FormatException {
-      _errorMessage =
-      'Não foi possível interpretar os modelos.';
+      if (_isStale(requestVersion)) {
+        return;
+      }
+
+      _errorMessage = 'Não foi possível interpretar os modelos.';
     } catch (_) {
-      _errorMessage =
-      'Não foi possível carregar mais modelos.';
+      if (_isStale(requestVersion)) {
+        return;
+      }
+
+      _errorMessage = 'Não foi possível carregar mais modelos.';
     } finally {
-      _isLoadingMore = false;
-      notifyListeners();
+      if (!_isStale(requestVersion)) {
+        _isLoadingMore = false;
+        notifyListeners();
+      }
     }
   }
 
   Future<WorkoutTemplateDetails?> selectTemplate(
-      WorkoutTemplateSummary template,
-      ) async {
+    WorkoutTemplateSummary template,
+  ) async {
     if (_isSubmitting) {
       return null;
     }
@@ -168,32 +223,26 @@ class SelectWorkoutTemplateViewModel
     notifyListeners();
 
     try {
-      return await _templatesService.getById(
-        template.id,
-      );
+      return await _templatesService.getById(template.id);
     } on ApiException catch (exception) {
-      _errorMessage =
-          _messageFromApiException(exception);
+      _errorMessage = _messageFromApiException(exception);
 
       return null;
     } on TimeoutException {
       _errorMessage =
-      'O servidor demorou mais que o esperado para carregar o modelo.';
+          'O servidor demorou mais que o esperado para carregar o modelo.';
 
       return null;
     } on http.ClientException {
-      _errorMessage =
-      'Não foi possível conectar ao servidor.';
+      _errorMessage = 'Não foi possível conectar ao servidor.';
 
       return null;
     } on FormatException {
-      _errorMessage =
-      'Não foi possível interpretar os dados do modelo.';
+      _errorMessage = 'Não foi possível interpretar os dados do modelo.';
 
       return null;
     } catch (_) {
-      _errorMessage =
-      'Não foi possível carregar este modelo de treino.';
+      _errorMessage = 'Não foi possível carregar este modelo de treino.';
 
       return null;
     } finally {
@@ -203,9 +252,17 @@ class SelectWorkoutTemplateViewModel
     }
   }
 
-  String _messageFromApiException(
-      ApiException exception,
-      ) {
+  bool _isStale(int requestVersion) {
+    return _isDisposed || requestVersion != _requestVersion;
+  }
+
+  void _notifySafely() {
+    if (!_isDisposed) {
+      notifyListeners();
+    }
+  }
+
+  String _messageFromApiException(ApiException exception) {
     if (exception.statusCode == 400) {
       return 'Não foi possível carregar os modelos de treino.';
     }
@@ -223,7 +280,11 @@ class SelectWorkoutTemplateViewModel
 
   @override
   void dispose() {
+    _isDisposed = true;
+    ++_requestVersion;
+
     _searchDebounce?.cancel();
+
     super.dispose();
   }
 }

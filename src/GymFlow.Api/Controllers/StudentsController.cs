@@ -26,7 +26,19 @@ public class StudentsController : ControllerBase
         if (!TryGetGymId(out var gymId))
             return Unauthorized();
 
-        var created = await _studentService.CreateAsync(gymId, request);
+        bool created;
+
+        try
+        {
+            created = await _studentService.CreateAsync(gymId, request);
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new
+            {
+                message = ex.Message
+            });
+        }
 
         if (!created)
         {
@@ -94,41 +106,51 @@ public class StudentsController : ControllerBase
 
         return Ok(student);
     }
-    
-    
+
+
     [Authorize(Roles = "Admin")]
     [HttpPut("{id:guid}")]
     public async Task<IActionResult> Update(
-        Guid id,
-        UpdateStudentRequest request)
+    Guid id,
+    UpdateStudentRequest request)
     {
         if (!TryGetGymId(out var gymId))
             return Unauthorized();
 
-        var result = await _studentService.UpdateAsync(
-            id,
-            gymId,
-            request);
-
-        return result switch
+        try
         {
-            UpdateStudentResult.Success => NoContent(),
+            var result = await _studentService.UpdateAsync(
+                id,
+                gymId,
+                request);
 
-            UpdateStudentResult.NotFound => NotFound(new
+            return result switch
             {
-                message = "Aluno não encontrado."
-            }),
+                UpdateStudentResult.Success => NoContent(),
 
-            UpdateStudentResult.EmailAlreadyInUse => Conflict(new
+                UpdateStudentResult.NotFound => NotFound(new
+                {
+                    message = "Aluno não encontrado."
+                }),
+
+                UpdateStudentResult.EmailAlreadyInUse => Conflict(new
+                {
+                    message = "Já existe um usuário com este e-mail."
+                }),
+
+                _ => StatusCode(500)
+            };
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new
             {
-                message = "Já existe um usuário com este e-mail."
-            }),
-
-            _ => StatusCode(500)
-        };
+                message = ex.Message
+            });
+        }
     }
-    
-    
+
+
     [Authorize(Roles = "Admin")]
     [HttpPatch("{id:guid}/status")]
     public async Task<IActionResult> UpdateStatus(

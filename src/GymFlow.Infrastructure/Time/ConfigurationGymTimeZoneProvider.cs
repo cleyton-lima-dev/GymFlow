@@ -1,5 +1,6 @@
 ﻿using GymFlow.Application.Interfaces.Time;
 using Microsoft.Extensions.Configuration;
+using GymFlow.Application.Exceptions;
 
 namespace GymFlow.Infrastructure.Time;
 
@@ -21,8 +22,7 @@ public class ConfigurationGymTimeZoneProvider
 
         if (string.IsNullOrWhiteSpace(timeZoneId))
         {
-            throw new KeyNotFoundException(
-                $"Fuso horário não configurado para a academia '{gymId}'.");
+            throw new GymTimeZoneNotConfiguredException(gymId);
         }
 
         return ResolveTimeZone(timeZoneId);

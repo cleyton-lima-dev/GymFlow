@@ -24,25 +24,35 @@ public class ExercisesController : ControllerBase
         if (!TryGetGymId(out var gymId))
             return Unauthorized();
 
-        var created = await _exerciseService.CreateAsync(
-            gymId,
-            request);
-
-        if (!created)
+        try
         {
-            return Conflict(new
+            var created = await _exerciseService.CreateAsync(
+                gymId,
+                request);
+
+            if (!created)
             {
-                message = "Não foi possível cadastrar o exercício."
+                return Conflict(new
+                {
+                    message = "Não foi possível cadastrar o exercício."
+                });
+            }
+
+            return StatusCode(201, new
+            {
+                message = "Exercício criado com sucesso."
             });
         }
-
-        return StatusCode(201, new
+        catch (ArgumentException ex)
         {
-            message = "Exercício criado com sucesso."
-        });
+            return BadRequest(new
+            {
+                message = ex.Message
+            });
+        }
     }
-    
-    
+
+
     [Authorize(Roles = "Admin,Professor")]
     [HttpGet]
     public async Task<IActionResult> GetAll(
@@ -75,34 +85,44 @@ public class ExercisesController : ControllerBase
             });
         }
     }
-    
-    
+
+
     [Authorize(Roles = "Admin,Professor")]
     [HttpPut("{id:guid}")]
     public async Task<IActionResult> Update(
-        Guid id,
-        UpdateExerciseRequest request)
+    Guid id,
+    UpdateExerciseRequest request)
     {
         if (!TryGetGymId(out var gymId))
             return Unauthorized();
 
-        var updated = await _exerciseService.UpdateAsync(
-            gymId,
-            id,
-            request);
-
-        if (!updated)
+        try
         {
-            return Conflict(new
+            var updated = await _exerciseService.UpdateAsync(
+                gymId,
+                id,
+                request);
+
+            if (!updated)
             {
-                message = "Não foi possível atualizar o exercício."
+                return Conflict(new
+                {
+                    message = "Não foi possível atualizar o exercício."
+                });
+            }
+
+            return NoContent();
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new
+            {
+                message = ex.Message
             });
         }
-
-        return NoContent();
     }
-    
-    
+
+
     [Authorize(Roles = "Admin")]
     [HttpPatch("{id:guid}/status")]
     public async Task<IActionResult> UpdateStatus(

@@ -1,7 +1,8 @@
-﻿using GymFlow.Application.DTOs.Exercises;
+﻿using GymFlow.Application.DTOs.Common;
+using GymFlow.Application.DTOs.Exercises;
 using GymFlow.Application.Interfaces.Repositories;
+using GymFlow.Application.Validation;
 using GymFlow.Domain.Entities;
-using GymFlow.Application.DTOs.Common;
 
 namespace GymFlow.Application.Services;
 
@@ -25,6 +26,21 @@ public class ExerciseService
             return false;
 
         var normalizedName = request.Name.Trim();
+
+        PersistenceTextPolicy.ValidateMaxLength(
+            normalizedName,
+            PersistenceTextPolicy.ExerciseNameMaxLength,
+            "O nome do exercício");
+
+        PersistenceTextPolicy.ValidateMaxLength(
+            request.MuscleGroup,
+            PersistenceTextPolicy.MuscleGroupMaxLength,
+            "O grupo muscular");
+
+        PersistenceTextPolicy.ValidateMaxLength(
+            request.Description,
+            PersistenceTextPolicy.DescriptionMaxLength,
+            "A descrição");
 
         var existingExercise = await _exerciseRepository
             .GetByNameAsync(normalizedName, gymId);
@@ -121,6 +137,21 @@ public class ExerciseService
             return false;
 
         var normalizedName = request.Name.Trim();
+
+        PersistenceTextPolicy.ValidateMaxLength(
+            normalizedName,
+            PersistenceTextPolicy.ExerciseNameMaxLength,
+            "O nome do exercício");
+
+        PersistenceTextPolicy.ValidateMaxLength(
+            request.MuscleGroup,
+            PersistenceTextPolicy.MuscleGroupMaxLength,
+            "O grupo muscular");
+
+        PersistenceTextPolicy.ValidateMaxLength(
+            request.Description,
+            PersistenceTextPolicy.DescriptionMaxLength,
+            "A descrição");
 
         var exerciseWithSameName = await _exerciseRepository
             .GetByNameAsync(normalizedName, gymId);

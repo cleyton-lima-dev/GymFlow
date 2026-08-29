@@ -3,6 +3,8 @@ using GymFlow.Application.Interfaces.Repositories;
 using GymFlow.Application.Interfaces.Security;
 using GymFlow.Domain.Entities;
 using GymFlow.Domain.Enums;
+using GymFlow.Application.Security;
+using GymFlow.Application.Validation;
 
 namespace GymFlow.Application.Services;
 
@@ -24,7 +26,11 @@ public class AuthenticationService
 
     public async Task<LoginResponse?> LoginAsync(LoginRequest request)
     {
-        var user = await _userRepository.GetByEmailAsync(request.Email);
+        var normalizedEmail =
+            request.Email.Trim().ToLowerInvariant();
+
+        var user =
+            await _userRepository.GetByEmailAsync(normalizedEmail);
 
         if (user is null || !user.IsActive)
             return null;
@@ -53,8 +59,20 @@ public class AuthenticationService
     Guid gymId,
     RegisterRequest request)
     {
+        PasswordPolicy.Validate(request.Password);
+
         var normalizedEmail =
             request.Email.Trim().ToLowerInvariant();
+
+        PersistenceTextPolicy.ValidateMaxLength(
+            request.Name,
+         PersistenceTextPolicy.UserNameMaxLength,
+            "O nome");
+
+        PersistenceTextPolicy.ValidateMaxLength(
+            normalizedEmail,
+            PersistenceTextPolicy.EmailMaxLength,
+            "O e-mail");
 
         var existingUser =
             await _userRepository.GetByEmailAsync(normalizedEmail);

@@ -13,4 +13,6 @@ public class WorkoutDayResponse
     public bool CompletedToday { get; set; }
 
     public DateTime? LastCompletedAt { get; set; }
+
+    public int? LastCompletedAtUtcOffsetMinutes { get; set; }
 }

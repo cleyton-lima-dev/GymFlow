@@ -57,6 +57,15 @@ public class PhysicalAssessmentsController : ControllerBase
                 _ => StatusCode(500)
             };
         }
+
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new
+            {
+                message = ex.Message
+            });
+        }
+
         catch (ArgumentException ex)
         {
             return BadRequest(new
@@ -64,6 +73,22 @@ public class PhysicalAssessmentsController : ControllerBase
                 message = ex.Message
             });
         }
+    }
+
+    [HttpGet("current-date")]
+    public IActionResult GetCurrentDate(Guid studentId)
+    {
+        if (!TryGetGymId(out var gymId))
+            return Unauthorized();
+
+        var currentDate =
+            _physicalAssessmentService
+                .GetCurrentGymDate(gymId);
+
+        return Ok(new
+        {
+            currentDate
+        });
     }
 
     [HttpGet("latest")]
@@ -105,6 +130,13 @@ public class PhysicalAssessmentsController : ControllerBase
                     pageSize);
 
             return Ok(history);
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new
+            {
+                message = ex.Message
+            });
         }
         catch (ArgumentException ex)
         {

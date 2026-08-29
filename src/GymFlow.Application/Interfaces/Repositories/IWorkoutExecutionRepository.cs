@@ -26,6 +26,10 @@ public interface IWorkoutExecutionRepository
 
     Task SaveChangesAsync();
 
+    Task<bool> ExistsForWorkoutAsync(
+    Guid workoutId,
+    Guid gymId);
+
     Task<bool> ExistsForWorkoutDayOnDateAsync(
     Guid workoutDayId,
     DateOnly executionDate);

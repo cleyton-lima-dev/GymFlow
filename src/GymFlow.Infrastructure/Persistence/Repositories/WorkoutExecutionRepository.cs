@@ -79,6 +79,17 @@ public class WorkoutExecutionRepository
             .ToListAsync();
     }
 
+    public async Task<bool> ExistsForWorkoutAsync(
+    Guid workoutId,
+    Guid gymId)
+    {
+        return await _context.WorkoutExecutions
+            .AsNoTracking()
+            .AnyAsync(x =>
+                x.WorkoutDay.WorkoutId == workoutId &&
+                x.WorkoutDay.Workout.GymId == gymId);
+    }
+
     public async Task<bool> ExistsForWorkoutDayOnDateAsync(
      Guid workoutDayId,
      DateOnly executionDate)

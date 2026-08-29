@@ -49,19 +49,17 @@ public class WorkoutRepository : IWorkoutRepository
     }
 
     public async Task<Workout?> GetForUpdateAsync(
-         Guid id,
-         Guid gymId)
+    Guid id,
+    Guid gymId)
     {
         return await _context.Workouts
             .Include(x => x.Days)
                 .ThenInclude(x => x.Exercises)
-            .Include(x => x.Days)
-                .ThenInclude(x => x.Executions)
             .FirstOrDefaultAsync(x =>
                 x.Id == id &&
                 x.GymId == gymId);
     }
-    
+
 
     public async Task<Workout?> GetActiveForUpdateAsync(
         Guid studentId,
