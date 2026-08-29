@@ -286,7 +286,10 @@ class _HistoryItemCard extends StatelessWidget {
                     const SizedBox(width: 6),
                     Expanded(
                       child: Text(
-                        _formatDateTime(item.completedAt),
+                        _formatDateTime(
+                          item.completedAt,
+                          item.completedAtUtcOffsetMinutes,
+                        ),
                         style: Theme.of(context).textTheme.bodySmall
                             ?.copyWith(color: colorScheme.onSurfaceVariant),
                       ),
@@ -301,15 +304,15 @@ class _HistoryItemCard extends StatelessWidget {
     );
   }
 
-  String _formatDateTime(DateTime value) {
-    final local = value.toLocal();
+  String _formatDateTime(DateTime value, int utcOffsetMinutes) {
+    final gymDateTime = value.toUtc().add(Duration(minutes: utcOffsetMinutes));
 
-    final day = local.day.toString().padLeft(2, '0');
-    final month = local.month.toString().padLeft(2, '0');
-    final hour = local.hour.toString().padLeft(2, '0');
-    final minute = local.minute.toString().padLeft(2, '0');
+    final day = gymDateTime.day.toString().padLeft(2, '0');
+    final month = gymDateTime.month.toString().padLeft(2, '0');
+    final hour = gymDateTime.hour.toString().padLeft(2, '0');
+    final minute = gymDateTime.minute.toString().padLeft(2, '0');
 
-    return '$day/$month/${local.year} '
+    return '$day/$month/${gymDateTime.year} '
         'às $hour:$minute';
   }
 }

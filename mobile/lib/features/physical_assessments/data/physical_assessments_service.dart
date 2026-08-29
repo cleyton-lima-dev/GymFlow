@@ -103,6 +103,31 @@ class PhysicalAssessmentsService {
     return PhysicalAssessment.fromJson(Map<String, dynamic>.from(response));
   }
 
+  Future<DateTime> getCurrentDate(String studentId) async {
+    final response = await _apiClient.get(
+      'api/students/$studentId/physical-assessments/current-date',
+    );
+
+    if (response is! Map) {
+      throw const FormatException('Invalid current gym date response.');
+    }
+
+    final json = Map<String, dynamic>.from(response);
+    final rawDate = json['currentDate'];
+
+    if (rawDate is! String) {
+      throw const FormatException('Invalid current gym date.');
+    }
+
+    final parsedDate = DateTime.tryParse(rawDate);
+
+    if (parsedDate == null) {
+      throw const FormatException('Invalid current gym date.');
+    }
+
+    return DateTime(parsedDate.year, parsedDate.month, parsedDate.day);
+  }
+
   Future<void> create({
     required String studentId,
     required CreatePhysicalAssessmentRequest request,

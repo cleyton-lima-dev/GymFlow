@@ -10,7 +10,10 @@ class StudentWorkoutDayViewModel extends ChangeNotifier {
   StudentWorkoutDayViewModel(this._service, WorkoutDayDetails day)
     : _workoutDayId = day.id,
       _completedToday = day.completedToday,
-      _completedAt = day.completedToday ? day.lastCompletedAt : null;
+      _completedAt = day.completedToday ? day.lastCompletedAt : null,
+      _completedAtUtcOffsetMinutes = day.completedToday
+          ? day.lastCompletedAtUtcOffsetMinutes
+          : null;
 
   final WorkoutsService _service;
   final String _workoutDayId;
@@ -18,11 +21,13 @@ class StudentWorkoutDayViewModel extends ChangeNotifier {
   bool _isCompleting = false;
   bool _completedToday;
   DateTime? _completedAt;
+  int? _completedAtUtcOffsetMinutes;
   String? _errorMessage;
 
   bool get isCompleting => _isCompleting;
   bool get completedToday => _completedToday;
   DateTime? get completedAt => _completedAt;
+  int? get completedAtUtcOffsetMinutes => _completedAtUtcOffsetMinutes;
   String? get errorMessage => _errorMessage;
 
   bool get canComplete => !_isCompleting && !_completedToday;
@@ -43,6 +48,7 @@ class StudentWorkoutDayViewModel extends ChangeNotifier {
 
       _completedToday = true;
       _completedAt = response.completedAt;
+      _completedAtUtcOffsetMinutes = response.completedAtUtcOffsetMinutes;
 
       return true;
     } on ApiException catch (exception) {
@@ -100,6 +106,7 @@ class StudentWorkoutDayViewModel extends ChangeNotifier {
 
         _completedToday = true;
         _completedAt = day.lastCompletedAt;
+        _completedAtUtcOffsetMinutes = day.lastCompletedAtUtcOffsetMinutes;
 
         return true;
       }

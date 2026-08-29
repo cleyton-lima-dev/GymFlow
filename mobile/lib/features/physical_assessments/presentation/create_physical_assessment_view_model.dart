@@ -7,10 +7,7 @@ import 'package:gymflow/features/physical_assessments/models/create_physical_ass
 import 'package:http/http.dart' as http;
 
 class CreatePhysicalAssessmentViewModel extends ChangeNotifier {
-  CreatePhysicalAssessmentViewModel(
-      this._service,
-      this._studentId,
-      );
+  CreatePhysicalAssessmentViewModel(this._service, this._studentId);
 
   final PhysicalAssessmentsService _service;
   final String _studentId;
@@ -20,6 +17,28 @@ class CreatePhysicalAssessmentViewModel extends ChangeNotifier {
 
   bool get isSubmitting => _isSubmitting;
   String? get errorMessage => _errorMessage;
+
+  Future<DateTime?> loadCurrentGymDate() async {
+    _errorMessage = null;
+
+    try {
+      return await _service.getCurrentDate(_studentId);
+    } on ApiException {
+      _errorMessage = 'Não foi possível obter a data atual da academia.';
+    } on TimeoutException {
+      _errorMessage =
+          'A consulta da data da academia demorou mais que o esperado.';
+    } on http.ClientException {
+      _errorMessage = 'Não foi possível conectar ao servidor.';
+    } on FormatException {
+      _errorMessage = 'Não foi possível interpretar a data atual da academia.';
+    } catch (_) {
+      _errorMessage = 'Não foi possível obter a data atual da academia.';
+    }
+
+    notifyListeners();
+    return null;
+  }
 
   Future<bool> submit({
     required DateTime assessmentDate,
@@ -98,10 +117,7 @@ class CreatePhysicalAssessmentViewModel extends ChangeNotifier {
       return false;
     }
 
-    final parsedHip = _parseOptionalNumber(
-      value: hipCm,
-      fieldName: 'quadril',
-    );
+    final parsedHip = _parseOptionalNumber(value: hipCm, fieldName: 'quadril');
 
     if (_errorMessage != null) {
       return false;
@@ -184,9 +200,7 @@ class CreatePhysicalAssessmentViewModel extends ChangeNotifier {
           leftThighCm: parsedLeftThigh,
           rightCalfCm: parsedRightCalf,
           leftCalfCm: parsedLeftCalf,
-          notes: normalizedNotes.isEmpty
-              ? null
-              : normalizedNotes,
+          notes: normalizedNotes.isEmpty ? null : normalizedNotes,
         ),
       );
 
@@ -196,15 +210,13 @@ class CreatePhysicalAssessmentViewModel extends ChangeNotifier {
       return false;
     } on TimeoutException {
       _errorMessage =
-      'O cadastro demorou mais que o esperado. Tente novamente.';
+          'O cadastro demorou mais que o esperado. Tente novamente.';
       return false;
     } on http.ClientException {
-      _errorMessage =
-      'Não foi possível conectar ao servidor.';
+      _errorMessage = 'Não foi possível conectar ao servidor.';
       return false;
     } catch (_) {
-      _errorMessage =
-      'Não foi possível cadastrar a avaliação física.';
+      _errorMessage = 'Não foi possível cadastrar a avaliação física.';
       return false;
     } finally {
       _isSubmitting = false;

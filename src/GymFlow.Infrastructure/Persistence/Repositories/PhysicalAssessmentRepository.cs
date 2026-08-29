@@ -1,7 +1,9 @@
-﻿using GymFlow.Application.Interfaces.Repositories;
+﻿using GymFlow.Application.Exceptions;
+using GymFlow.Application.Interfaces.Repositories;
 using GymFlow.Domain.Entities;
 using GymFlow.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 
 namespace GymFlow.Infrastructure.Persistence.Repositories;
 
@@ -97,6 +99,35 @@ public class PhysicalAssessmentRepository
 
     public async Task SaveChangesAsync()
     {
-        await _context.SaveChangesAsync();
+        try
+        {
+            await _context.SaveChangesAsync();
+        }
+        catch (DbUpdateException ex)
+            when (IsAssessmentDateUniqueViolation(ex))
+        {
+            throw new PhysicalAssessmentDateConflictException(ex);
+        }
+    }
+
+    private static bool IsAssessmentDateUniqueViolation(
+    DbUpdateException exception)
+    {
+        const string constraintName =
+            "IX_PhysicalAssessments_StudentId_AssessmentDate";
+
+        if (exception.InnerException is PostgresException postgresException)
+        {
+            return postgresException.SqlState ==
+                       PostgresErrorCodes.UniqueViolation &&
+                   string.Equals(
+                       postgresException.ConstraintName,
+                       constraintName,
+                       StringComparison.Ordinal);
+        }
+
+        return exception.InnerException?.Message.Contains(
+            "PhysicalAssessments.StudentId, PhysicalAssessments.AssessmentDate",
+            StringComparison.OrdinalIgnoreCase) == true;
     }
 }

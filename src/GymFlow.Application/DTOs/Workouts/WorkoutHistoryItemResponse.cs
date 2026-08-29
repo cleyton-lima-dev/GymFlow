@@ -13,4 +13,6 @@ public class WorkoutHistoryItemResponse
     public string WorkoutDayName { get; set; } = string.Empty;
 
     public DateTime CompletedAt { get; set; }
+
+    public int CompletedAtUtcOffsetMinutes { get; set; }
 }

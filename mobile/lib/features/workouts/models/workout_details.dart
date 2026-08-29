@@ -62,6 +62,7 @@ class WorkoutDayDetails {
     required this.exercises,
     required this.completedToday,
     required this.lastCompletedAt,
+    required this.lastCompletedAtUtcOffsetMinutes,
   });
 
   final String id;
@@ -72,6 +73,7 @@ class WorkoutDayDetails {
 
   final bool completedToday;
   final DateTime? lastCompletedAt;
+  final int? lastCompletedAtUtcOffsetMinutes;
 
   factory WorkoutDayDetails.fromJson(Map<String, dynamic> json) {
     final rawExercises = json['exercises'];
@@ -95,6 +97,8 @@ class WorkoutDayDetails {
       lastCompletedAt: json['lastCompletedAt'] == null
           ? null
           : DateTime.parse(json['lastCompletedAt'] as String),
+      lastCompletedAtUtcOffsetMinutes:
+          json['lastCompletedAtUtcOffsetMinutes'] as int?,
     );
   }
 }

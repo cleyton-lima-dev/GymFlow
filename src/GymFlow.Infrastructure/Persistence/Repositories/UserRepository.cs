@@ -20,6 +20,18 @@ public class UserRepository : IUserRepository
             .FirstOrDefaultAsync(x => x.Email == email);
     }
 
+    public async Task<bool> IsActiveAsync(
+    Guid userId,
+    Guid gymId)
+    {
+        return await _context.Users
+            .AsNoTracking()
+            .AnyAsync(user =>
+                user.Id == userId &&
+                user.GymId == gymId &&
+                user.IsActive);
+    }
+
     public async Task AddAsync(User user)
     {
         await _context.Users.AddAsync(user);

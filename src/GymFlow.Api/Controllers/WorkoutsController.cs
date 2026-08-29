@@ -37,6 +37,13 @@ public class WorkoutsController : ControllerBase
                 new { studentId = result.StudentId },
                 result);
         }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new
+            {
+                message = ex.Message
+            });
+        }
         catch (ArgumentException ex)
         {
             return BadRequest(new
@@ -73,6 +80,13 @@ public class WorkoutsController : ControllerBase
                 new { studentId = result.StudentId },
                 result);
         }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new
+            {
+                message = ex.Message
+            });
+        }
         catch (ArgumentException ex)
         {
             return BadRequest(new
@@ -107,6 +121,13 @@ public class WorkoutsController : ControllerBase
                     request);
 
             return Ok(result);
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new
+            {
+                message = ex.Message
+            });
         }
         catch (ArgumentException ex)
         {
@@ -150,7 +171,7 @@ public class WorkoutsController : ControllerBase
 
             return Ok(result);
         }
-        catch (ArgumentException ex)
+        catch (KeyNotFoundException ex)
         {
             return NotFound(new
             {
@@ -187,7 +208,7 @@ public class WorkoutsController : ControllerBase
 
             return Ok(result);
         }
-        catch (ArgumentException ex)
+        catch (KeyNotFoundException ex)
         {
             return NotFound(new
             {
@@ -217,7 +238,14 @@ public class WorkoutsController : ControllerBase
 
             return Ok(result);
         }
-       
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new
+            {
+                message = ex.Message
+            });
+        }
+
         catch (ArgumentException ex)
         {
             return BadRequest(new
@@ -258,6 +286,13 @@ public class WorkoutsController : ControllerBase
 
             return Ok(result);
         }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new
+            {
+                message = ex.Message
+            });
+        }
         catch (ArgumentException ex)
         {
             return BadRequest(new
@@ -289,6 +324,13 @@ public class WorkoutsController : ControllerBase
                     pageSize);
 
             return Ok(result);
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new
+            {
+                message = ex.Message
+            });
         }
         catch (ArgumentException ex)
         {

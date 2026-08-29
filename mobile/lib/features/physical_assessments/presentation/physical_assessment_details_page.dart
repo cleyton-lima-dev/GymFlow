@@ -23,47 +23,37 @@ class PhysicalAssessmentDetailsPage extends StatelessWidget {
   Widget build(BuildContext context) {
     return ChangeNotifierProvider(
       create: (context) => PhysicalAssessmentDetailsViewModel(
-        PhysicalAssessmentsService(
-          context.read<ApiClient>(),
-        ),
+        PhysicalAssessmentsService(context.read<ApiClient>()),
         studentId,
         assessmentId,
       )..load(),
-      child: _PhysicalAssessmentDetailsView(
-        studentName: studentName,
-      ),
+      child: _PhysicalAssessmentDetailsView(studentName: studentName),
     );
   }
 }
 
 class _PhysicalAssessmentDetailsView extends StatelessWidget {
-  const _PhysicalAssessmentDetailsView({
-    required this.studentName,
-  });
+  const _PhysicalAssessmentDetailsView({required this.studentName});
 
   final String studentName;
 
   @override
   Widget build(BuildContext context) {
-    final viewModel =
-    context.watch<PhysicalAssessmentDetailsViewModel>();
+    final viewModel = context.watch<PhysicalAssessmentDetailsViewModel>();
 
     return Scaffold(
-      bottomNavigationBar:
-      const ProfessorAdminBottomNavigation(
+      bottomNavigationBar: const ProfessorAdminBottomNavigation(
         currentItem: ProfessorAdminNavItem.students,
       ),
       body: SafeArea(
         child: CustomScrollView(
           slivers: [
-            const ProfessorAdminPageHeader(),
+            const SliverToBoxAdapter(child: ProfessorAdminPageHeader()),
 
             if (viewModel.isLoading)
               const SliverFillRemaining(
                 hasScrollBody: false,
-                child: Center(
-                  child: CircularProgressIndicator(),
-                ),
+                child: Center(child: CircularProgressIndicator()),
               )
             else if (viewModel.errorMessage != null)
               SliverFillRemaining(
@@ -74,13 +64,13 @@ class _PhysicalAssessmentDetailsView extends StatelessWidget {
                 ),
               )
             else if (viewModel.assessment != null)
-                SliverToBoxAdapter(
-                  child: _Content(
-                    assessment: viewModel.assessment!,
-                    studentName: studentName,
-                    isLatest: viewModel.isLatest,
-                  ),
+              SliverToBoxAdapter(
+                child: _Content(
+                  assessment: viewModel.assessment!,
+                  studentName: studentName,
+                  isLatest: viewModel.isLatest,
                 ),
+              ),
           ],
         ),
       ),
@@ -105,12 +95,7 @@ class _Content extends StatelessWidget {
     final colorScheme = theme.colorScheme;
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(
-        20,
-        12,
-        20,
-        32,
-      ),
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -132,33 +117,23 @@ class _Content extends StatelessWidget {
 
           const SizedBox(height: 20),
 
-          _AssessmentHeader(
-            assessment: assessment,
-          ),
+          _AssessmentHeader(assessment: assessment),
 
           const SizedBox(height: 16),
 
           if (isLatest) ...[
-            _CurrentStatusCard(
-              assessment: assessment,
-            ),
+            _CurrentStatusCard(assessment: assessment),
             const SizedBox(height: 16),
           ] else ...[
-            _HistoricalInfoCard(
-              assessment: assessment,
-            ),
+            _HistoricalInfoCard(assessment: assessment),
             const SizedBox(height: 16),
           ],
 
-          _MeasurementsCard(
-            assessment: assessment,
-          ),
+          _MeasurementsCard(assessment: assessment),
 
           const SizedBox(height: 16),
 
-          _NotesCard(
-            notes: assessment.notes,
-          ),
+          _NotesCard(notes: assessment.notes),
 
           const SizedBox(height: 16),
 
@@ -171,15 +146,12 @@ class _Content extends StatelessWidget {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(
-                  Icons.info_outline_rounded,
-                  color: colorScheme.primary,
-                ),
+                Icon(Icons.info_outline_rounded, color: colorScheme.primary),
                 const SizedBox(width: 12),
                 const Expanded(
                   child: Text(
                     'As medidas são usadas para acompanhar '
-                        'a evolução do aluno ao longo do tempo.',
+                    'a evolução do aluno ao longo do tempo.',
                   ),
                 ),
               ],
@@ -192,9 +164,7 @@ class _Content extends StatelessWidget {
 }
 
 class _AssessmentHeader extends StatelessWidget {
-  const _AssessmentHeader({
-    required this.assessment,
-  });
+  const _AssessmentHeader({required this.assessment});
 
   final PhysicalAssessment assessment;
 
@@ -208,9 +178,7 @@ class _AssessmentHeader extends StatelessWidget {
       decoration: BoxDecoration(
         color: colorScheme.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: colorScheme.outlineVariant.withAlpha(120),
-        ),
+        border: Border.all(color: colorScheme.outlineVariant.withAlpha(120)),
       ),
       child: Row(
         children: [
@@ -232,9 +200,7 @@ class _AssessmentHeader extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  _formatDate(
-                    assessment.assessmentDate,
-                  ),
+                  _formatDate(assessment.assessmentDate),
                   style: theme.textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.w800,
                   ),
@@ -249,9 +215,7 @@ class _AssessmentHeader extends StatelessWidget {
 }
 
 class _CurrentStatusCard extends StatelessWidget {
-  const _CurrentStatusCard({
-    required this.assessment,
-  });
+  const _CurrentStatusCard({required this.assessment});
 
   final PhysicalAssessment assessment;
 
@@ -261,9 +225,7 @@ class _CurrentStatusCard extends StatelessWidget {
 
     final due = assessment.isReassessmentDue;
 
-    final color = due
-        ? const Color(0xFFF97316)
-        : const Color(0xFF16A34A);
+    final color = due ? const Color(0xFFF97316) : const Color(0xFF16A34A);
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -275,9 +237,7 @@ class _CurrentStatusCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Icon(
-            due
-                ? Icons.warning_amber_rounded
-                : Icons.check_circle_rounded,
+            due ? Icons.warning_amber_rounded : Icons.check_circle_rounded,
             color: color,
             size: 28,
           ),
@@ -287,9 +247,7 @@ class _CurrentStatusCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  due
-                      ? 'Reavaliação recomendada'
-                      : 'Avaliação em dia',
+                  due ? 'Reavaliação recomendada' : 'Avaliação em dia',
                   style: theme.textTheme.titleMedium?.copyWith(
                     color: color,
                     fontWeight: FontWeight.w800,
@@ -300,7 +258,7 @@ class _CurrentStatusCard extends StatelessWidget {
                   due
                       ? 'Uma nova avaliação já é recomendada.'
                       : 'Próxima avaliação recomendada para '
-                      '${_formatDate(assessment.nextAssessmentDate)}.',
+                            '${_formatDate(assessment.nextAssessmentDate)}.',
                 ),
               ],
             ),
@@ -312,9 +270,7 @@ class _CurrentStatusCard extends StatelessWidget {
 }
 
 class _HistoricalInfoCard extends StatelessWidget {
-  const _HistoricalInfoCard({
-    required this.assessment,
-  });
+  const _HistoricalInfoCard({required this.assessment});
 
   final PhysicalAssessment assessment;
 
@@ -332,10 +288,7 @@ class _HistoricalInfoCard extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(
-            Icons.history_rounded,
-            color: colorScheme.primary,
-          ),
+          Icon(Icons.history_rounded, color: colorScheme.primary),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
@@ -350,7 +303,7 @@ class _HistoricalInfoCard extends StatelessWidget {
                 const SizedBox(height: 4),
                 Text(
                   'Na época, a próxima avaliação era recomendada '
-                      'para ${_formatDate(assessment.nextAssessmentDate)}.',
+                  'para ${_formatDate(assessment.nextAssessmentDate)}.',
                 ),
               ],
             ),
@@ -362,9 +315,7 @@ class _HistoricalInfoCard extends StatelessWidget {
 }
 
 class _MeasurementsCard extends StatelessWidget {
-  const _MeasurementsCard({
-    required this.assessment,
-  });
+  const _MeasurementsCard({required this.assessment});
 
   final PhysicalAssessment assessment;
 
@@ -374,60 +325,22 @@ class _MeasurementsCard extends StatelessWidget {
     final colorScheme = theme.colorScheme;
 
     final measurements = [
-      _Measurement(
-        'Peso',
-        '${_formatNumber(assessment.weightKg)} kg',
-      ),
-      _Measurement(
-        'Altura',
-        '${_formatNumber(assessment.heightCm)} cm',
-      ),
+      _Measurement('Peso', '${_formatNumber(assessment.weightKg)} kg'),
+      _Measurement('Altura', '${_formatNumber(assessment.heightCm)} cm'),
       _Measurement(
         '% Gordura',
-        _optionalPercentage(
-          assessment.bodyFatPercentage,
-        ),
+        _optionalPercentage(assessment.bodyFatPercentage),
       ),
-      _Measurement(
-        'Peito',
-        _optionalCm(assessment.chestCm),
-      ),
-      _Measurement(
-        'Cintura',
-        _optionalCm(assessment.waistCm),
-      ),
-      _Measurement(
-        'Abdômen',
-        _optionalCm(assessment.abdomenCm),
-      ),
-      _Measurement(
-        'Quadril',
-        _optionalCm(assessment.hipCm),
-      ),
-      _Measurement(
-        'Braço direito',
-        _optionalCm(assessment.rightArmCm),
-      ),
-      _Measurement(
-        'Braço esquerdo',
-        _optionalCm(assessment.leftArmCm),
-      ),
-      _Measurement(
-        'Coxa direita',
-        _optionalCm(assessment.rightThighCm),
-      ),
-      _Measurement(
-        'Coxa esquerda',
-        _optionalCm(assessment.leftThighCm),
-      ),
-      _Measurement(
-        'Panturrilha direita',
-        _optionalCm(assessment.rightCalfCm),
-      ),
-      _Measurement(
-        'Panturrilha esquerda',
-        _optionalCm(assessment.leftCalfCm),
-      ),
+      _Measurement('Peito', _optionalCm(assessment.chestCm)),
+      _Measurement('Cintura', _optionalCm(assessment.waistCm)),
+      _Measurement('Abdômen', _optionalCm(assessment.abdomenCm)),
+      _Measurement('Quadril', _optionalCm(assessment.hipCm)),
+      _Measurement('Braço direito', _optionalCm(assessment.rightArmCm)),
+      _Measurement('Braço esquerdo', _optionalCm(assessment.leftArmCm)),
+      _Measurement('Coxa direita', _optionalCm(assessment.rightThighCm)),
+      _Measurement('Coxa esquerda', _optionalCm(assessment.leftThighCm)),
+      _Measurement('Panturrilha direita', _optionalCm(assessment.rightCalfCm)),
+      _Measurement('Panturrilha esquerda', _optionalCm(assessment.leftCalfCm)),
     ];
 
     return Container(
@@ -435,19 +348,14 @@ class _MeasurementsCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: colorScheme.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: colorScheme.outlineVariant.withAlpha(120),
-        ),
+        border: Border.all(color: colorScheme.outlineVariant.withAlpha(120)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Row(
             children: [
-              Icon(
-                Icons.monitor_weight_outlined,
-                color: colorScheme.primary,
-              ),
+              Icon(Icons.monitor_weight_outlined, color: colorScheme.primary),
               const SizedBox(width: 10),
               Text(
                 'Medidas corporais',
@@ -463,8 +371,7 @@ class _MeasurementsCard extends StatelessWidget {
           LayoutBuilder(
             builder: (context, constraints) {
               const spacing = 12.0;
-              final itemWidth =
-                  (constraints.maxWidth - spacing) / 2;
+              final itemWidth = (constraints.maxWidth - spacing) / 2;
 
               return Wrap(
                 spacing: spacing,
@@ -473,9 +380,7 @@ class _MeasurementsCard extends StatelessWidget {
                   for (final measurement in measurements)
                     SizedBox(
                       width: itemWidth,
-                      child: _MeasurementTile(
-                        measurement: measurement,
-                      ),
+                      child: _MeasurementTile(measurement: measurement),
                     ),
                 ],
               );
@@ -488,19 +393,14 @@ class _MeasurementsCard extends StatelessWidget {
 }
 
 class _Measurement {
-  const _Measurement(
-      this.label,
-      this.value,
-      );
+  const _Measurement(this.label, this.value);
 
   final String label;
   final String value;
 }
 
 class _MeasurementTile extends StatelessWidget {
-  const _MeasurementTile({
-    required this.measurement,
-  });
+  const _MeasurementTile({required this.measurement});
 
   final _Measurement measurement;
 
@@ -513,9 +413,7 @@ class _MeasurementTile extends StatelessWidget {
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: colorScheme.outlineVariant.withAlpha(100),
-        ),
+        border: Border.all(color: colorScheme.outlineVariant.withAlpha(100)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -540,9 +438,7 @@ class _MeasurementTile extends StatelessWidget {
 }
 
 class _NotesCard extends StatelessWidget {
-  const _NotesCard({
-    required this.notes,
-  });
+  const _NotesCard({required this.notes});
 
   final String? notes;
 
@@ -558,19 +454,14 @@ class _NotesCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: colorScheme.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: colorScheme.outlineVariant.withAlpha(120),
-        ),
+        border: Border.all(color: colorScheme.outlineVariant.withAlpha(120)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Icon(
-                Icons.notes_rounded,
-                color: colorScheme.primary,
-              ),
+              Icon(Icons.notes_rounded, color: colorScheme.primary),
               const SizedBox(width: 10),
               Text(
                 'Observações',
@@ -582,8 +473,7 @@ class _NotesCard extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           Text(
-            normalizedNotes == null ||
-                normalizedNotes.isEmpty
+            normalizedNotes == null || normalizedNotes.isEmpty
                 ? 'Nenhuma observação registrada.'
                 : normalizedNotes,
           ),
@@ -594,10 +484,7 @@ class _NotesCard extends StatelessWidget {
 }
 
 class _ErrorState extends StatelessWidget {
-  const _ErrorState({
-    required this.message,
-    required this.onRetry,
-  });
+  const _ErrorState({required this.message, required this.onRetry});
 
   final String message;
   final VoidCallback onRetry;
@@ -611,16 +498,9 @@ class _ErrorState extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(
-            Icons.error_outline_rounded,
-            color: colorScheme.error,
-            size: 42,
-          ),
+          Icon(Icons.error_outline_rounded, color: colorScheme.error, size: 42),
           const SizedBox(height: 14),
-          Text(
-            message,
-            textAlign: TextAlign.center,
-          ),
+          Text(message, textAlign: TextAlign.center),
           const SizedBox(height: 18),
           OutlinedButton(
             onPressed: onRetry,

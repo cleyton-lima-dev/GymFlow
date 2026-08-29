@@ -21,22 +21,16 @@ class CreatePhysicalAssessmentPage extends StatelessWidget {
   Widget build(BuildContext context) {
     return ChangeNotifierProvider(
       create: (context) => CreatePhysicalAssessmentViewModel(
-        PhysicalAssessmentsService(
-          context.read<ApiClient>(),
-        ),
+        PhysicalAssessmentsService(context.read<ApiClient>()),
         studentId,
       ),
-      child: _CreatePhysicalAssessmentView(
-        studentName: studentName,
-      ),
+      child: _CreatePhysicalAssessmentView(studentName: studentName),
     );
   }
 }
 
 class _CreatePhysicalAssessmentView extends StatefulWidget {
-  const _CreatePhysicalAssessmentView({
-    required this.studentName,
-  });
+  const _CreatePhysicalAssessmentView({required this.studentName});
 
   final String studentName;
 
@@ -50,6 +44,7 @@ class _CreatePhysicalAssessmentViewState
   final _formKey = GlobalKey<FormState>();
 
   late DateTime _assessmentDate;
+  DateTime? _currentGymDate;
 
   final _weightController = TextEditingController();
   final _heightController = TextEditingController();
@@ -77,11 +72,28 @@ class _CreatePhysicalAssessmentViewState
 
     final now = DateTime.now();
 
-    _assessmentDate = DateTime(
-      now.year,
-      now.month,
-      now.day,
-    );
+    _assessmentDate = DateTime(now.year, now.month, now.day);
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadCurrentGymDate();
+    });
+  }
+
+  Future<bool> _loadCurrentGymDate() async {
+    final viewModel = context.read<CreatePhysicalAssessmentViewModel>();
+
+    final currentGymDate = await viewModel.loadCurrentGymDate();
+
+    if (!mounted || currentGymDate == null) {
+      return false;
+    }
+
+    setState(() {
+      _currentGymDate = currentGymDate;
+      _assessmentDate = currentGymDate;
+    });
+
+    return true;
   }
 
   @override
@@ -110,17 +122,31 @@ class _CreatePhysicalAssessmentViewState
   }
 
   Future<void> _selectAssessmentDate() async {
-    final now = DateTime.now();
+    var currentGymDate = _currentGymDate;
+
+    if (currentGymDate == null) {
+      final loaded = await _loadCurrentGymDate();
+
+      if (!loaded || !mounted) {
+        return;
+      }
+
+      currentGymDate = _currentGymDate;
+    }
+
+    if (currentGymDate == null) {
+      return;
+    }
+
+    final initialDate = _assessmentDate.isAfter(currentGymDate)
+        ? currentGymDate
+        : _assessmentDate;
 
     final selectedDate = await showDatePicker(
       context: context,
-      initialDate: _assessmentDate,
+      initialDate: initialDate,
       firstDate: DateTime(2000),
-      lastDate: DateTime(
-        now.year,
-        now.month,
-        now.day,
-      ),
+      lastDate: currentGymDate,
     );
 
     if (selectedDate == null || !mounted) {
@@ -134,13 +160,19 @@ class _CreatePhysicalAssessmentViewState
 
   Future<void> _submit() async {
     FocusScope.of(context).unfocus();
+    if (_currentGymDate == null) {
+      final loaded = await _loadCurrentGymDate();
+
+      if (!loaded || !mounted) {
+        return;
+      }
+    }
 
     if (!(_formKey.currentState?.validate() ?? false)) {
       return;
     }
 
-    final viewModel =
-    context.read<CreatePhysicalAssessmentViewModel>();
+    final viewModel = context.read<CreatePhysicalAssessmentViewModel>();
 
     final success = await viewModel.submit(
       assessmentDate: _assessmentDate,
@@ -165,11 +197,7 @@ class _CreatePhysicalAssessmentViewState
     }
 
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text(
-          'Avaliação física cadastrada com sucesso.',
-        ),
-      ),
+      const SnackBar(content: Text('Avaliação física cadastrada com sucesso.')),
     );
 
     Navigator.of(context).pop(true);
@@ -177,32 +205,23 @@ class _CreatePhysicalAssessmentViewState
 
   @override
   Widget build(BuildContext context) {
-    final viewModel =
-    context.watch<CreatePhysicalAssessmentViewModel>();
+    final viewModel = context.watch<CreatePhysicalAssessmentViewModel>();
 
     return Scaffold(
-      bottomNavigationBar:
-      const ProfessorAdminBottomNavigation(
+      bottomNavigationBar: const ProfessorAdminBottomNavigation(
         currentItem: ProfessorAdminNavItem.students,
       ),
       body: SafeArea(
         child: Form(
           key: _formKey,
           child: CustomScrollView(
-            keyboardDismissBehavior:
-            ScrollViewKeyboardDismissBehavior.onDrag,
+            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
             slivers: [
               SliverToBoxAdapter(
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(
-                    20,
-                    12,
-                    20,
-                    32,
-                  ),
+                  padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
                   child: Column(
-                    crossAxisAlignment:
-                    CrossAxisAlignment.stretch,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       const ProfessorAdminPageHeader(),
 
@@ -210,25 +229,16 @@ class _CreatePhysicalAssessmentViewState
 
                       Text(
                         'Nova avaliação física',
-                        style: Theme.of(context)
-                            .textTheme
-                            .headlineSmall
-                            ?.copyWith(
-                          fontWeight: FontWeight.w800,
-                        ),
+                        style: Theme.of(context).textTheme.headlineSmall
+                            ?.copyWith(fontWeight: FontWeight.w800),
                       ),
 
                       const SizedBox(height: 4),
 
                       Text(
                         widget.studentName,
-                        style: Theme.of(context)
-                            .textTheme
-                            .bodyLarge
-                            ?.copyWith(
-                          color: Theme.of(context)
-                              .colorScheme
-                              .onSurfaceVariant,
+                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
                         ),
                       ),
 
@@ -246,45 +256,39 @@ class _CreatePhysicalAssessmentViewState
                             _AssessmentDateField(
                               date: _assessmentDate,
                               enabled:
-                              !viewModel.isSubmitting,
-                              onTap:
-                              _selectAssessmentDate,
+                                  !viewModel.isSubmitting &&
+                                  _currentGymDate != null,
+                              onTap: _selectAssessmentDate,
                             ),
 
                             const SizedBox(height: 16),
 
                             _DecimalField(
-                              controller:
-                              _weightController,
+                              controller: _weightController,
                               label: 'Peso',
                               suffixText: 'kg',
                               requiredField: true,
-                              enabled:
-                              !viewModel.isSubmitting,
+                              enabled: !viewModel.isSubmitting,
                             ),
 
                             const SizedBox(height: 16),
 
                             _DecimalField(
-                              controller:
-                              _heightController,
+                              controller: _heightController,
                               label: 'Altura',
                               suffixText: 'cm',
                               requiredField: true,
-                              enabled:
-                              !viewModel.isSubmitting,
+                              enabled: !viewModel.isSubmitting,
                             ),
 
                             const SizedBox(height: 16),
 
                             _DecimalField(
-                              controller:
-                              _bodyFatController,
+                              controller: _bodyFatController,
                               label: '% de gordura',
                               suffixText: '%',
                               maxValue: 100,
-                              enabled:
-                              !viewModel.isSubmitting,
+                              enabled: !viewModel.isSubmitting,
                             ),
                           ],
                         ),
@@ -296,40 +300,33 @@ class _CreatePhysicalAssessmentViewState
                         title: 'Medidas corporais',
                         icon: Icons.straighten_rounded,
                         child: Column(
-                          crossAxisAlignment:
-                          CrossAxisAlignment.stretch,
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
                             Text(
                               'Preencha somente as medidas '
-                                  'realizadas nesta avaliação.',
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .bodySmall
+                              'realizadas nesta avaliação.',
+                              style: Theme.of(context).textTheme.bodySmall
                                   ?.copyWith(
-                                color: Theme.of(context)
-                                    .colorScheme
-                                    .onSurfaceVariant,
-                              ),
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .onSurfaceVariant,
+                                  ),
                             ),
 
                             const SizedBox(height: 16),
 
                             _MeasurementRow(
                               left: _DecimalField(
-                                controller:
-                                _chestController,
+                                controller: _chestController,
                                 label: 'Peito',
                                 suffixText: 'cm',
-                                enabled:
-                                !viewModel.isSubmitting,
+                                enabled: !viewModel.isSubmitting,
                               ),
                               right: _DecimalField(
-                                controller:
-                                _waistController,
+                                controller: _waistController,
                                 label: 'Cintura',
                                 suffixText: 'cm',
-                                enabled:
-                                !viewModel.isSubmitting,
+                                enabled: !viewModel.isSubmitting,
                               ),
                             ),
 
@@ -337,20 +334,16 @@ class _CreatePhysicalAssessmentViewState
 
                             _MeasurementRow(
                               left: _DecimalField(
-                                controller:
-                                _abdomenController,
+                                controller: _abdomenController,
                                 label: 'Abdômen',
                                 suffixText: 'cm',
-                                enabled:
-                                !viewModel.isSubmitting,
+                                enabled: !viewModel.isSubmitting,
                               ),
                               right: _DecimalField(
-                                controller:
-                                _hipController,
+                                controller: _hipController,
                                 label: 'Quadril',
                                 suffixText: 'cm',
-                                enabled:
-                                !viewModel.isSubmitting,
+                                enabled: !viewModel.isSubmitting,
                               ),
                             ),
 
@@ -358,20 +351,16 @@ class _CreatePhysicalAssessmentViewState
 
                             _MeasurementRow(
                               left: _DecimalField(
-                                controller:
-                                _rightArmController,
+                                controller: _rightArmController,
                                 label: 'Braço direito',
                                 suffixText: 'cm',
-                                enabled:
-                                !viewModel.isSubmitting,
+                                enabled: !viewModel.isSubmitting,
                               ),
                               right: _DecimalField(
-                                controller:
-                                _leftArmController,
+                                controller: _leftArmController,
                                 label: 'Braço esquerdo',
                                 suffixText: 'cm',
-                                enabled:
-                                !viewModel.isSubmitting,
+                                enabled: !viewModel.isSubmitting,
                               ),
                             ),
 
@@ -379,20 +368,16 @@ class _CreatePhysicalAssessmentViewState
 
                             _MeasurementRow(
                               left: _DecimalField(
-                                controller:
-                                _rightThighController,
+                                controller: _rightThighController,
                                 label: 'Coxa direita',
                                 suffixText: 'cm',
-                                enabled:
-                                !viewModel.isSubmitting,
+                                enabled: !viewModel.isSubmitting,
                               ),
                               right: _DecimalField(
-                                controller:
-                                _leftThighController,
+                                controller: _leftThighController,
                                 label: 'Coxa esquerda',
                                 suffixText: 'cm',
-                                enabled:
-                                !viewModel.isSubmitting,
+                                enabled: !viewModel.isSubmitting,
                               ),
                             ),
 
@@ -400,22 +385,16 @@ class _CreatePhysicalAssessmentViewState
 
                             _MeasurementRow(
                               left: _DecimalField(
-                                controller:
-                                _rightCalfController,
-                                label:
-                                'Panturrilha direita',
+                                controller: _rightCalfController,
+                                label: 'Panturrilha direita',
                                 suffixText: 'cm',
-                                enabled:
-                                !viewModel.isSubmitting,
+                                enabled: !viewModel.isSubmitting,
                               ),
                               right: _DecimalField(
-                                controller:
-                                _leftCalfController,
-                                label:
-                                'Panturrilha esquerda',
+                                controller: _leftCalfController,
+                                label: 'Panturrilha esquerda',
                                 suffixText: 'cm',
-                                enabled:
-                                !viewModel.isSubmitting,
+                                enabled: !viewModel.isSubmitting,
                               ),
                             ),
                           ],
@@ -433,11 +412,10 @@ class _CreatePhysicalAssessmentViewState
                           minLines: 4,
                           maxLines: 6,
                           maxLength: 500,
-                          textCapitalization:
-                          TextCapitalization.sentences,
+                          textCapitalization: TextCapitalization.sentences,
                           decoration: const InputDecoration(
                             hintText:
-                            'Adicione observações sobre '
+                                'Adicione observações sobre '
                                 'a avaliação...',
                             border: OutlineInputBorder(),
                           ),
@@ -446,10 +424,7 @@ class _CreatePhysicalAssessmentViewState
 
                       if (viewModel.errorMessage != null) ...[
                         const SizedBox(height: 20),
-                        _ErrorMessage(
-                          message:
-                          viewModel.errorMessage!,
-                        ),
+                        _ErrorMessage(message: viewModel.errorMessage!),
                       ],
 
                       const SizedBox(height: 24),
@@ -457,21 +432,16 @@ class _CreatePhysicalAssessmentViewState
                       SizedBox(
                         height: 52,
                         child: FilledButton.icon(
-                          onPressed: viewModel.isSubmitting
-                              ? null
-                              : _submit,
+                          onPressed: viewModel.isSubmitting ? null : _submit,
                           icon: viewModel.isSubmitting
                               ? const SizedBox(
-                            width: 20,
-                            height: 20,
-                            child:
-                            CircularProgressIndicator(
-                              strokeWidth: 2,
-                            ),
-                          )
-                              : const Icon(
-                            Icons.check_rounded,
-                          ),
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : const Icon(Icons.check_rounded),
                           label: Text(
                             viewModel.isSubmitting
                                 ? 'Salvando...'
@@ -485,8 +455,7 @@ class _CreatePhysicalAssessmentViewState
                       TextButton(
                         onPressed: viewModel.isSubmitting
                             ? null
-                            : () =>
-                            Navigator.of(context).pop(),
+                            : () => Navigator.of(context).pop(),
                         child: const Text('Cancelar'),
                       ),
                     ],
@@ -517,16 +486,13 @@ class _InformationCard extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(
-            Icons.info_outline_rounded,
-            color: colorScheme.primary,
-          ),
+          Icon(Icons.info_outline_rounded, color: colorScheme.primary),
           const SizedBox(width: 12),
           const Expanded(
             child: Text(
               'Registre os dados obtidos na avaliação física. '
-                  'Peso e altura são obrigatórios; as demais medidas '
-                  'podem ser preenchidas conforme a avaliação realizada.',
+              'Peso e altura são obrigatórios; as demais medidas '
+              'podem ser preenchidas conforme a avaliação realizada.',
             ),
           ),
         ],
@@ -556,19 +522,14 @@ class _FormSection extends StatelessWidget {
       decoration: BoxDecoration(
         color: colorScheme.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: colorScheme.outlineVariant.withAlpha(120),
-        ),
+        border: Border.all(color: colorScheme.outlineVariant.withAlpha(120)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Row(
             children: [
-              Icon(
-                icon,
-                color: colorScheme.primary,
-              ),
+              Icon(icon, color: colorScheme.primary),
               const SizedBox(width: 10),
               Text(
                 title,
@@ -605,15 +566,12 @@ class _AssessmentDateField extends StatelessWidget {
       child: InputDecorator(
         decoration: const InputDecoration(
           labelText: 'Data da avaliação *',
-          prefixIcon:
-          Icon(Icons.calendar_month_outlined),
+          prefixIcon: Icon(Icons.calendar_month_outlined),
           border: OutlineInputBorder(),
         ),
         child: Text(
           _formatDate(date),
-          style: const TextStyle(
-            fontWeight: FontWeight.w600,
-          ),
+          style: const TextStyle(fontWeight: FontWeight.w600),
         ),
       ),
     );
@@ -621,10 +579,7 @@ class _AssessmentDateField extends StatelessWidget {
 }
 
 class _MeasurementRow extends StatelessWidget {
-  const _MeasurementRow({
-    required this.left,
-    required this.right,
-  });
+  const _MeasurementRow({required this.left, required this.right});
 
   final Widget left;
   final Widget right;
@@ -634,13 +589,7 @@ class _MeasurementRow extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         if (constraints.maxWidth < 300) {
-          return Column(
-            children: [
-              left,
-              const SizedBox(height: 14),
-              right,
-            ],
-          );
+          return Column(children: [left, const SizedBox(height: 14), right]);
         }
 
         return Row(
@@ -678,24 +627,15 @@ class _DecimalField extends StatelessWidget {
     return TextFormField(
       controller: controller,
       enabled: enabled,
-      keyboardType: const TextInputType.numberWithOptions(
-        decimal: true,
-      ),
-      inputFormatters: [
-        FilteringTextInputFormatter.allow(
-          RegExp(r'[0-9,.]'),
-        ),
-      ],
+      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+      inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9,.]'))],
       decoration: InputDecoration(
-        labelText: requiredField
-            ? '$label *'
-            : label,
+        labelText: requiredField ? '$label *' : label,
         suffixText: suffixText,
         border: const OutlineInputBorder(),
       ),
       validator: (value) {
-        final normalized =
-            value?.trim().replaceAll(',', '.') ?? '';
+        final normalized = value?.trim().replaceAll(',', '.') ?? '';
 
         if (normalized.isEmpty) {
           if (requiredField) {
@@ -721,9 +661,7 @@ class _DecimalField extends StatelessWidget {
 }
 
 class _ErrorMessage extends StatelessWidget {
-  const _ErrorMessage({
-    required this.message,
-  });
+  const _ErrorMessage({required this.message});
 
   final String message;
 
@@ -748,9 +686,7 @@ class _ErrorMessage extends StatelessWidget {
           Expanded(
             child: Text(
               message,
-              style: TextStyle(
-                color: colorScheme.onErrorContainer,
-              ),
+              style: TextStyle(color: colorScheme.onErrorContainer),
             ),
           ),
         ],

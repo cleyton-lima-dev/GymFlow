@@ -1,8 +1,9 @@
 ﻿using GymFlow.Application.DTOs.Common;
 using GymFlow.Application.DTOs.Workouts;
 using GymFlow.Application.Interfaces.Repositories;
-using GymFlow.Domain.Entities;
 using GymFlow.Application.Interfaces.Time;
+using GymFlow.Application.Validation;
+using GymFlow.Domain.Entities;
 
 namespace GymFlow.Application.Services;
 
@@ -37,10 +38,10 @@ public class WorkoutService
         CreateWorkoutRequest request)
     {
         var student = await _studentRepository
-            .GetByIdAndGymIdAsync(request.StudentId, gymId);
+    .GetByIdAndGymIdAsync(request.StudentId, gymId);
 
         if (student is null)
-            throw new ArgumentException("Aluno não encontrado.");
+            throw new KeyNotFoundException("Aluno não encontrado.");
 
         if (!student.User.IsActive)
             throw new InvalidOperationException(
@@ -51,6 +52,16 @@ public class WorkoutService
         if (string.IsNullOrWhiteSpace(name))
             throw new ArgumentException(
                 "O nome do treino é obrigatório.");
+
+        PersistenceTextPolicy.ValidateMaxLength(
+             name,
+            PersistenceTextPolicy.WorkoutNameMaxLength,
+            "O nome do treino");
+
+        PersistenceTextPolicy.ValidateMaxLength(
+            request.Description,
+            PersistenceTextPolicy.DescriptionMaxLength,
+            "A descrição");
 
         if (request.Days.Count == 0)
             throw new ArgumentException(
@@ -175,7 +186,7 @@ public class WorkoutService
             .GetByIdAndGymIdAsync(request.StudentId, gymId);
 
         if (student is null)
-            throw new ArgumentException("Aluno não encontrado.");
+            throw new KeyNotFoundException("Aluno não encontrado.");
 
         if (!student.User.IsActive)
         {
@@ -187,7 +198,7 @@ public class WorkoutService
             .GetByIdAsync(request.TemplateId, gymId);
 
         if (template is null)
-            throw new ArgumentException("Modelo de treino não encontrado.");
+            throw new KeyNotFoundException("Modelo de treino não encontrado.");
 
         if (!template.IsActive)
         {
@@ -202,6 +213,16 @@ public class WorkoutService
             throw new ArgumentException(
                 "O nome do treino é obrigatório.");
         }
+
+        PersistenceTextPolicy.ValidateMaxLength(
+            name,
+            PersistenceTextPolicy.WorkoutNameMaxLength,
+            "O nome do treino");
+
+        PersistenceTextPolicy.ValidateMaxLength(
+            request.Description,
+            PersistenceTextPolicy.DescriptionMaxLength,
+            "A descrição");
 
         if (request.Days.Count == 0)
         {
@@ -339,7 +360,7 @@ public class WorkoutService
             .GetByIdAndGymIdAsync(studentId, gymId);
 
         if (student is null)
-            throw new ArgumentException(
+            throw new KeyNotFoundException(
                 "Aluno não encontrado.");
 
         if (!student.User.IsActive)
@@ -357,14 +378,17 @@ public class WorkoutService
 
         if (!validWorkoutDay)
         {
-            throw new ArgumentException(
+            throw new KeyNotFoundException(
                 "Dia de treino não encontrado no treino ativo do aluno.");
         }
 
         var nowUtc = DateTime.UtcNow;
 
+        var timeZone =
+            _gymTimeZoneProvider.GetTimeZone(gymId);
+
         var executionDate = GetGymDate(
-            gymId,
+            timeZone,
             nowUtc);
 
         var alreadyCompleted =
@@ -397,7 +421,11 @@ public class WorkoutService
         {
             Id = execution.Id,
             WorkoutDayId = execution.WorkoutDayId,
-            CompletedAt = execution.CompletedAt
+            CompletedAt = execution.CompletedAt,
+            CompletedAtUtcOffsetMinutes =
+            GetGymUtcOffsetMinutes(
+                timeZone,
+                execution.CompletedAt)
         };
     }
 
@@ -420,10 +448,13 @@ public class WorkoutService
         }
 
         var student = await _studentRepository
-            .GetByIdAndGymIdAsync(studentId, gymId);
+    .GetByIdAndGymIdAsync(studentId, gymId);
 
         if (student is null)
-            throw new ArgumentException("Aluno não encontrado.");
+            throw new KeyNotFoundException("Aluno não encontrado.");
+
+        var timeZone =
+            _gymTimeZoneProvider.GetTimeZone(gymId);
 
         var skip = (page - 1) * pageSize;
 
@@ -447,7 +478,11 @@ public class WorkoutService
                 WorkoutName = execution.WorkoutDay.Workout.Name,
                 WorkoutDayId = execution.WorkoutDayId,
                 WorkoutDayName = execution.WorkoutDay.Name,
-                CompletedAt = execution.CompletedAt
+                CompletedAt = execution.CompletedAt,
+                CompletedAtUtcOffsetMinutes =
+                GetGymUtcOffsetMinutes(
+                    timeZone,
+                    execution.CompletedAt)
             })
             .ToList();
 
@@ -468,7 +503,7 @@ public class WorkoutService
             .GetByUserIdAndGymIdAsync(userId, gymId);
 
         if (student is null)
-            throw new ArgumentException("Aluno não encontrado.");
+            throw new KeyNotFoundException("Aluno não encontrado.");
 
         return await GetActiveByStudentAsync(
             gymId,
@@ -484,7 +519,7 @@ public class WorkoutService
             .GetByUserIdAndGymIdAsync(userId, gymId);
 
         if (student is null)
-            throw new ArgumentException("Aluno não encontrado.");
+            throw new KeyNotFoundException("Aluno não encontrado.");
 
         return await CompleteDayAsync(
             gymId,
@@ -502,7 +537,7 @@ public class WorkoutService
             .GetByUserIdAndGymIdAsync(userId, gymId);
 
         if (student is null)
-            throw new ArgumentException("Aluno não encontrado.");
+            throw new KeyNotFoundException("Aluno não encontrado.");
 
         return await GetHistoryAsync(
             gymId,
@@ -517,10 +552,10 @@ public class WorkoutService
      UpdateWorkoutRequest request)
     {
         var workout = await _workoutRepository
-            .GetForUpdateAsync(workoutId, gymId);
+    .GetForUpdateAsync(workoutId, gymId);
 
         if (workout is null)
-            throw new ArgumentException("Treino não encontrado.");
+            throw new KeyNotFoundException("Treino não encontrado.");
 
         if (!workout.IsActive)
         {
@@ -535,6 +570,16 @@ public class WorkoutService
             throw new ArgumentException(
                 "O nome do treino é obrigatório.");
         }
+
+        PersistenceTextPolicy.ValidateMaxLength(
+            name,
+            PersistenceTextPolicy.WorkoutNameMaxLength,
+            "O nome do treino");
+
+        PersistenceTextPolicy.ValidateMaxLength(
+            request.Description,
+            PersistenceTextPolicy.DescriptionMaxLength,
+            "A descrição");
 
         if (request.Days.Count == 0)
         {
@@ -573,8 +618,11 @@ public class WorkoutService
             }
         }
 
-        var hasExecutions = workout.Days
-            .Any(x => x.Executions.Count > 0);
+        var hasExecutions =
+                await _workoutExecutionRepository
+        .ExistsForWorkoutAsync(
+            workout.Id,
+            gymId);
 
         if (hasExecutions)
         {
@@ -757,7 +805,7 @@ public class WorkoutService
             .GetByIdAndGymIdAsync(studentId, gymId);
 
         if (student is null)
-            throw new ArgumentException("Aluno não encontrado.");
+            throw new KeyNotFoundException("Aluno não encontrado.");
 
         var workout = await _workoutRepository
             .GetActiveByStudentAsync(studentId, gymId);
@@ -772,20 +820,25 @@ public class WorkoutService
         var latestExecutions = await _workoutExecutionRepository
             .GetLatestByWorkoutDayIdsAsync(workoutDayIds);
 
+        var timeZone =
+             _gymTimeZoneProvider.GetTimeZone(gymId);
+
         var today = GetGymDate(
-            gymId,
+            timeZone,
             DateTime.UtcNow);
 
         return MapToDetailResponse(
             workout,
             latestExecutions,
-            today);
+            today,
+            timeZone);
     }
 
     private static WorkoutDetailResponse MapToDetailResponse(
     Workout workout,
     List<WorkoutExecution>? latestExecutions,
-    DateOnly today)
+    DateOnly today,
+    TimeZoneInfo timeZone)
     {
         var executionsByDay = latestExecutions?
             .ToDictionary(
@@ -825,6 +878,15 @@ public class WorkoutService
                                 ? lastExecution.CompletedAt
                                 : null,
 
+                    LastCompletedAtUtcOffsetMinutes =
+                        executionsByDay.TryGetValue(
+                         day.Id,
+                         out var offsetExecution)
+                             ? GetGymUtcOffsetMinutes(
+                        timeZone,
+                                offsetExecution.CompletedAt)
+                                : null,
+
                     Exercises = day.Exercises
                         .OrderBy(x => x.Order)
                         .Select(exercise => new WorkoutExerciseResponse
@@ -845,16 +907,47 @@ public class WorkoutService
         };
     }
 
-    private DateOnly GetGymDate(
-    Guid gymId,
+    private static int GetGymUtcOffsetMinutes(
+    TimeZoneInfo timeZone,
     DateTime utcDateTime)
     {
-        var timeZone =
-            _gymTimeZoneProvider.GetTimeZone(gymId);
+        var normalizedUtc = utcDateTime.Kind switch
+        {
+            DateTimeKind.Utc => utcDateTime,
+
+            DateTimeKind.Local =>
+                utcDateTime.ToUniversalTime(),
+
+            _ => DateTime.SpecifyKind(
+                utcDateTime,
+                DateTimeKind.Utc)
+        };
+
+        return checked(
+            (int)timeZone
+                .GetUtcOffset(normalizedUtc)
+                .TotalMinutes);
+    }
+
+    private static DateOnly GetGymDate(
+        TimeZoneInfo timeZone,
+        DateTime utcDateTime)
+    {
+        var normalizedUtc = utcDateTime.Kind switch
+        {
+            DateTimeKind.Utc => utcDateTime,
+
+            DateTimeKind.Local =>
+                utcDateTime.ToUniversalTime(),
+
+            _ => DateTime.SpecifyKind(
+                utcDateTime,
+                DateTimeKind.Utc)
+        };
 
         var localDateTime =
             TimeZoneInfo.ConvertTimeFromUtc(
-                utcDateTime,
+                normalizedUtc,
                 timeZone);
 
         return DateOnly.FromDateTime(
@@ -1068,6 +1161,27 @@ public class WorkoutService
             {
                 throw new ArgumentException(
                     $"A ordem dos exercícios no dia '{day.Name}' não pode se repetir.");
+            }
+        }
+
+        foreach (var day in days)
+        {
+            PersistenceTextPolicy.ValidateMaxLength(
+                day.Name,
+                PersistenceTextPolicy.DayNameMaxLength,
+                "O nome do dia");
+
+            foreach (var exercise in day.Exercises)
+            {
+                PersistenceTextPolicy.ValidateMaxLength(
+                    exercise.Repetitions,
+                    PersistenceTextPolicy.RepetitionsMaxLength,
+                    "As repetições");
+
+                PersistenceTextPolicy.ValidateMaxLength(
+                    exercise.Notes,
+                    PersistenceTextPolicy.NotesMaxLength,
+                    "As observações");
             }
         }
     }

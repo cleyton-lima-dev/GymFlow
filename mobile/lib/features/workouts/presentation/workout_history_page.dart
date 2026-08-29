@@ -21,36 +21,28 @@ class WorkoutHistoryPage extends StatelessWidget {
   Widget build(BuildContext context) {
     return ChangeNotifierProvider(
       create: (context) => WorkoutHistoryViewModel(
-        WorkoutsService(
-          context.read<ApiClient>(),
-        ),
+        WorkoutsService(context.read<ApiClient>()),
         studentId,
       )..load(),
-      child: _WorkoutHistoryView(
-        studentName: studentName,
-      ),
+      child: _WorkoutHistoryView(studentName: studentName),
     );
   }
 }
 
 class _WorkoutHistoryView extends StatelessWidget {
-  const _WorkoutHistoryView({
-    required this.studentName,
-  });
+  const _WorkoutHistoryView({required this.studentName});
 
   final String studentName;
 
   @override
   Widget build(BuildContext context) {
-    final viewModel =
-    context.watch<WorkoutHistoryViewModel>();
+    final viewModel = context.watch<WorkoutHistoryViewModel>();
 
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
 
     return Scaffold(
-      bottomNavigationBar:
-      const ProfessorAdminBottomNavigation(
+      bottomNavigationBar: const ProfessorAdminBottomNavigation(
         currentItem: ProfessorAdminNavItem.students,
       ),
       body: SafeArea(
@@ -58,22 +50,14 @@ class _WorkoutHistoryView extends StatelessWidget {
         child: RefreshIndicator(
           onRefresh: viewModel.refresh,
           child: ListView(
-            physics:
-            const AlwaysScrollableScrollPhysics(),
-            padding: const EdgeInsets.fromLTRB(
-              20,
-              12,
-              20,
-              32,
-            ),
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
             children: [
               const ProfessorAdminPageHeader(),
 
               const SizedBox(height: 24),
 
-              _StudentCard(
-                studentName: studentName,
-              ),
+              _StudentCard(studentName: studentName),
 
               const SizedBox(height: 28),
 
@@ -90,9 +74,7 @@ class _WorkoutHistoryView extends StatelessWidget {
                   Expanded(
                     child: Text(
                       'Histórico de treinos',
-                      style: theme
-                          .textTheme.headlineSmall
-                          ?.copyWith(
+                      style: theme.textTheme.headlineSmall?.copyWith(
                         fontWeight: FontWeight.w800,
                       ),
                     ),
@@ -104,34 +86,26 @@ class _WorkoutHistoryView extends StatelessWidget {
 
               Text(
                 'Dias de treino concluídos pelo aluno.',
-                style:
-                theme.textTheme.bodyMedium?.copyWith(
-                  color:
-                  colorScheme.onSurfaceVariant,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: colorScheme.onSurfaceVariant,
                   height: 1.4,
                 ),
               ),
 
-              if (viewModel.hasLoaded &&
-                  viewModel.errorMessage == null) ...[
+              if (viewModel.hasLoaded && viewModel.errorMessage == null) ...[
                 const SizedBox(height: 8),
 
                 Text(
-                  _historyCountLabel(
-                    viewModel.totalCount,
-                  ),
-                  style:
-                  theme.textTheme.bodySmall?.copyWith(
-                    color:
-                    colorScheme.onSurfaceVariant,
+                  _historyCountLabel(viewModel.totalCount),
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
                   ),
                 ),
               ],
 
               const SizedBox(height: 22),
 
-              if (viewModel.isLoading &&
-                  !viewModel.hasLoaded)
+              if (viewModel.isLoading && !viewModel.hasLoaded)
                 const _LoadingState()
               else if (viewModel.errorMessage != null &&
                   viewModel.items.isEmpty)
@@ -140,55 +114,47 @@ class _WorkoutHistoryView extends StatelessWidget {
                   onRetry: viewModel.load,
                 )
               else if (viewModel.isEmpty)
-                  const _EmptyState()
-                else ...[
-                    for (var index = 0;
-                    index < viewModel.items.length;
-                    index++) ...[
-                      _HistoryCard(
-                        item: viewModel.items[index],
-                      ),
+                const _EmptyState()
+              else ...[
+                for (
+                  var index = 0;
+                  index < viewModel.items.length;
+                  index++
+                ) ...[
+                  _HistoryCard(item: viewModel.items[index]),
 
-                      if (index <
-                          viewModel.items.length - 1)
-                        const SizedBox(height: 12),
-                    ],
+                  if (index < viewModel.items.length - 1)
+                    const SizedBox(height: 12),
+                ],
 
-                    if (viewModel.errorMessage != null) ...[
-                      const SizedBox(height: 16),
+                if (viewModel.errorMessage != null) ...[
+                  const SizedBox(height: 16),
 
-                      _InlineError(
-                        message: viewModel.errorMessage!,
-                      ),
-                    ],
+                  _InlineError(message: viewModel.errorMessage!),
+                ],
 
-                    if (viewModel.hasNextPage) ...[
-                      const SizedBox(height: 20),
+                if (viewModel.hasNextPage) ...[
+                  const SizedBox(height: 20),
 
-                      OutlinedButton.icon(
-                        onPressed: viewModel.isLoadingMore
-                            ? null
-                            : viewModel.loadMore,
-                        icon: viewModel.isLoadingMore
-                            ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child:
-                          CircularProgressIndicator(
-                            strokeWidth: 2,
-                          ),
-                        )
-                            : const Icon(
-                          Icons.expand_more_rounded,
-                        ),
-                        label: Text(
-                          viewModel.isLoadingMore
-                              ? 'Carregando...'
-                              : 'Carregar mais',
-                        ),
-                      ),
-                    ],
-                  ],
+                  OutlinedButton.icon(
+                    onPressed: viewModel.isLoadingMore
+                        ? null
+                        : viewModel.loadMore,
+                    icon: viewModel.isLoadingMore
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.expand_more_rounded),
+                    label: Text(
+                      viewModel.isLoadingMore
+                          ? 'Carregando...'
+                          : 'Carregar mais',
+                    ),
+                  ),
+                ],
+              ],
             ],
           ),
         ),
@@ -198,9 +164,7 @@ class _WorkoutHistoryView extends StatelessWidget {
 }
 
 class _StudentCard extends StatelessWidget {
-  const _StudentCard({
-    required this.studentName,
-  });
+  const _StudentCard({required this.studentName});
 
   final String studentName;
 
@@ -214,10 +178,7 @@ class _StudentCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: colorScheme.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color:
-          colorScheme.outlineVariant.withAlpha(120),
-        ),
+        border: Border.all(color: colorScheme.outlineVariant.withAlpha(120)),
       ),
       child: Row(
         children: [
@@ -227,13 +188,11 @@ class _StudentCard extends StatelessWidget {
             alignment: Alignment.center,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color:
-              colorScheme.primary.withAlpha(18),
+              color: colorScheme.primary.withAlpha(18),
             ),
             child: Text(
               _initials(studentName),
-              style:
-              theme.textTheme.titleMedium?.copyWith(
+              style: theme.textTheme.titleMedium?.copyWith(
                 color: colorScheme.primary,
                 fontWeight: FontWeight.w800,
               ),
@@ -244,15 +203,13 @@ class _StudentCard extends StatelessWidget {
 
           Expanded(
             child: Column(
-              crossAxisAlignment:
-              CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   studentName,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style:
-                  theme.textTheme.titleMedium?.copyWith(
+                  style: theme.textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.w800,
                   ),
                 ),
@@ -261,10 +218,8 @@ class _StudentCard extends StatelessWidget {
 
                 Text(
                   'Aluno',
-                  style:
-                  theme.textTheme.bodySmall?.copyWith(
-                    color:
-                    colorScheme.onSurfaceVariant,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
                   ),
                 ),
               ],
@@ -277,9 +232,7 @@ class _StudentCard extends StatelessWidget {
 }
 
 class _HistoryCard extends StatelessWidget {
-  const _HistoryCard({
-    required this.item,
-  });
+  const _HistoryCard({required this.item});
 
   final WorkoutHistoryItem item;
 
@@ -288,30 +241,26 @@ class _HistoryCard extends StatelessWidget {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
 
-    final completedAt =
-    item.completedAt.toLocal();
+    final completedAt = item.completedAt.toUtc().add(
+      Duration(minutes: item.completedAtUtcOffsetMinutes),
+    );
 
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: colorScheme.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color:
-          colorScheme.outlineVariant.withAlpha(120),
-        ),
+        border: Border.all(color: colorScheme.outlineVariant.withAlpha(120)),
       ),
       child: Row(
-        crossAxisAlignment:
-        CrossAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           Container(
             width: 50,
             height: 50,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color:
-              colorScheme.primary.withAlpha(18),
+              color: colorScheme.primary.withAlpha(18),
             ),
             child: Icon(
               Icons.fitness_center_rounded,
@@ -323,13 +272,11 @@ class _HistoryCard extends StatelessWidget {
 
           Expanded(
             child: Column(
-              crossAxisAlignment:
-              CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   item.workoutName,
-                  style:
-                  theme.textTheme.titleMedium?.copyWith(
+                  style: theme.textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.w800,
                   ),
                 ),
@@ -338,8 +285,7 @@ class _HistoryCard extends StatelessWidget {
 
                 Text(
                   item.workoutDayName,
-                  style:
-                  theme.textTheme.bodyMedium?.copyWith(
+                  style: theme.textTheme.bodyMedium?.copyWith(
                     color: colorScheme.primary,
                     fontWeight: FontWeight.w700,
                   ),
@@ -352,8 +298,7 @@ class _HistoryCard extends StatelessWidget {
                     Icon(
                       Icons.calendar_today_outlined,
                       size: 16,
-                      color:
-                      colorScheme.onSurfaceVariant,
+                      color: colorScheme.onSurfaceVariant,
                     ),
 
                     const SizedBox(width: 7),
@@ -361,12 +306,10 @@ class _HistoryCard extends StatelessWidget {
                     Flexible(
                       child: Text(
                         '${_formatDate(completedAt)}'
-                            ' • '
-                            '${_formatTime(completedAt)}',
-                        style: theme.textTheme.bodySmall
-                            ?.copyWith(
-                          color: colorScheme
-                              .onSurfaceVariant,
+                        ' • '
+                        '${_formatTime(completedAt)}',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
@@ -388,12 +331,8 @@ class _LoadingState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return const Padding(
-      padding: EdgeInsets.symmetric(
-        vertical: 48,
-      ),
-      child: Center(
-        child: CircularProgressIndicator(),
-      ),
+      padding: EdgeInsets.symmetric(vertical: 48),
+      child: Center(child: CircularProgressIndicator()),
     );
   }
 }
@@ -407,17 +346,11 @@ class _EmptyState extends StatelessWidget {
     final colorScheme = theme.colorScheme;
 
     return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: 20,
-        vertical: 32,
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 32),
       decoration: BoxDecoration(
         color: colorScheme.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color:
-          colorScheme.outlineVariant.withAlpha(120),
-        ),
+        border: Border.all(color: colorScheme.outlineVariant.withAlpha(120)),
       ),
       child: Column(
         children: [
@@ -426,8 +359,7 @@ class _EmptyState extends StatelessWidget {
             height: 56,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color:
-              colorScheme.primary.withAlpha(18),
+              color: colorScheme.primary.withAlpha(18),
             ),
             child: Icon(
               Icons.history_rounded,
@@ -441,8 +373,7 @@ class _EmptyState extends StatelessWidget {
           Text(
             'Nenhum treino concluído ainda',
             textAlign: TextAlign.center,
-            style:
-            theme.textTheme.titleMedium?.copyWith(
+            style: theme.textTheme.titleMedium?.copyWith(
               fontWeight: FontWeight.w800,
             ),
           ),
@@ -452,10 +383,8 @@ class _EmptyState extends StatelessWidget {
           Text(
             'As divisões concluídas pelo aluno aparecerão aqui.',
             textAlign: TextAlign.center,
-            style:
-            theme.textTheme.bodyMedium?.copyWith(
-              color:
-              colorScheme.onSurfaceVariant,
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: colorScheme.onSurfaceVariant,
               height: 1.4,
             ),
           ),
@@ -466,10 +395,7 @@ class _EmptyState extends StatelessWidget {
 }
 
 class _ErrorState extends StatelessWidget {
-  const _ErrorState({
-    required this.message,
-    required this.onRetry,
-  });
+  const _ErrorState({required this.message, required this.onRetry});
 
   final String message;
   final VoidCallback onRetry;
@@ -484,25 +410,18 @@ class _ErrorState extends StatelessWidget {
       decoration: BoxDecoration(
         color: colorScheme.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: colorScheme.error.withAlpha(70),
-        ),
+        border: Border.all(color: colorScheme.error.withAlpha(70)),
       ),
       child: Column(
         children: [
-          Icon(
-            Icons.error_outline_rounded,
-            color: colorScheme.error,
-            size: 32,
-          ),
+          Icon(Icons.error_outline_rounded, color: colorScheme.error, size: 32),
 
           const SizedBox(height: 12),
 
           Text(
             message,
             textAlign: TextAlign.center,
-            style:
-            theme.textTheme.bodyMedium?.copyWith(
+            style: theme.textTheme.bodyMedium?.copyWith(
               color: colorScheme.error,
             ),
           ),
@@ -511,12 +430,8 @@ class _ErrorState extends StatelessWidget {
 
           OutlinedButton.icon(
             onPressed: onRetry,
-            icon: const Icon(
-              Icons.refresh_rounded,
-            ),
-            label: const Text(
-              'Tentar novamente',
-            ),
+            icon: const Icon(Icons.refresh_rounded),
+            label: const Text('Tentar novamente'),
           ),
         ],
       ),
@@ -525,45 +440,30 @@ class _ErrorState extends StatelessWidget {
 }
 
 class _InlineError extends StatelessWidget {
-  const _InlineError({
-    required this.message,
-  });
+  const _InlineError({required this.message});
 
   final String message;
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme =
-        Theme.of(context).colorScheme;
+    final colorScheme = Theme.of(context).colorScheme;
 
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: colorScheme.error.withAlpha(15),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: colorScheme.error.withAlpha(70),
-        ),
+        border: Border.all(color: colorScheme.error.withAlpha(70)),
       ),
       child: Row(
-        crossAxisAlignment:
-        CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(
-            Icons.error_outline_rounded,
-            size: 20,
-            color: colorScheme.error,
-          ),
+          Icon(Icons.error_outline_rounded, size: 20, color: colorScheme.error),
 
           const SizedBox(width: 10),
 
           Expanded(
-            child: Text(
-              message,
-              style: TextStyle(
-                color: colorScheme.error,
-              ),
-            ),
+            child: Text(message, style: TextStyle(color: colorScheme.error)),
           ),
         ],
       ),
@@ -610,12 +510,10 @@ String _initials(String name) {
   }
 
   if (parts.length == 1) {
-    return parts.first
-        .substring(0, 1)
-        .toUpperCase();
+    return parts.first.substring(0, 1).toUpperCase();
   }
 
   return '${parts.first.substring(0, 1)}'
-      '${parts.last.substring(0, 1)}'
+          '${parts.last.substring(0, 1)}'
       .toUpperCase();
 }

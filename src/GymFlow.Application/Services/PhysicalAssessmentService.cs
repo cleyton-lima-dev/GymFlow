@@ -3,6 +3,7 @@ using GymFlow.Application.DTOs.PhysicalAssessments;
 using GymFlow.Application.Interfaces.Repositories;
 using GymFlow.Domain.Entities;
 using GymFlow.Application.Interfaces.Time;
+using GymFlow.Application.Exceptions;
 
 namespace GymFlow.Application.Services;
 
@@ -11,6 +12,7 @@ public class PhysicalAssessmentService
     private readonly IPhysicalAssessmentRepository _physicalAssessmentRepository;
     private readonly IStudentRepository _studentRepository;
     private readonly IGymTimeZoneProvider _gymTimeZoneProvider;
+    private const decimal MaxDatabaseDecimalValue = 999.99m;
 
     public PhysicalAssessmentService(
     IPhysicalAssessmentRepository physicalAssessmentRepository,
@@ -82,8 +84,16 @@ public class PhysicalAssessmentService
             UpdatedAt = now
         };
 
-        await _physicalAssessmentRepository.AddAsync(assessment);
-        await _physicalAssessmentRepository.SaveChangesAsync();
+        try
+        {
+            await _physicalAssessmentRepository.AddAsync(assessment);
+            await _physicalAssessmentRepository.SaveChangesAsync();
+        }
+        catch (PhysicalAssessmentDateConflictException)
+        {
+            return CreatePhysicalAssessmentResult
+                .AssessmentAlreadyExistsForDate;
+        }
 
         return CreatePhysicalAssessmentResult.Success;
     }
@@ -117,71 +127,32 @@ public class PhysicalAssessmentService
     }
 
     public async Task<PagedResponse<PhysicalAssessmentHistoryItemResponse>>
-        GetHistoryAsync(
-            Guid studentId,
-            Guid gymId,
-            int page,
-            int pageSize)
+    GetHistoryAsync(
+        Guid studentId,
+        Guid gymId,
+        int page,
+        int pageSize)
     {
-        if (page < 1)
-        {
-            throw new ArgumentException(
-                "A página deve ser maior ou igual a 1.");
-        }
+        ValidatePagination(
+            page,
+            pageSize);
 
-        if (pageSize < 1 || pageSize > 100)
-        {
-            throw new ArgumentException(
-                "O tamanho da página deve estar entre 1 e 100.");
-        }
-
-        var assessments =
-            await _physicalAssessmentRepository.GetHistoryByStudentAsync(
-                studentId,
-                gymId,
-                page,
-                pageSize);
-
-        var totalCount =
-            await _physicalAssessmentRepository.CountByStudentAsync(
+        var student = await _studentRepository
+            .GetByIdAndGymIdAsync(
                 studentId,
                 gymId);
 
-        var today = GetGymDate(
-                gymId,
-                DateTime.UtcNow);
-
-        var items = assessments
-            .Select(assessment =>
-            {
-                var nextAssessmentDate =
-                    assessment.AssessmentDate.AddMonths(2);
-
-                return new PhysicalAssessmentHistoryItemResponse
-                {
-                    Id = assessment.Id,
-                    AssessmentDate = assessment.AssessmentDate,
-                    WeightKg = assessment.WeightKg,
-                    HeightCm = assessment.HeightCm,
-                    BodyFatPercentage =
-                        assessment.BodyFatPercentage,
-
-                    NextAssessmentDate =
-                        nextAssessmentDate,
-
-                    IsReassessmentDue =
-                        today >= nextAssessmentDate
-                };
-            })
-            .ToList();
-
-        return new PagedResponse<PhysicalAssessmentHistoryItemResponse>
+        if (student is null)
         {
-            Items = items,
-            Page = page,
-            PageSize = pageSize,
-            TotalCount = totalCount
-        };
+            throw new KeyNotFoundException(
+                "Aluno não encontrado.");
+        }
+
+        return await GetHistoryCoreAsync(
+            student.Id,
+            gymId,
+            page,
+            pageSize);
     }
 
     public async Task<PhysicalAssessmentResponse?> GetLatestForUserAsync(
@@ -198,19 +169,28 @@ public class PhysicalAssessmentService
     }
 
     public async Task<PagedResponse<PhysicalAssessmentHistoryItemResponse>>
-        GetHistoryForUserAsync(
-            Guid userId,
-            Guid gymId,
-            int page,
-            int pageSize)
+    GetHistoryForUserAsync(
+        Guid userId,
+        Guid gymId,
+        int page,
+        int pageSize)
     {
+        ValidatePagination(
+            page,
+            pageSize);
+
         var student = await _studentRepository
-            .GetByUserIdAndGymIdAsync(userId, gymId);
+            .GetByUserIdAndGymIdAsync(
+                userId,
+                gymId);
 
         if (student is null)
-            throw new KeyNotFoundException("Aluno não encontrado.");
+        {
+            throw new KeyNotFoundException(
+                "Aluno não encontrado.");
+        }
 
-        return await GetHistoryAsync(
+        return await GetHistoryCoreAsync(
             student.Id,
             gymId,
             page,
@@ -232,6 +212,94 @@ public class PhysicalAssessmentService
             assessmentId,
             student.Id,
             gymId);
+    }
+
+    private static void ValidatePagination(
+    int page,
+    int pageSize)
+    {
+        if (page < 1)
+        {
+            throw new ArgumentException(
+                "A página deve ser maior ou igual a 1.");
+        }
+
+        if (pageSize < 1 || pageSize > 100)
+        {
+            throw new ArgumentException(
+                "O tamanho da página deve estar entre 1 e 100.");
+        }
+    }
+
+    private async Task<PagedResponse<PhysicalAssessmentHistoryItemResponse>>
+        GetHistoryCoreAsync(
+            Guid studentId,
+            Guid gymId,
+            int page,
+            int pageSize)
+    {
+        var assessments =
+            await _physicalAssessmentRepository
+                .GetHistoryByStudentAsync(
+                    studentId,
+                    gymId,
+                    page,
+                    pageSize);
+
+        var totalCount =
+            await _physicalAssessmentRepository
+                .CountByStudentAsync(
+                    studentId,
+                    gymId);
+
+        var today = GetGymDate(
+            gymId,
+            DateTime.UtcNow);
+
+        var items = assessments
+            .Select(assessment =>
+            {
+                var nextAssessmentDate =
+                    assessment.AssessmentDate.AddMonths(2);
+
+                return new PhysicalAssessmentHistoryItemResponse
+                {
+                    Id = assessment.Id,
+                    AssessmentDate =
+                        assessment.AssessmentDate,
+
+                    WeightKg =
+                        assessment.WeightKg,
+
+                    HeightCm =
+                        assessment.HeightCm,
+
+                    BodyFatPercentage =
+                        assessment.BodyFatPercentage,
+
+                    NextAssessmentDate =
+                        nextAssessmentDate,
+
+                    IsReassessmentDue =
+                        today >= nextAssessmentDate
+                };
+            })
+            .ToList();
+
+        return new PagedResponse<PhysicalAssessmentHistoryItemResponse>
+        {
+            Items = items,
+            Page = page,
+            PageSize = pageSize,
+            TotalCount = totalCount
+        };
+    }
+
+    public DateOnly GetCurrentGymDate(Guid gymId)
+    {
+        return GetGymDate(
+            gymId,
+            DateTime.UtcNow);
     }
 
     private PhysicalAssessmentResponse MapToResponse(
@@ -303,23 +371,25 @@ public class PhysicalAssessmentService
             gymId,
             DateTime.UtcNow);
 
+        if (request.AssessmentDate == default)
+        {
+            throw new ArgumentException(
+                "A data da avaliação é obrigatória.");
+        }
+
         if (request.AssessmentDate > today)
         {
             throw new ArgumentException(
                 "A data da avaliação não pode estar no futuro.");
         }
 
-        if (request.WeightKg <= 0)
-        {
-            throw new ArgumentException(
-                "O peso deve ser maior que zero.");
-        }
+        ValidateRequiredMeasurement(
+            request.WeightKg,
+             "Peso");
 
-        if (request.HeightCm <= 0)
-        {
-            throw new ArgumentException(
-                "A altura deve ser maior que zero.");
-        }
+        ValidateRequiredMeasurement(
+            request.HeightCm,
+            "Altura");
 
         if (request.BodyFatPercentage.HasValue &&
             (request.BodyFatPercentage.Value < 0 ||
@@ -329,24 +399,88 @@ public class PhysicalAssessmentService
                 "O percentual de gordura deve estar entre 0 e 100.");
         }
 
-        ValidatePositive(request.ChestCm, "Peito");
-        ValidatePositive(request.WaistCm, "Cintura");
-        ValidatePositive(request.AbdomenCm, "Abdômen");
-        ValidatePositive(request.HipCm, "Quadril");
+        ValidateOptionalMeasurement(
+    request.ChestCm,
+    "Peitoral");
 
-        ValidatePositive(request.RightArmCm, "Braço direito");
-        ValidatePositive(request.LeftArmCm, "Braço esquerdo");
+        ValidateOptionalMeasurement(
+            request.WaistCm,
+            "Cintura");
 
-        ValidatePositive(request.RightThighCm, "Coxa direita");
-        ValidatePositive(request.LeftThighCm, "Coxa esquerda");
+        ValidateOptionalMeasurement(
+            request.AbdomenCm,
+            "Abdômen");
 
-        ValidatePositive(request.RightCalfCm, "Panturrilha direita");
-        ValidatePositive(request.LeftCalfCm, "Panturrilha esquerda");
+        ValidateOptionalMeasurement(
+            request.HipCm,
+            "Quadril");
+
+        ValidateOptionalMeasurement(
+            request.RightArmCm,
+            "Braço direito");
+
+        ValidateOptionalMeasurement(
+            request.LeftArmCm,
+            "Braço esquerdo");
+
+        ValidateOptionalMeasurement(
+            request.RightThighCm,
+            "Coxa direita");
+
+        ValidateOptionalMeasurement(
+            request.LeftThighCm,
+            "Coxa esquerda");
+
+        ValidateOptionalMeasurement(
+            request.RightCalfCm,
+            "Panturrilha direita");
+
+        ValidateOptionalMeasurement(
+            request.LeftCalfCm,
+            "Panturrilha esquerda");
 
         if (request.Notes?.Length > 500)
         {
             throw new ArgumentException(
                 "As observações devem possuir no máximo 500 caracteres.");
+        }
+    }
+    private static void ValidateRequiredMeasurement(
+    decimal value,
+    string fieldName)
+    {
+        if (value <= 0)
+        {
+            throw new ArgumentException(
+                $"{fieldName} deve ser maior que zero.");
+        }
+
+        if (value > MaxDatabaseDecimalValue)
+        {
+            throw new ArgumentException(
+                $"{fieldName} excede o valor máximo permitido.");
+        }
+    }
+
+    private static void ValidateOptionalMeasurement(
+        decimal? value,
+        string fieldName)
+    {
+        if (!value.HasValue)
+        {
+            return;
+        }
+
+        if (value.Value <= 0)
+        {
+            throw new ArgumentException(
+                $"{fieldName} deve ser maior que zero.");
+        }
+
+        if (value.Value > MaxDatabaseDecimalValue)
+        {
+            throw new ArgumentException(
+                $"{fieldName} excede o valor máximo permitido.");
         }
     }
 

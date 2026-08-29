@@ -1,4 +1,9 @@
 <Solution>
+  <Folder Name="/src/" />
+  <Folder Name="/tests/">
+    <Project Path="tests/GymFlow.Application.Tests/GymFlow.Application.Tests.csproj" />
+    <Project Path="tests/GymFlow.IntegrationTests/GymFlow.IntegrationTests.csproj" />
+  </Folder>
   <Project Path="src/GymFlow.Api/GymFlow.Api.csproj" />
   <Project Path="src/GymFlow.Application/GymFlow.Application.csproj" />
   <Project Path="src/GymFlow.Domain/GymFlow.Domain.csproj" />

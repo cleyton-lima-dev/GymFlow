@@ -1,7 +1,8 @@
-﻿using GymFlow.Application.DTOs.WorkoutTemplates;
+﻿using GymFlow.Application.DTOs.Common;
+using GymFlow.Application.DTOs.WorkoutTemplates;
 using GymFlow.Application.Interfaces.Repositories;
+using GymFlow.Application.Validation;
 using GymFlow.Domain.Entities;
-using GymFlow.Application.DTOs.Common;
 
 namespace GymFlow.Application.Services;
 
@@ -26,6 +27,16 @@ public class WorkoutTemplateService
 
         if (string.IsNullOrWhiteSpace(name))
             throw new ArgumentException("O nome do modelo é obrigatório.");
+
+        PersistenceTextPolicy.ValidateMaxLength(
+            name,
+            PersistenceTextPolicy.WorkoutNameMaxLength,
+            "O nome do modelo");
+
+        PersistenceTextPolicy.ValidateMaxLength(
+            request.Description,
+            PersistenceTextPolicy.DescriptionMaxLength,
+            "A descrição");
 
         if (request.Days.Count == 0)
             throw new ArgumentException("O modelo deve possuir pelo menos um dia.");
@@ -234,6 +245,16 @@ public class WorkoutTemplateService
 
         var name = request.Name.Trim();
 
+        PersistenceTextPolicy.ValidateMaxLength(
+            name,
+            PersistenceTextPolicy.WorkoutNameMaxLength,
+            "O nome do modelo");
+
+        PersistenceTextPolicy.ValidateMaxLength(
+            request.Description,
+            PersistenceTextPolicy.DescriptionMaxLength,
+            "A descrição");
+
         if (string.IsNullOrWhiteSpace(name))
             throw new ArgumentException(
                 "O nome do modelo é obrigatório.");
@@ -397,6 +418,26 @@ public class WorkoutTemplateService
         if (days.GroupBy(x => x.Order).Any(x => x.Count() > 1))
             throw new ArgumentException(
                 "A ordem dos dias não pode se repetir.");
+        foreach (var day in days)
+        {
+            PersistenceTextPolicy.ValidateMaxLength(
+                day.Name,
+                PersistenceTextPolicy.DayNameMaxLength,
+                "O nome do dia");
+
+            foreach (var exercise in day.Exercises)
+            {
+                PersistenceTextPolicy.ValidateMaxLength(
+                    exercise.Repetitions,
+                    PersistenceTextPolicy.RepetitionsMaxLength,
+                    "As repetições");
+
+                PersistenceTextPolicy.ValidateMaxLength(
+                    exercise.Notes,
+                    PersistenceTextPolicy.NotesMaxLength,
+                    "As observações");
+            }
+        }
 
         foreach (var day in days)
         {

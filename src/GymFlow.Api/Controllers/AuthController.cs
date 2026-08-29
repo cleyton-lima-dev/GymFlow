@@ -3,6 +3,7 @@ using GymFlow.Application.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
 using System.Security.Claims;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace GymFlow.Api.Controllers;
 
@@ -11,12 +12,17 @@ namespace GymFlow.Api.Controllers;
 public class AuthController : ControllerBase
 {
     private readonly AuthenticationService _authenticationService;
+    private readonly ILogger<AuthController> _logger;
 
-    public AuthController(AuthenticationService authenticationService)
+    public AuthController(
+        AuthenticationService authenticationService,
+        ILogger<AuthController> logger)
     {
         _authenticationService = authenticationService;
+        _logger = logger;
     }
 
+    [EnableRateLimiting("login")]
     [HttpPost("login")]
     public async Task<IActionResult> Login(LoginRequest request)
     {
@@ -24,11 +30,22 @@ public class AuthController : ControllerBase
 
         if (result is null)
         {
+            _logger.LogWarning(
+                "Tentativa de login rejeitada. IP: {ClientIp}",
+                HttpContext.Connection.RemoteIpAddress?.ToString()
+                    ?? "unknown");
+
             return Unauthorized(new
             {
                 message = "E-mail ou senha inválidos."
             });
         }
+
+        _logger.LogInformation(
+            "Login realizado com sucesso. UserId: {UserId}, GymId: {GymId}, Role: {Role}",
+            result.UserId,
+            result.GymId,
+            result.Role);
 
         return Ok(result);
     }
@@ -41,9 +58,20 @@ public class AuthController : ControllerBase
         if (!TryGetGymId(out var gymId))
             return Unauthorized();
 
-        var created =
-            await _authenticationService
+        bool created;
+
+        try
+        {
+            created = await _authenticationService
                 .RegisterAsync(gymId, request);
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new
+            {
+                message = ex.Message
+            });
+        }
 
         if (!created)
         {

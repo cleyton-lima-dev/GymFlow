@@ -117,7 +117,11 @@ class _StudentWorkoutDayView extends StatelessWidget {
 
                     if (viewModel.completedToday) ...[
                       const SizedBox(height: 24),
-                      _CompletedDayBanner(completedAt: viewModel.completedAt),
+                      _CompletedDayBanner(
+                        completedAt: viewModel.completedAt,
+                        completedAtUtcOffsetMinutes:
+                            viewModel.completedAtUtcOffsetMinutes,
+                      ),
                     ],
 
                     const SizedBox(height: 24),
@@ -515,9 +519,13 @@ class _PrescriptionItem extends StatelessWidget {
 }
 
 class _CompletedDayBanner extends StatelessWidget {
-  const _CompletedDayBanner({required this.completedAt});
+  const _CompletedDayBanner({
+    required this.completedAt,
+    required this.completedAtUtcOffsetMinutes,
+  });
 
   final DateTime? completedAt;
+  final int? completedAtUtcOffsetMinutes;
 
   @override
   Widget build(BuildContext context) {
@@ -574,14 +582,18 @@ class _CompletedDayBanner extends StatelessWidget {
   }
 
   String _formatCompletedAt(DateTime value) {
-    final local = value.toLocal();
+    final offsetMinutes = completedAtUtcOffsetMinutes;
 
-    final day = local.day.toString().padLeft(2, '0');
-    final month = local.month.toString().padLeft(2, '0');
-    final hour = local.hour.toString().padLeft(2, '0');
-    final minute = local.minute.toString().padLeft(2, '0');
+    final gymDateTime = offsetMinutes == null
+        ? value.toUtc()
+        : value.toUtc().add(Duration(minutes: offsetMinutes));
 
-    return '$day/$month/${local.year} '
+    final day = gymDateTime.day.toString().padLeft(2, '0');
+    final month = gymDateTime.month.toString().padLeft(2, '0');
+    final hour = gymDateTime.hour.toString().padLeft(2, '0');
+    final minute = gymDateTime.minute.toString().padLeft(2, '0');
+
+    return '$day/$month/${gymDateTime.year} '
         'às $hour:$minute';
   }
 }

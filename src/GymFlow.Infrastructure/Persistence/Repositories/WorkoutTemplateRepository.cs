@@ -127,12 +127,12 @@ public class WorkoutTemplateRepository : IWorkoutTemplateRepository
         await _context.SaveChangesAsync();
     }
 
-    public async Task RemoveDaysAsync(
+    public Task RemoveDaysAsync(
     IEnumerable<WorkoutTemplateDay> days)
     {
         _context.WorkoutTemplateDays.RemoveRange(days);
 
-        await _context.SaveChangesAsync();
+        return Task.CompletedTask;
     }
 
     public void AddDays(IEnumerable<WorkoutTemplateDay> days)

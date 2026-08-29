@@ -79,7 +79,10 @@ class PhysicalAssessmentHistoryViewModel extends ChangeNotifier {
   }
 
   Future<void> refresh() async {
-    await _loadPage(_page);
+    await _loadPage(
+      _page,
+      refreshLatest: true,
+    );
   }
 
   Future<void> previousPage() async {
@@ -98,13 +101,18 @@ class PhysicalAssessmentHistoryViewModel extends ChangeNotifier {
     await _loadPage(_page + 1);
   }
 
-  Future<void> _loadPage(int requestedPage) async {
+  Future<void> _loadPage(
+      int requestedPage, {
+        bool refreshLatest = false,
+      }) async {
     _isChangingPage = true;
     _errorMessage = null;
     notifyListeners();
 
     try {
-      _latest = await _fetchLatest();
+      if (refreshLatest) {
+        _latest = await _fetchLatest();
+      }
 
       final response = await _fetchHistory(page: requestedPage);
 

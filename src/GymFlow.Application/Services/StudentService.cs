@@ -1,9 +1,11 @@
-﻿using GymFlow.Application.DTOs.Students;
+﻿using GymFlow.Application.DTOs.Common;
+using GymFlow.Application.DTOs.Students;
 using GymFlow.Application.Interfaces.Repositories;
 using GymFlow.Application.Interfaces.Security;
+using GymFlow.Application.Security;
+using GymFlow.Application.Validation;
 using GymFlow.Domain.Entities;
 using GymFlow.Domain.Enums;
-using GymFlow.Application.DTOs.Common;
 
 
 namespace GymFlow.Application.Services;
@@ -28,9 +30,26 @@ public class StudentService
         Guid gymId,
         CreateStudentRequest request)
     {
+        PasswordPolicy.Validate(request.Password);
+
         var normalizedEmail = request.Email
             .Trim()
             .ToLowerInvariant();
+
+        PersistenceTextPolicy.ValidateMaxLength(
+            request.Name,
+            PersistenceTextPolicy.UserNameMaxLength,
+            "O nome");
+
+        PersistenceTextPolicy.ValidateMaxLength(
+            normalizedEmail,
+            PersistenceTextPolicy.EmailMaxLength,
+            "O e-mail");
+
+        PersistenceTextPolicy.ValidateMaxLength(
+            request.Phone,
+            PersistenceTextPolicy.PhoneMaxLength,
+            "O telefone");
 
         var existingUser =
             await _userRepository.GetByEmailAsync(normalizedEmail);
@@ -148,6 +167,21 @@ public class StudentService
         var normalizedEmail = request.Email
             .Trim()
             .ToLowerInvariant();
+
+        PersistenceTextPolicy.ValidateMaxLength(
+            request.Name,
+            PersistenceTextPolicy.UserNameMaxLength,
+            "O nome");
+
+        PersistenceTextPolicy.ValidateMaxLength(
+            normalizedEmail,
+            PersistenceTextPolicy.EmailMaxLength,
+            "O e-mail");
+
+        PersistenceTextPolicy.ValidateMaxLength(
+            request.Phone,
+            PersistenceTextPolicy.PhoneMaxLength,
+            "O telefone");
 
         var existingUser =
             await _userRepository.GetByEmailAsync(normalizedEmail);
