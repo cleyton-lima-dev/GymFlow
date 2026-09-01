@@ -162,6 +162,51 @@ builder.Services
         };
     });
 
+var configuredCorsOrigins =
+    builder.Configuration["Cors:AllowedOrigins"]?
+        .Split(
+            ',',
+            StringSplitOptions.RemoveEmptyEntries |
+            StringSplitOptions.TrimEntries)
+    ?? [];
+
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AvelriWeb", policy =>
+    {
+        policy
+            .SetIsOriginAllowed(origin =>
+            {
+                if (configuredCorsOrigins.Contains(
+                        origin,
+                        StringComparer.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+
+                if (!builder.Environment.IsDevelopment())
+                {
+                    return false;
+                }
+
+                if (!Uri.TryCreate(
+                        origin,
+                        UriKind.Absolute,
+                        out var uri))
+                {
+                    return false;
+                }
+
+                return uri.Host.Equals(
+                           "localhost",
+                           StringComparison.OrdinalIgnoreCase)
+                       || uri.Host == "127.0.0.1";
+            })
+            .AllowAnyHeader()
+            .AllowAnyMethod();
+    });
+});
+
 builder.Services.AddAuthorization();
 
 builder.Services.AddRateLimiter(options =>
@@ -235,6 +280,8 @@ if (!app.Environment.IsDevelopment() &&
 {
     app.UseHttpsRedirection();
 }
+
+app.UseCors("AvelriWeb");
 
 app.UseRouting();
 
