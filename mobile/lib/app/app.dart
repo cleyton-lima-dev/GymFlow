@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:go_router/go_router.dart';
 import 'package:gymflow/app/session/session_controller.dart';
@@ -32,7 +33,21 @@ class GymFlowApp extends StatelessWidget {
       ],
       child: Consumer<BrandingController>(
         builder: (context, brandingController, child) {
-          return MaterialApp.router(
+          final isDark =
+              brandingController.branding.brightness == Brightness.dark;
+
+          final systemUiStyle = SystemUiOverlayStyle(
+            systemNavigationBarColor:
+            isDark ? Colors.black : Colors.white,
+            systemNavigationBarIconBrightness:
+            isDark ? Brightness.light : Brightness.dark,
+            systemNavigationBarDividerColor:
+            isDark ? Colors.black : Colors.white,
+          );
+
+          return AnnotatedRegion<SystemUiOverlayStyle>(
+              value: systemUiStyle,
+              child: MaterialApp.router(
             title: brandingController.branding.displayName,
             locale: const Locale('pt', 'BR'),
             supportedLocales: const [
@@ -46,7 +61,8 @@ class GymFlowApp extends StatelessWidget {
             theme: AppTheme.fromBranding(
               brandingController.branding,
             ),
-            routerConfig: router,
+                routerConfig: router,
+              ),
           );
         },
       ),

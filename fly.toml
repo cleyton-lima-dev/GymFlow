@@ -1,0 +1,32 @@
+app = "gymflow-api-prod"
+primary_region = "gru"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  ASPNETCORE_ENVIRONMENT = "Production"
+  ASPNETCORE_URLS = "http://+:8080"
+  Jwt__Issuer = "GymFlow.Api"
+  Jwt__Audience = "GymFlow.Mobile"
+  Jwt__ExpirationMinutes = "10080"
+  "GymTimeZones__11111111-1111-1111-1111-111111111111" = "America/Sao_Paulo"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = "off"
+  auto_start_machines = true
+  min_machines_running = 1
+
+[[http_service.checks]]
+  grace_period = "10s"
+  interval = "30s"
+  method = "GET"
+  timeout = "5s"
+  path = "/health"
+
+[[vm]]
+  cpu_kind = "shared"
+  cpus = 1
+  memory = "512mb"

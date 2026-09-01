@@ -417,7 +417,7 @@ class _EditStudentViewState extends State<_EditStudentView> {
                                 Expanded(
                                   child: Text(
                                     'As alterações serão aplicadas ao '
-                                        'cadastro do aluno no GymFlow.',
+                                        'cadastro do aluno no Avelri.',
                                     style: theme.textTheme.bodyMedium
                                         ?.copyWith(
                                       height: 1.4,

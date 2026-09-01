@@ -131,13 +131,13 @@ class _LoginViewState extends State<_LoginView> {
                                     TextSpan(
                                       children: [
                                         const TextSpan(
-                                          text: 'GYM',
+                                          text: 'AVE',
                                           style: TextStyle(
                                             color: Color(0xFF071227),
                                           ),
                                         ),
                                         TextSpan(
-                                          text: 'FLOW',
+                                          text: 'LRI',
                                           style: TextStyle(
                                             color: colorScheme.primary,
                                           ),

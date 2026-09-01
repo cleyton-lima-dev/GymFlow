@@ -128,7 +128,7 @@ class StudentMorePage extends StatelessWidget {
         return AlertDialog(
           title: const Text('Sair da conta?'),
           content: const Text(
-            'Você precisará entrar novamente para acessar o GymFlow.',
+            'Você precisará entrar novamente para acessar o Avelri.',
           ),
           actions: [
             TextButton(

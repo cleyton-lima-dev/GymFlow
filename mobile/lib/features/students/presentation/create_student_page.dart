@@ -468,7 +468,7 @@ class _CreateStudentViewState extends State<_CreateStudentView> {
                                 Expanded(
                                   child: Text(
                                     'A senha cadastrada será utilizada '
-                                        'pelo aluno para acessar o GymFlow.',
+                                        'pelo aluno para acessar o Avelri.',
                                     style: theme.textTheme.bodyMedium
                                         ?.copyWith(
                                       height: 1.4,
