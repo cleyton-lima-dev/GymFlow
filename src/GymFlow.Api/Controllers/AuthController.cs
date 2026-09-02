@@ -86,6 +86,19 @@ public class AuthController : ControllerBase
         });
     }
 
+    [Authorize(Roles = "Admin")]
+    [HttpGet("professors")]
+    public async Task<IActionResult> GetProfessors()
+    {
+        if (!TryGetGymId(out var gymId))
+            return Unauthorized();
+
+        var professors =
+            await _authenticationService.GetProfessorsAsync(gymId);
+
+        return Ok(professors);
+    }
+
 
     [Authorize]
     [HttpGet("me")]

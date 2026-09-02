@@ -2,6 +2,7 @@
 using GymFlow.Domain.Entities;
 using GymFlow.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
+using GymFlow.Domain.Enums;
 
 namespace GymFlow.Infrastructure.Persistence.Repositories;
 
@@ -30,6 +31,18 @@ public class UserRepository : IUserRepository
                 user.Id == userId &&
                 user.GymId == gymId &&
                 user.IsActive);
+    }
+
+    public async Task<IReadOnlyList<User>> GetProfessorsByGymIdAsync(
+    Guid gymId)
+    {
+        return await _context.Users
+            .AsNoTracking()
+            .Where(user =>
+                user.GymId == gymId &&
+                user.Role == UserRole.Professor)
+            .OrderBy(user => user.Name)
+            .ToListAsync();
     }
 
     public async Task AddAsync(User user)
