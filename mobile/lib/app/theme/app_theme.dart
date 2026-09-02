@@ -11,7 +11,7 @@ class AppTheme {
     ).copyWith(
         primary: branding.primaryColor,
         secondary: branding.secondaryColor,
-        surface: branding.backgroundColor,
+        surface: branding.surfaceColor ?? branding.backgroundColor,
     );
 
     return ThemeData(

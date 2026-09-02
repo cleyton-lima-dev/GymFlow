@@ -8,6 +8,7 @@ class GymBranding {
     required this.secondaryColor,
     required this.backgroundColor,
     required this.brightness,
+    this.surfaceColor,
     this.logoAsset,
   });
 
@@ -17,5 +18,6 @@ class GymBranding {
   final Color secondaryColor;
   final Color backgroundColor;
   final Brightness brightness;
+  final Color? surfaceColor;
   final String? logoAsset;
 }
