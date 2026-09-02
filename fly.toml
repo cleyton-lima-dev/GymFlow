@@ -5,6 +5,7 @@ primary_region = "gru"
   dockerfile = "Dockerfile"
 
 [env]
+"GymTimeZones__91f3fdb7-22b9-43ee-8a10-5e411c44cfbe" = "America/Sao_Paulo"
 Cors__AllowedOrigins = "https://avelri.pages.dev"
   ASPNETCORE_ENVIRONMENT = "Production"
   ASPNETCORE_URLS = "http://+:8080"
