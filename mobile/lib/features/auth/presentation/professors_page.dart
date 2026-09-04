@@ -14,11 +14,9 @@ class ProfessorsPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ChangeNotifierProvider(
-      create: (context) => ProfessorsViewModel(
-        AuthService(
-          context.read<ApiClient>(),
-        ),
-      )..loadProfessors(),
+      create: (context) =>
+          ProfessorsViewModel(AuthService(context.read<ApiClient>()))
+            ..loadProfessors(),
       child: const _ProfessorsView(),
     );
   }
@@ -27,20 +25,14 @@ class ProfessorsPage extends StatelessWidget {
 class _ProfessorsView extends StatelessWidget {
   const _ProfessorsView();
 
-  Future<void> _openCreateProfessor(
-      BuildContext context,
-      ) async {
-    final created = await context.push<bool>(
-      '/admin/professors/new',
-    );
+  Future<void> _openCreateProfessor(BuildContext context) async {
+    final created = await context.push<bool>('/admin/professors/new');
 
     if (!context.mounted || created != true) {
       return;
     }
 
-    await context
-        .read<ProfessorsViewModel>()
-        .loadProfessors();
+    await context.read<ProfessorsViewModel>().loadProfessors();
   }
 
   @override
@@ -55,76 +47,44 @@ class _ProfessorsView extends StatelessWidget {
         child: RefreshIndicator(
           onRefresh: viewModel.loadProfessors,
           child: ListView(
-            padding: const EdgeInsets.fromLTRB(
-              24,
-              18,
-              24,
-              32,
-            ),
+            padding: const EdgeInsets.fromLTRB(24, 18, 24, 32),
             children: [
               const ProfessorAdminPageHeader(),
 
               const SizedBox(height: 24),
 
-              Row(
-                crossAxisAlignment:
-                CrossAxisAlignment.start,
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment:
-                      CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Professores',
-                          style: theme
-                              .textTheme
-                              .headlineLarge
-                              ?.copyWith(
-                            fontWeight:
-                            FontWeight.w800,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Gerencie os professores desta academia.',
-                          style: theme
-                              .textTheme
-                              .bodyLarge
-                              ?.copyWith(
-                            color: colorScheme
-                                .onSurfaceVariant,
-                            height: 1.45,
-                          ),
-                        ),
-                      ],
+                  Text(
+                    'Professores',
+                    style: theme.textTheme.headlineLarge?.copyWith(
+                      fontWeight: FontWeight.w800,
                     ),
                   ),
-
-                  const SizedBox(width: 16),
-
-                  FilledButton.icon(
-                    onPressed: () =>
-                        _openCreateProfessor(context),
-                    icon: const Icon(
-                      Icons.person_add_alt_1_rounded,
+                  const SizedBox(height: 8),
+                  Text(
+                    'Gerencie os professores desta academia.',
+                    style: theme.textTheme.bodyLarge?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
+                      height: 1.45,
                     ),
-                    label:
-                    const Text('Novo professor'),
+                  ),
+                  const SizedBox(height: 16),
+                  FilledButton.icon(
+                    onPressed: () => _openCreateProfessor(context),
+                    icon: const Icon(Icons.person_add_alt_1_rounded),
+                    label: const Text('Novo professor'),
                   ),
                 ],
               ),
 
               const SizedBox(height: 28),
 
-              if (viewModel.isLoading &&
-                  viewModel.professors.isEmpty)
+              if (viewModel.isLoading && viewModel.professors.isEmpty)
                 const Padding(
-                  padding:
-                  EdgeInsets.symmetric(vertical: 64),
-                  child: Center(
-                    child: CircularProgressIndicator(),
-                  ),
+                  padding: EdgeInsets.symmetric(vertical: 64),
+                  child: Center(child: CircularProgressIndicator()),
                 )
               else if (viewModel.errorMessage != null)
                 _ErrorState(
@@ -132,38 +92,30 @@ class _ProfessorsView extends StatelessWidget {
                   onRetry: viewModel.loadProfessors,
                 )
               else if (viewModel.professors.isEmpty)
-                  _EmptyState(
-                    onCreate: () =>
-                        _openCreateProfessor(context),
-                  )
-                else ...[
-                    Text(
-                      '${viewModel.professors.length} '
-                          '${viewModel.professors.length == 1 ? 'professor' : 'professores'}',
-                      style:
-                      theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
+                _EmptyState(onCreate: () => _openCreateProfessor(context))
+              else ...[
+                Text(
+                  '${viewModel.professors.length} '
+                  '${viewModel.professors.length == 1 ? 'professor' : 'professores'}',
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
 
-                    const SizedBox(height: 14),
+                const SizedBox(height: 14),
 
-                    ...viewModel.professors.map(
-                          (professor) => Padding(
-                        padding:
-                        const EdgeInsets.only(bottom: 12),
-                        child: _ProfessorCard(
-                          professor: professor,
-                        ),
-                      ),
-                    ),
-                  ],
+                ...viewModel.professors.map(
+                  (professor) => Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: _ProfessorCard(professor: professor),
+                  ),
+                ),
+              ],
             ],
           ),
         ),
       ),
-      bottomNavigationBar:
-      const ProfessorAdminBottomNavigation(
+      bottomNavigationBar: const ProfessorAdminBottomNavigation(
         currentItem: ProfessorAdminNavItem.more,
       ),
     );
@@ -171,9 +123,7 @@ class _ProfessorsView extends StatelessWidget {
 }
 
 class _ProfessorCard extends StatelessWidget {
-  const _ProfessorCard({
-    required this.professor,
-  });
+  const _ProfessorCard({required this.professor});
 
   final ProfessorResponse professor;
 
@@ -191,10 +141,7 @@ class _ProfessorCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: colorScheme.surface,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color:
-          colorScheme.outlineVariant.withAlpha(120),
-        ),
+        border: Border.all(color: colorScheme.outlineVariant.withAlpha(120)),
       ),
       child: Row(
         children: [
@@ -219,13 +166,11 @@ class _ProfessorCard extends StatelessWidget {
 
           Expanded(
             child: Column(
-              crossAxisAlignment:
-              CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   professor.name,
-                  style:
-                  theme.textTheme.titleMedium?.copyWith(
+                  style: theme.textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.w800,
                   ),
                 ),
@@ -235,18 +180,15 @@ class _ProfessorCard extends StatelessWidget {
                     Icon(
                       Icons.mail_outline_rounded,
                       size: 17,
-                      color:
-                      colorScheme.onSurfaceVariant,
+                      color: colorScheme.onSurfaceVariant,
                     ),
                     const SizedBox(width: 6),
                     Expanded(
                       child: Text(
                         professor.email,
                         overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.bodyMedium
-                            ?.copyWith(
-                          color: colorScheme
-                              .onSurfaceVariant,
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
                         ),
                       ),
                     ),
@@ -259,10 +201,7 @@ class _ProfessorCard extends StatelessWidget {
           const SizedBox(width: 12),
 
           Container(
-            padding: const EdgeInsets.symmetric(
-              horizontal: 10,
-              vertical: 6,
-            ),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
             decoration: BoxDecoration(
               color: professor.isActive
                   ? Colors.green.withAlpha(18)
@@ -286,9 +225,7 @@ class _ProfessorCard extends StatelessWidget {
 }
 
 class _EmptyState extends StatelessWidget {
-  const _EmptyState({
-    required this.onCreate,
-  });
+  const _EmptyState({required this.onCreate});
 
   final VoidCallback onCreate;
 
@@ -301,11 +238,7 @@ class _EmptyState extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 56),
       child: Column(
         children: [
-          Icon(
-            Icons.groups_2_outlined,
-            size: 58,
-            color: colorScheme.primary,
-          ),
+          Icon(Icons.groups_2_outlined, size: 58, color: colorScheme.primary),
           const SizedBox(height: 18),
           Text(
             'Nenhum professor cadastrado',
@@ -324,9 +257,7 @@ class _EmptyState extends StatelessWidget {
           const SizedBox(height: 20),
           FilledButton.icon(
             onPressed: onCreate,
-            icon: const Icon(
-              Icons.person_add_alt_1_rounded,
-            ),
+            icon: const Icon(Icons.person_add_alt_1_rounded),
             label: const Text('Novo professor'),
           ),
         ],
@@ -336,10 +267,7 @@ class _EmptyState extends StatelessWidget {
 }
 
 class _ErrorState extends StatelessWidget {
-  const _ErrorState({
-    required this.message,
-    required this.onRetry,
-  });
+  const _ErrorState({required this.message, required this.onRetry});
 
   final String message;
   final Future<void> Function() onRetry;
@@ -353,11 +281,7 @@ class _ErrorState extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 56),
       child: Column(
         children: [
-          Icon(
-            Icons.error_outline_rounded,
-            size: 52,
-            color: colorScheme.error,
-          ),
+          Icon(Icons.error_outline_rounded, size: 52, color: colorScheme.error),
           const SizedBox(height: 16),
           Text(
             message,
