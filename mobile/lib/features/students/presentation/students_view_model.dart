@@ -233,7 +233,7 @@ class StudentsViewModel extends ChangeNotifier {
     }
 
     if (exception.statusCode >= 500) {
-      return 'O GymFlow está temporariamente indisponível. Tente novamente.';
+      return 'O Avelri está temporariamente indisponível. Tente novamente.';
     }
 
     return 'Não foi possível carregar os alunos. Tente novamente.';

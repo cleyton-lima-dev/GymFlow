@@ -15,6 +15,8 @@ class MorePage extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
+    final user = context.watch<SessionController>().user;
+    final isAdmin = user?.role == AppRole.admin;
 
     return Scaffold(
       bottomNavigationBar:
@@ -75,6 +77,19 @@ class MorePage extends StatelessWidget {
                         _openExercises(context),
                   ),
 
+                  if (isAdmin) ...[
+                    const SizedBox(height: 12),
+
+                    _MoreOptionCard(
+                      icon: Icons.groups_2_outlined,
+                      title: 'Professores',
+                      description:
+                      'Gerencie os professores desta academia.',
+                      onTap: () =>
+                          context.push('/admin/professors'),
+                    ),
+                  ],
+
                   const SizedBox(height: 12),
 
                   _MoreOptionCard(
@@ -129,7 +144,7 @@ class MorePage extends StatelessWidget {
             'Sair da conta?',
           ),
           content: const Text(
-            'Você precisará entrar novamente para acessar o GymFlow.',
+            'Você precisará entrar novamente para acessar o Avelri.',
           ),
           actions: [
             TextButton(

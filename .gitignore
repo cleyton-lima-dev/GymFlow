@@ -18,3 +18,7 @@ build/
 # Sistema
 .DS_Store
 Thumbs.db
+
+# Release binaries
+artifacts/release/*.apk
+artifacts/release/*.aab

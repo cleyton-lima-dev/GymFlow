@@ -1,6 +1,7 @@
 import 'package:gymflow/core/network/api_client.dart';
 import 'package:gymflow/features/auth/models/current_user_response.dart';
 import 'package:gymflow/features/auth/models/login_response.dart';
+import 'package:gymflow/features/auth/data/professor_response.dart';
 
 class AuthService {
   const AuthService(this._apiClient);
@@ -35,5 +36,39 @@ class AuthService {
     }
 
     return LoginResponse.fromJson(response);
+  }
+
+  Future<void> registerProfessor({
+    required String name,
+    required String email,
+    required String password,
+  }) async {
+    await _apiClient.post(
+      'api/auth/register',
+      body: {
+        'name': name.trim(),
+        'email': email.trim(),
+        'password': password,
+      },
+    );
+  }
+
+  Future<List<ProfessorResponse>> getProfessors() async {
+    final response =
+    await _apiClient.get('api/auth/professors');
+
+    if (response is! List) {
+      throw const FormatException(
+        'Invalid professors response.',
+      );
+    }
+
+    return response
+        .map(
+          (item) => ProfessorResponse.fromJson(
+        item as Map<String, dynamic>,
+      ),
+    )
+        .toList();
   }
 }

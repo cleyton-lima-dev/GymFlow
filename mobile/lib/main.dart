@@ -12,6 +12,7 @@ import 'package:gymflow/app/theme/default_branding.dart';
 import 'package:gymflow/app/theme/local_branding_repository.dart';
 import 'package:gymflow/app/session/session_status.dart';
 import 'package:gymflow/app/theme/ac_power_gym_branding.dart';
+import 'package:gymflow/app/theme/space_branding.dart';
 import 'package:gymflow/app/config/app_config.dart';
 
 void main() {
@@ -35,6 +36,7 @@ void main() {
 
   const brandingRepository = LocalBrandingRepository({
     '11111111-1111-1111-1111-111111111111': acPowerGymBranding,
+    '91f3fdb7-22b9-43ee-8a10-5e411c44cfbe': spaceBranding,
   });
 
   final brandingController = BrandingController(

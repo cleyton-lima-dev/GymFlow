@@ -1,4 +1,4 @@
-package com.cleytonlimadev.gymflow
+package com.cleytonlimadev.avelri
 
 import io.flutter.embedding.android.FlutterActivity
 

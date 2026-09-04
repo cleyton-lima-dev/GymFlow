@@ -7,7 +7,10 @@ public interface IUserRepository
     Task<User?> GetByEmailAsync(string email);
 
     Task<bool> IsActiveAsync(
-        Guid userId,
+    Guid userId,
+    Guid gymId);
+
+    Task<IReadOnlyList<User>> GetProfessorsByGymIdAsync(
         Guid gymId);
 
     Task AddAsync(User user);

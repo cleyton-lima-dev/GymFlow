@@ -95,7 +95,7 @@ class CreateStudentViewModel extends ChangeNotifier {
     }
 
     if (exception.statusCode >= 500) {
-      return 'O GymFlow está temporariamente indisponível. Tente novamente.';
+      return 'O Avelri está temporariamente indisponível. Tente novamente.';
     }
 
     return apiMessage ?? 'Não foi possível cadastrar o aluno.';

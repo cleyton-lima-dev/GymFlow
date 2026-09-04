@@ -466,8 +466,8 @@ class _StudentDetailsContent extends StatelessWidget {
           ),
           content: Text(
             willActivate
-                ? 'O aluno voltará a ficar ativo no GymFlow.'
-                : 'O aluno ficará inativo no GymFlow. '
+                ? 'O aluno voltará a ficar ativo no Avelri.'
+                : 'O aluno ficará inativo no Avelri. '
                 'Os dados cadastrados não serão excluídos.',
           ),
           actions: [

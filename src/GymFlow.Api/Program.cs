@@ -130,9 +130,8 @@ builder.Services
 
                 {
                     logger.LogWarning(
-                        "Token rejeitado por claims inválidas. IP: {ClientIp}",
-                    context.HttpContext.Connection.RemoteIpAddress?.ToString()
-                     ?? "unknown");
+                    "Token rejeitado por claims inválidas. IP: {ClientIp}",
+                    GetClientIp(context.HttpContext));
 
                     context.Fail(
                         "Token sem identificação válida.");
@@ -163,6 +162,51 @@ builder.Services
         };
     });
 
+var configuredCorsOrigins =
+    builder.Configuration["Cors:AllowedOrigins"]?
+        .Split(
+            ',',
+            StringSplitOptions.RemoveEmptyEntries |
+            StringSplitOptions.TrimEntries)
+    ?? [];
+
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AvelriWeb", policy =>
+    {
+        policy
+            .SetIsOriginAllowed(origin =>
+            {
+                if (configuredCorsOrigins.Contains(
+                        origin,
+                        StringComparer.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+
+                if (!builder.Environment.IsDevelopment())
+                {
+                    return false;
+                }
+
+                if (!Uri.TryCreate(
+                        origin,
+                        UriKind.Absolute,
+                        out var uri))
+                {
+                    return false;
+                }
+
+                return uri.Host.Equals(
+                           "localhost",
+                           StringComparison.OrdinalIgnoreCase)
+                       || uri.Host == "127.0.0.1";
+            })
+            .AllowAnyHeader()
+            .AllowAnyMethod();
+    });
+});
+
 builder.Services.AddAuthorization();
 
 builder.Services.AddRateLimiter(options =>
@@ -174,11 +218,7 @@ builder.Services.AddRateLimiter(options =>
         "login",
         httpContext =>
         {
-            var clientIp =
-                httpContext.Connection
-                    .RemoteIpAddress?
-                    .ToString()
-                ?? "unknown";
+            var clientIp = GetClientIp(httpContext);
 
             return RateLimitPartition
                 .GetFixedWindowLimiter(
@@ -204,9 +244,8 @@ builder.Services.AddRateLimiter(options =>
                     .CreateLogger("LoginRateLimiter");
 
             logger.LogWarning(
-                "Rate limit de login acionado. IP: {ClientIp}",
-                context.HttpContext.Connection.RemoteIpAddress?.ToString()
-                    ?? "unknown");
+            "Rate limit de login acionado. IP: {ClientIp}",
+             GetClientIp(context.HttpContext));
 
             context.HttpContext.Response.StatusCode =
                 StatusCodes.Status429TooManyRequests;
@@ -235,10 +274,14 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
-if (!app.Environment.IsDevelopment())
+if (!app.Environment.IsDevelopment() &&
+    string.IsNullOrWhiteSpace(
+        Environment.GetEnvironmentVariable("FLY_APP_NAME")))
 {
     app.UseHttpsRedirection();
 }
+
+app.UseCors("AvelriWeb");
 
 app.UseRouting();
 
@@ -250,4 +293,25 @@ app.UseAuthorization();
 
 app.MapControllers();
 
+app.MapGet("/health", () => Results.Ok(new { status = "ok" }))
+    .AllowAnonymous();
+
 app.Run();
+
+static string GetClientIp(HttpContext httpContext)
+{
+    if (!string.IsNullOrWhiteSpace(
+            Environment.GetEnvironmentVariable("FLY_APP_NAME")))
+    {
+        var flyClientIp =
+            httpContext.Request.Headers["Fly-Client-IP"].ToString();
+
+        if (!string.IsNullOrWhiteSpace(flyClientIp))
+        {
+            return flyClientIp;
+        }
+    }
+
+    return httpContext.Connection.RemoteIpAddress?.ToString()
+        ?? "unknown";
+}

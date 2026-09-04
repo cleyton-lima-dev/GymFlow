@@ -31,9 +31,8 @@ public class AuthController : ControllerBase
         if (result is null)
         {
             _logger.LogWarning(
-                "Tentativa de login rejeitada. IP: {ClientIp}",
-                HttpContext.Connection.RemoteIpAddress?.ToString()
-                    ?? "unknown");
+                       "Tentativa de login rejeitada. IP: {ClientIp}",
+                    GetClientIp());
 
             return Unauthorized(new
             {
@@ -87,6 +86,19 @@ public class AuthController : ControllerBase
         });
     }
 
+    [Authorize(Roles = "Admin")]
+    [HttpGet("professors")]
+    public async Task<IActionResult> GetProfessors()
+    {
+        if (!TryGetGymId(out var gymId))
+            return Unauthorized();
+
+        var professors =
+            await _authenticationService.GetProfessorsAsync(gymId);
+
+        return Ok(professors);
+    }
+
 
     [Authorize]
     [HttpGet("me")]
@@ -135,5 +147,22 @@ public class AuthController : ControllerBase
         return Guid.TryParse(
             gymIdClaim,
             out gymId);
+    }
+
+    private string GetClientIp()
+    {
+        if (!string.IsNullOrWhiteSpace(
+                Environment.GetEnvironmentVariable("FLY_APP_NAME")))
+        {
+            var flyClientIp = Request.Headers["Fly-Client-IP"].ToString();
+
+            if (!string.IsNullOrWhiteSpace(flyClientIp))
+            {
+                return flyClientIp;
+            }
+        }
+
+        return HttpContext.Connection.RemoteIpAddress?.ToString()
+            ?? "unknown";
     }
 }

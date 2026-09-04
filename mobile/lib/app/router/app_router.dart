@@ -39,7 +39,8 @@ import 'package:gymflow/features/students/presentation/student_personal_data_pag
 import 'package:gymflow/features/physical_assessments/presentation/student_physical_assessment_page.dart';
 import 'package:gymflow/features/physical_assessments/presentation/student_physical_assessment_details_page.dart';
 import 'package:gymflow/features/physical_assessments/presentation/student_physical_assessment_history_page.dart';
-
+import 'package:gymflow/features/auth/presentation/create_professor_page.dart';
+import 'package:gymflow/features/auth/presentation/professors_page.dart';
 
 class AppRouter {
   AppRouter(
@@ -125,6 +126,14 @@ class AppRouter {
       GoRoute(
         path: '/admin/more',
         builder: (context, state) => const MorePage(),
+      ),
+      GoRoute(
+        path: '/admin/professors',
+        builder: (context, state) => const ProfessorsPage(),
+      ),
+      GoRoute(
+        path: '/admin/professors/new',
+        builder: (context, state) => const CreateProfessorPage(),
       ),
       GoRoute(
         path: '/professor/more',

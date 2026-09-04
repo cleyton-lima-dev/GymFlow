@@ -55,6 +55,22 @@ public class AuthenticationService
             Token = token
         };
     }
+
+    public async Task<IReadOnlyList<ProfessorResponse>> GetProfessorsAsync(
+    Guid gymId)
+    {
+        var professors =
+            await _userRepository.GetProfessorsByGymIdAsync(gymId);
+
+        return professors
+            .Select(user => new ProfessorResponse(
+                user.Id,
+                user.Name,
+                user.Email,
+                user.IsActive,
+                user.CreatedAt))
+            .ToList();
+    }
     public async Task<bool> RegisterAsync(
     Guid gymId,
     RegisterRequest request)

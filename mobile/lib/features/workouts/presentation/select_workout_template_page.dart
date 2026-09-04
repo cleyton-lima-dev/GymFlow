@@ -388,7 +388,7 @@ class _SelectWorkoutTemplateViewState
                                   ),
                                   Expanded(
                                     child: Text(
-                                      'Ao selecionar, o GymFlow criará um treino para este aluno usando a estrutura do modelo.',
+                                      'Ao selecionar, o Avelri criará um treino para este aluno usando a estrutura do modelo.',
                                       style: theme
                                           .textTheme
                                           .bodySmall
