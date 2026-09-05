@@ -1333,6 +1333,173 @@ public class PhysicalAssessmentServiceTests
                 Arg.Any<Guid>());
     }
 
+    [Fact]
+    public async Task UpdateAsync_WithValidData_ShouldUpdateAssessmentWithoutChangingIdentityOrDate()
+    {
+        var gymId = Guid.NewGuid();
+        var studentId = Guid.NewGuid();
+
+        var assessment = CreateAssessment(
+            studentId,
+            new DateOnly(2026, 9, 4));
+
+        var originalId = assessment.Id;
+        var originalStudentId = assessment.StudentId;
+        var originalDate = assessment.AssessmentDate;
+        var originalCreatedAt = assessment.CreatedAt;
+
+        assessment.UpdatedAt = DateTime.UtcNow.AddDays(-1);
+
+        _physicalAssessmentRepository
+            .GetByIdForUpdateAsync(
+                assessment.Id,
+                studentId,
+                gymId)
+            .Returns(assessment);
+
+        var request = CreateValidUpdateRequest();
+        request.WeightKg = 82.5m;
+        request.WaistCm = 83m;
+        request.Notes = "  Corrigido  ";
+
+        var result = await _service.UpdateAsync(
+            assessment.Id,
+            studentId,
+            gymId,
+            request);
+
+        Assert.True(result);
+
+        Assert.Equal(originalId, assessment.Id);
+        Assert.Equal(originalStudentId, assessment.StudentId);
+        Assert.Equal(originalDate, assessment.AssessmentDate);
+        Assert.Equal(originalCreatedAt, assessment.CreatedAt);
+
+        Assert.Equal(82.5m, assessment.WeightKg);
+        Assert.Equal(83m, assessment.WaistCm);
+        Assert.Equal("Corrigido", assessment.Notes);
+
+        Assert.True(
+            assessment.UpdatedAt >
+            originalCreatedAt);
+
+        await _physicalAssessmentRepository
+            .Received(1)
+            .SaveChangesAsync();
+    }
+
+    [Fact]
+    public async Task UpdateAsync_WhenAssessmentDoesNotExist_ShouldReturnFalse()
+    {
+        var assessmentId = Guid.NewGuid();
+        var studentId = Guid.NewGuid();
+        var gymId = Guid.NewGuid();
+
+        _physicalAssessmentRepository
+            .GetByIdForUpdateAsync(
+                assessmentId,
+                studentId,
+                gymId)
+            .Returns((PhysicalAssessment?)null);
+
+        var result = await _service.UpdateAsync(
+            assessmentId,
+            studentId,
+            gymId,
+            CreateValidUpdateRequest());
+
+        Assert.False(result);
+
+        await _physicalAssessmentRepository
+            .DidNotReceive()
+            .SaveChangesAsync();
+    }
+
+    [Fact]
+    public async Task UpdateAsync_WithInvalidWeight_ShouldThrowArgumentException()
+    {
+        var gymId = Guid.NewGuid();
+        var studentId = Guid.NewGuid();
+
+        var assessment = CreateAssessment(
+            studentId,
+            new DateOnly(2026, 9, 4));
+
+        _physicalAssessmentRepository
+            .GetByIdForUpdateAsync(
+                assessment.Id,
+                studentId,
+                gymId)
+            .Returns(assessment);
+
+        var request = CreateValidUpdateRequest();
+        request.WeightKg = 0;
+
+        await Assert.ThrowsAsync<ArgumentException>(
+            () => _service.UpdateAsync(
+                assessment.Id,
+                studentId,
+                gymId,
+                request));
+
+        await _physicalAssessmentRepository
+            .DidNotReceive()
+            .SaveChangesAsync();
+    }
+
+    [Fact]
+    public async Task UpdateAsync_WithNotesLongerThan500Characters_ShouldThrowArgumentException()
+    {
+        var gymId = Guid.NewGuid();
+        var studentId = Guid.NewGuid();
+
+        var assessment = CreateAssessment(
+            studentId,
+            new DateOnly(2026, 9, 4));
+
+        _physicalAssessmentRepository
+            .GetByIdForUpdateAsync(
+                assessment.Id,
+                studentId,
+                gymId)
+            .Returns(assessment);
+
+        var request = CreateValidUpdateRequest();
+        request.Notes = new string('a', 501);
+
+        await Assert.ThrowsAsync<ArgumentException>(
+            () => _service.UpdateAsync(
+                assessment.Id,
+                studentId,
+                gymId,
+                request));
+
+        await _physicalAssessmentRepository
+            .DidNotReceive()
+            .SaveChangesAsync();
+    }
+
+    private static UpdatePhysicalAssessmentRequest CreateValidUpdateRequest()
+    {
+        return new UpdatePhysicalAssessmentRequest
+        {
+            WeightKg = 80m,
+            HeightCm = 175m,
+            BodyFatPercentage = 18m,
+            ChestCm = 100m,
+            WaistCm = 85m,
+            AbdomenCm = 87m,
+            HipCm = 100m,
+            RightArmCm = 35m,
+            LeftArmCm = 35m,
+            RightThighCm = 60m,
+            LeftThighCm = 60m,
+            RightCalfCm = 37m,
+            LeftCalfCm = 37m,
+            Notes = "Observação"
+        };
+    }
+
     private static void SetNumericField(
     CreatePhysicalAssessmentRequest request,
     string field,

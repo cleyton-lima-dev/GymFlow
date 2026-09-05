@@ -404,7 +404,22 @@ class AppRouter {
               state.pathParameters['assessmentId']!,
               studentName:
               state.extra as String? ?? 'Aluno',
+              routeBase: 'admin',
             ),
+      ),
+      GoRoute(
+        path:
+        '/admin/students/:studentId/physical-assessments/:assessmentId/edit',
+        builder: (context, state) {
+          final arguments =
+          state.extra as EditPhysicalAssessmentArguments;
+
+          return CreatePhysicalAssessmentPage(
+            studentId: state.pathParameters['studentId']!,
+            studentName: arguments.studentName,
+            assessment: arguments.assessment,
+          );
+        },
       ),
       GoRoute(
         path:
@@ -426,7 +441,22 @@ class AppRouter {
               state.pathParameters['assessmentId']!,
               studentName:
               state.extra as String? ?? 'Aluno',
+              routeBase: 'professor',
             ),
+      ),
+      GoRoute(
+        path:
+        '/professor/students/:studentId/physical-assessments/:assessmentId/edit',
+        builder: (context, state) {
+          final arguments =
+          state.extra as EditPhysicalAssessmentArguments;
+
+          return CreatePhysicalAssessmentPage(
+            studentId: state.pathParameters['studentId']!,
+            studentName: arguments.studentName,
+            assessment: arguments.assessment,
+          );
+        },
       ),
       GoRoute(
         path: '/admin/students/:studentId/physical-assessments',

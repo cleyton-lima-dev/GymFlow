@@ -98,6 +98,53 @@ public class PhysicalAssessmentService
         return CreatePhysicalAssessmentResult.Success;
     }
 
+    public async Task<bool> UpdateAsync(
+    Guid assessmentId,
+    Guid studentId,
+    Guid gymId,
+    UpdatePhysicalAssessmentRequest request)
+    {
+        var assessment = await _physicalAssessmentRepository
+            .GetByIdForUpdateAsync(
+                assessmentId,
+                studentId,
+                gymId);
+
+        if (assessment is null)
+            return false;
+
+        ValidateUpdateRequest(request);
+
+        assessment.WeightKg = request.WeightKg;
+        assessment.HeightCm = request.HeightCm;
+
+        assessment.BodyFatPercentage = request.BodyFatPercentage;
+
+        assessment.ChestCm = request.ChestCm;
+        assessment.WaistCm = request.WaistCm;
+        assessment.AbdomenCm = request.AbdomenCm;
+        assessment.HipCm = request.HipCm;
+
+        assessment.RightArmCm = request.RightArmCm;
+        assessment.LeftArmCm = request.LeftArmCm;
+
+        assessment.RightThighCm = request.RightThighCm;
+        assessment.LeftThighCm = request.LeftThighCm;
+
+        assessment.RightCalfCm = request.RightCalfCm;
+        assessment.LeftCalfCm = request.LeftCalfCm;
+
+        assessment.Notes = string.IsNullOrWhiteSpace(request.Notes)
+            ? null
+            : request.Notes.Trim();
+
+        assessment.UpdatedAt = DateTime.UtcNow;
+
+        await _physicalAssessmentRepository.SaveChangesAsync();
+
+        return true;
+    }
+
     public async Task<PhysicalAssessmentResponse?> GetLatestAsync(
         Guid studentId,
         Guid gymId)
@@ -402,6 +449,72 @@ public class PhysicalAssessmentService
         ValidateOptionalMeasurement(
     request.ChestCm,
     "Peitoral");
+
+        ValidateOptionalMeasurement(
+            request.WaistCm,
+            "Cintura");
+
+        ValidateOptionalMeasurement(
+            request.AbdomenCm,
+            "Abdômen");
+
+        ValidateOptionalMeasurement(
+            request.HipCm,
+            "Quadril");
+
+        ValidateOptionalMeasurement(
+            request.RightArmCm,
+            "Braço direito");
+
+        ValidateOptionalMeasurement(
+            request.LeftArmCm,
+            "Braço esquerdo");
+
+        ValidateOptionalMeasurement(
+            request.RightThighCm,
+            "Coxa direita");
+
+        ValidateOptionalMeasurement(
+            request.LeftThighCm,
+            "Coxa esquerda");
+
+        ValidateOptionalMeasurement(
+            request.RightCalfCm,
+            "Panturrilha direita");
+
+        ValidateOptionalMeasurement(
+            request.LeftCalfCm,
+            "Panturrilha esquerda");
+
+        if (request.Notes?.Length > 500)
+        {
+            throw new ArgumentException(
+                "As observações devem possuir no máximo 500 caracteres.");
+        }
+    }
+
+    private void ValidateUpdateRequest(
+    UpdatePhysicalAssessmentRequest request)
+    {
+        ValidateRequiredMeasurement(
+            request.WeightKg,
+            "Peso");
+
+        ValidateRequiredMeasurement(
+            request.HeightCm,
+            "Altura");
+
+        if (request.BodyFatPercentage.HasValue &&
+            (request.BodyFatPercentage.Value < 0 ||
+             request.BodyFatPercentage.Value > 100))
+        {
+            throw new ArgumentException(
+                "O percentual de gordura deve estar entre 0 e 100.");
+        }
+
+        ValidateOptionalMeasurement(
+            request.ChestCm,
+            "Peitoral");
 
         ValidateOptionalMeasurement(
             request.WaistCm,

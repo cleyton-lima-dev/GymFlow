@@ -3,6 +3,7 @@ import 'package:gymflow/core/network/api_exception.dart';
 import 'package:gymflow/features/physical_assessments/models/paged_physical_assessments_response.dart';
 import 'package:gymflow/features/physical_assessments/models/physical_assessment.dart';
 import 'package:gymflow/features/physical_assessments/models/create_physical_assessment_request.dart';
+import 'package:gymflow/features/physical_assessments/models/update_physical_assessment_request.dart';
 
 class PhysicalAssessmentsService {
   const PhysicalAssessmentsService(this._apiClient);
@@ -134,6 +135,17 @@ class PhysicalAssessmentsService {
   }) async {
     await _apiClient.post(
       'api/students/$studentId/physical-assessments',
+      body: request.toJson(),
+    );
+  }
+
+  Future<void> update({
+    required String studentId,
+    required String assessmentId,
+    required UpdatePhysicalAssessmentRequest request,
+  }) async {
+    await _apiClient.put(
+      'api/students/$studentId/physical-assessments/$assessmentId',
       body: request.toJson(),
     );
   }

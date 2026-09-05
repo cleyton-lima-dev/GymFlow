@@ -75,6 +75,45 @@ public class PhysicalAssessmentsController : ControllerBase
         }
     }
 
+    [HttpPut("{assessmentId:guid}")]
+    public async Task<IActionResult> Update(
+    Guid studentId,
+    Guid assessmentId,
+    UpdatePhysicalAssessmentRequest request)
+    {
+        if (!TryGetGymId(out var gymId))
+            return Unauthorized();
+
+        try
+        {
+            var updated = await _physicalAssessmentService.UpdateAsync(
+                assessmentId,
+                studentId,
+                gymId,
+                request);
+
+            if (!updated)
+            {
+                return NotFound(new
+                {
+                    message = "Avaliação física não encontrada."
+                });
+            }
+
+            return Ok(new
+            {
+                message = "Avaliação física atualizada com sucesso."
+            });
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new
+            {
+                message = ex.Message
+            });
+        }
+    }
+
     [HttpGet("current-date")]
     public IActionResult GetCurrentDate(Guid studentId)
     {

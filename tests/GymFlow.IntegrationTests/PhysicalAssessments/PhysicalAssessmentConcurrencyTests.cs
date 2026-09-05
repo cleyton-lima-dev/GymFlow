@@ -164,6 +164,17 @@ public class PhysicalAssessmentConcurrencyTests
                 gymId);
         }
 
+        public Task<PhysicalAssessment?> GetByIdForUpdateAsync(
+             Guid assessmentId,
+             Guid studentId,
+             Guid gymId)
+        {
+            return _inner.GetByIdForUpdateAsync(
+                assessmentId,
+                studentId,
+                gymId);
+        }
+
         public Task<PhysicalAssessment?> GetLatestByStudentAsync(
             Guid studentId,
             Guid gymId)
