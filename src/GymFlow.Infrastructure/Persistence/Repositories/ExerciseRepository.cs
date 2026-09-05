@@ -61,8 +61,8 @@ public class ExerciseRepository : IExerciseRepository
 
             query = query.Where(exercise =>
                 EF.Functions.ILike(
-                    exercise.MuscleGroup,
-                    muscleGroupTerm));
+                    EF.Functions.Unaccent(exercise.MuscleGroup),
+                    EF.Functions.Unaccent(muscleGroupTerm)));
         }
 
         if (isActive.HasValue)
