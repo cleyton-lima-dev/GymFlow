@@ -96,9 +96,7 @@ class _ExercisesViewState extends State<_ExercisesView> {
   Future<void> _openMuscleGroupFilter(
       ExercisesViewModel viewModel,
       ) async {
-    final controller = TextEditingController(
-      text: viewModel.muscleGroup ?? '',
-    );
+    var muscleGroupValue = viewModel.muscleGroup ?? '';
 
     final result = await showModalBottomSheet<String>(
       context: context,
@@ -144,19 +142,20 @@ class _ExercisesViewState extends State<_ExercisesView> {
 
                 const SizedBox(height: 18),
 
-                TextField(
-                  controller: controller,
+                TextFormField(
+                  initialValue: muscleGroupValue,
                   autofocus: true,
-                  textCapitalization:
-                  TextCapitalization.sentences,
+                  textCapitalization: TextCapitalization.sentences,
                   decoration: const InputDecoration(
                     labelText: 'Grupo muscular',
                     hintText: 'Ex.: Peito',
-                    prefixIcon:
-                    Icon(Icons.fitness_center_rounded),
+                    prefixIcon: Icon(Icons.fitness_center_rounded),
                     border: OutlineInputBorder(),
                   ),
-                  onSubmitted: (value) {
+                  onChanged: (value) {
+                    muscleGroupValue = value;
+                  },
+                  onFieldSubmitted: (value) {
                     Navigator.of(context).pop(
                       value.trim(),
                     );
@@ -180,7 +179,7 @@ class _ExercisesViewState extends State<_ExercisesView> {
                       child: FilledButton(
                         onPressed: () {
                           Navigator.of(context).pop(
-                            controller.text.trim(),
+                            muscleGroupValue.trim(),
                           );
                         },
                         child: const Text('Aplicar'),
@@ -195,7 +194,6 @@ class _ExercisesViewState extends State<_ExercisesView> {
       },
     );
 
-    controller.dispose();
 
     if (!mounted || result == null) {
       return;
