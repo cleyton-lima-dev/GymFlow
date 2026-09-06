@@ -22,3 +22,4 @@ Thumbs.db
 # Release binaries
 artifacts/release/*.apk
 artifacts/release/*.aab
+artifacts/release/*.sql
