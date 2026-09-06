@@ -6,16 +6,29 @@ import 'package:gymflow/features/physical_assessments/data/physical_assessments_
 import 'package:gymflow/features/physical_assessments/presentation/create_physical_assessment_view_model.dart';
 import 'package:provider/provider.dart';
 import 'package:gymflow/features/home/presentation/widgets/professor_admin_page_header.dart';
+import 'package:gymflow/features/physical_assessments/models/physical_assessment.dart';
+
+class EditPhysicalAssessmentArguments {
+  const EditPhysicalAssessmentArguments({
+    required this.studentName,
+    required this.assessment,
+  });
+
+  final String studentName;
+  final PhysicalAssessment assessment;
+}
 
 class CreatePhysicalAssessmentPage extends StatelessWidget {
   const CreatePhysicalAssessmentPage({
     required this.studentId,
     required this.studentName,
+    this.assessment,
     super.key,
   });
 
   final String studentId;
   final String studentName;
+  final PhysicalAssessment? assessment;
 
   @override
   Widget build(BuildContext context) {
@@ -24,15 +37,22 @@ class CreatePhysicalAssessmentPage extends StatelessWidget {
         PhysicalAssessmentsService(context.read<ApiClient>()),
         studentId,
       ),
-      child: _CreatePhysicalAssessmentView(studentName: studentName),
+      child: _CreatePhysicalAssessmentView(
+        studentName: studentName,
+        assessment: assessment,
+      ),
     );
   }
 }
 
 class _CreatePhysicalAssessmentView extends StatefulWidget {
-  const _CreatePhysicalAssessmentView({required this.studentName});
+  const _CreatePhysicalAssessmentView({
+    required this.studentName,
+    this.assessment,
+  });
 
   final String studentName;
+  final PhysicalAssessment? assessment;
 
   @override
   State<_CreatePhysicalAssessmentView> createState() =>
@@ -41,6 +61,7 @@ class _CreatePhysicalAssessmentView extends StatefulWidget {
 
 class _CreatePhysicalAssessmentViewState
     extends State<_CreatePhysicalAssessmentView> {
+  bool get _isEditing => widget.assessment != null;
   final _formKey = GlobalKey<FormState>();
 
   late DateTime _assessmentDate;
@@ -70,6 +91,34 @@ class _CreatePhysicalAssessmentViewState
   void initState() {
     super.initState();
 
+    final assessment = widget.assessment;
+
+    if (assessment != null) {
+      _assessmentDate = assessment.assessmentDate;
+
+      _weightController.text = _formatNumber(assessment.weightKg);
+      _heightController.text = _formatNumber(assessment.heightCm);
+      _bodyFatController.text = _formatNumber(assessment.bodyFatPercentage);
+
+      _chestController.text = _formatNumber(assessment.chestCm);
+      _waistController.text = _formatNumber(assessment.waistCm);
+      _abdomenController.text = _formatNumber(assessment.abdomenCm);
+      _hipController.text = _formatNumber(assessment.hipCm);
+
+      _rightArmController.text = _formatNumber(assessment.rightArmCm);
+      _leftArmController.text = _formatNumber(assessment.leftArmCm);
+
+      _rightThighController.text = _formatNumber(assessment.rightThighCm);
+      _leftThighController.text = _formatNumber(assessment.leftThighCm);
+
+      _rightCalfController.text = _formatNumber(assessment.rightCalfCm);
+      _leftCalfController.text = _formatNumber(assessment.leftCalfCm);
+
+      _notesController.text = assessment.notes ?? '';
+
+      return;
+    }
+
     final now = DateTime.now();
 
     _assessmentDate = DateTime(now.year, now.month, now.day);
@@ -94,6 +143,18 @@ class _CreatePhysicalAssessmentViewState
     });
 
     return true;
+  }
+
+  String _formatNumber(double? value) {
+    if (value == null) {
+      return '';
+    }
+
+    if (value == value.truncateToDouble()) {
+      return value.toInt().toString();
+    }
+
+    return value.toString();
   }
 
   @override
@@ -160,7 +221,7 @@ class _CreatePhysicalAssessmentViewState
 
   Future<void> _submit() async {
     FocusScope.of(context).unfocus();
-    if (_currentGymDate == null) {
+    if (!_isEditing && _currentGymDate == null) {
       final loaded = await _loadCurrentGymDate();
 
       if (!loaded || !mounted) {
@@ -175,6 +236,7 @@ class _CreatePhysicalAssessmentViewState
     final viewModel = context.read<CreatePhysicalAssessmentViewModel>();
 
     final success = await viewModel.submit(
+      assessmentId: widget.assessment?.id,
       assessmentDate: _assessmentDate,
       weightKg: _weightController.text,
       heightCm: _heightController.text,
@@ -197,7 +259,13 @@ class _CreatePhysicalAssessmentViewState
     }
 
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Avaliação física cadastrada com sucesso.')),
+      SnackBar(
+        content: Text(
+          _isEditing
+              ? 'Avaliação física atualizada com sucesso.'
+              : 'Avaliação física cadastrada com sucesso.',
+        ),
+      ),
     );
 
     Navigator.of(context).pop(true);
@@ -228,7 +296,7 @@ class _CreatePhysicalAssessmentViewState
                       const SizedBox(height: 16),
 
                       Text(
-                        'Nova avaliação física',
+                        _isEditing ? 'Editar avaliação física' : 'Nova avaliação física',
                         style: Theme.of(context).textTheme.headlineSmall
                             ?.copyWith(fontWeight: FontWeight.w800),
                       ),
@@ -256,6 +324,7 @@ class _CreatePhysicalAssessmentViewState
                             _AssessmentDateField(
                               date: _assessmentDate,
                               enabled:
+                              !_isEditing &&
                                   !viewModel.isSubmitting &&
                                   _currentGymDate != null,
                               onTap: _selectAssessmentDate,
@@ -445,6 +514,8 @@ class _CreatePhysicalAssessmentViewState
                           label: Text(
                             viewModel.isSubmitting
                                 ? 'Salvando...'
+                                : _isEditing
+                                ? 'Salvar alterações'
                                 : 'Salvar avaliação',
                           ),
                         ),

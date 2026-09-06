@@ -13,12 +13,14 @@ class EditWorkoutPage extends StatelessWidget {
   const EditWorkoutPage({
     required this.workout,
     required this.studentName,
+    required this.onReplaceWithTemplateTap,
     this.onUpdated,
     super.key,
   });
 
   final WorkoutDetails workout;
   final String studentName;
+  final Future<bool> Function() onReplaceWithTemplateTap;
   final VoidCallback? onUpdated;
 
   @override
@@ -32,6 +34,7 @@ class EditWorkoutPage extends StatelessWidget {
       ),
       child: _EditWorkoutView(
         studentName: studentName,
+        onReplaceWithTemplateTap: onReplaceWithTemplateTap,
         onUpdated: onUpdated,
       ),
     );
@@ -41,10 +44,12 @@ class EditWorkoutPage extends StatelessWidget {
 class _EditWorkoutView extends StatelessWidget {
   const _EditWorkoutView({
     required this.studentName,
+    required this.onReplaceWithTemplateTap,
     required this.onUpdated,
   });
 
   final String studentName;
+  final Future<bool> Function() onReplaceWithTemplateTap;
   final VoidCallback? onUpdated;
 
   @override
@@ -248,6 +253,16 @@ class _EditWorkoutView extends StatelessWidget {
 
                   const SizedBox(height: 28),
 
+                  OutlinedButton.icon(
+                    onPressed: viewModel.isSubmitting
+                        ? null
+                        : () => _replaceWithTemplate(context),
+                    icon: const Icon(Icons.content_copy_rounded),
+                    label: const Text('Substituir por modelo'),
+                  ),
+
+                  const SizedBox(height: 12),
+
                   FilledButton.icon(
                     onPressed: viewModel.isSubmitting
                         ? null
@@ -327,6 +342,49 @@ class _EditWorkoutView extends StatelessWidget {
       index,
       editedDay,
     );
+  }
+
+  Future<void> _replaceWithTemplate(
+      BuildContext context,
+      ) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Substituir treino atual?'),
+          content: const Text(
+            'Você poderá escolher um modelo e revisar o novo treino antes de salvar. '
+                'Ao salvar, o treino atual será substituído pelo novo.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(dialogContext).pop(false);
+              },
+              child: const Text('Cancelar'),
+            ),
+            FilledButton(
+              onPressed: () {
+                Navigator.of(dialogContext).pop(true);
+              },
+              child: const Text('Continuar'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmed != true || !context.mounted) {
+      return;
+    }
+
+    final replaced = await onReplaceWithTemplateTap();
+
+    if (!context.mounted || !replaced) {
+      return;
+    }
+
+    onUpdated?.call();
   }
 
   Future<void> _submit(

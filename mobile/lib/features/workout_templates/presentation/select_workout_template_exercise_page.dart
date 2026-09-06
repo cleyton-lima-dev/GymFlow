@@ -124,7 +124,7 @@ class _SelectWorkoutTemplateExerciseViewState
                             decoration:
                             InputDecoration(
                               hintText:
-                              'Buscar exercício...',
+                              'Buscar por exercício ou grupo muscular...',
                               prefixIcon:
                               const Icon(
                                 Icons.search_rounded,

@@ -37,6 +37,20 @@ public class PhysicalAssessmentRepository
                 x.Student.User.GymId == gymId);
     }
 
+    public async Task<PhysicalAssessment?> GetByIdForUpdateAsync(
+    Guid assessmentId,
+    Guid studentId,
+    Guid gymId)
+    {
+        return await _context.PhysicalAssessments
+            .Include(x => x.Student)
+                .ThenInclude(x => x.User)
+            .FirstOrDefaultAsync(x =>
+                x.Id == assessmentId &&
+                x.StudentId == studentId &&
+                x.Student.User.GymId == gymId);
+    }
+
     public async Task<PhysicalAssessment?> GetLatestByStudentAsync(
         Guid studentId,
         Guid gymId)

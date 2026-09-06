@@ -5,6 +5,7 @@ import 'package:gymflow/core/network/api_exception.dart';
 import 'package:gymflow/features/physical_assessments/data/physical_assessments_service.dart';
 import 'package:gymflow/features/physical_assessments/models/create_physical_assessment_request.dart';
 import 'package:http/http.dart' as http;
+import 'package:gymflow/features/physical_assessments/models/update_physical_assessment_request.dart';
 
 class CreatePhysicalAssessmentViewModel extends ChangeNotifier {
   CreatePhysicalAssessmentViewModel(this._service, this._studentId);
@@ -41,6 +42,7 @@ class CreatePhysicalAssessmentViewModel extends ChangeNotifier {
   }
 
   Future<bool> submit({
+    String? assessmentId,
     required DateTime assessmentDate,
     required String weightKg,
     required String heightCm,
@@ -183,26 +185,49 @@ class CreatePhysicalAssessmentViewModel extends ChangeNotifier {
     notifyListeners();
 
     try {
-      await _service.create(
-        studentId: _studentId,
-        request: CreatePhysicalAssessmentRequest(
-          assessmentDate: assessmentDate,
-          weightKg: parsedWeight,
-          heightCm: parsedHeight,
-          bodyFatPercentage: parsedBodyFat,
-          chestCm: parsedChest,
-          waistCm: parsedWaist,
-          abdomenCm: parsedAbdomen,
-          hipCm: parsedHip,
-          rightArmCm: parsedRightArm,
-          leftArmCm: parsedLeftArm,
-          rightThighCm: parsedRightThigh,
-          leftThighCm: parsedLeftThigh,
-          rightCalfCm: parsedRightCalf,
-          leftCalfCm: parsedLeftCalf,
-          notes: normalizedNotes.isEmpty ? null : normalizedNotes,
-        ),
-      );
+      if (assessmentId == null) {
+        await _service.create(
+          studentId: _studentId,
+          request: CreatePhysicalAssessmentRequest(
+            assessmentDate: assessmentDate,
+            weightKg: parsedWeight,
+            heightCm: parsedHeight,
+            bodyFatPercentage: parsedBodyFat,
+            chestCm: parsedChest,
+            waistCm: parsedWaist,
+            abdomenCm: parsedAbdomen,
+            hipCm: parsedHip,
+            rightArmCm: parsedRightArm,
+            leftArmCm: parsedLeftArm,
+            rightThighCm: parsedRightThigh,
+            leftThighCm: parsedLeftThigh,
+            rightCalfCm: parsedRightCalf,
+            leftCalfCm: parsedLeftCalf,
+            notes: normalizedNotes.isEmpty ? null : normalizedNotes,
+          ),
+        );
+      } else {
+        await _service.update(
+          studentId: _studentId,
+          assessmentId: assessmentId,
+          request: UpdatePhysicalAssessmentRequest(
+            weightKg: parsedWeight,
+            heightCm: parsedHeight,
+            bodyFatPercentage: parsedBodyFat,
+            chestCm: parsedChest,
+            waistCm: parsedWaist,
+            abdomenCm: parsedAbdomen,
+            hipCm: parsedHip,
+            rightArmCm: parsedRightArm,
+            leftArmCm: parsedLeftArm,
+            rightThighCm: parsedRightThigh,
+            leftThighCm: parsedLeftThigh,
+            rightCalfCm: parsedRightCalf,
+            leftCalfCm: parsedLeftCalf,
+            notes: normalizedNotes.isEmpty ? null : normalizedNotes,
+          ),
+        );
+      }
 
       return true;
     } on ApiException catch (exception) {

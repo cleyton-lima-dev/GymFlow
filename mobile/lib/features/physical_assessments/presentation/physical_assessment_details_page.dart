@@ -6,18 +6,22 @@ import 'package:gymflow/features/physical_assessments/models/physical_assessment
 import 'package:gymflow/features/physical_assessments/presentation/physical_assessment_details_view_model.dart';
 import 'package:provider/provider.dart';
 import 'package:gymflow/features/home/presentation/widgets/professor_admin_page_header.dart';
+import 'package:go_router/go_router.dart';
+import 'package:gymflow/features/physical_assessments/presentation/create_physical_assessment_page.dart';
 
 class PhysicalAssessmentDetailsPage extends StatelessWidget {
   const PhysicalAssessmentDetailsPage({
     required this.studentId,
     required this.assessmentId,
     required this.studentName,
+    required this.routeBase,
     super.key,
   });
 
   final String studentId;
   final String assessmentId;
   final String studentName;
+  final String routeBase;
 
   @override
   Widget build(BuildContext context) {
@@ -27,16 +31,28 @@ class PhysicalAssessmentDetailsPage extends StatelessWidget {
         studentId,
         assessmentId,
       )..load(),
-      child: _PhysicalAssessmentDetailsView(studentName: studentName),
+      child: _PhysicalAssessmentDetailsView(
+        studentId: studentId,
+        assessmentId: assessmentId,
+        studentName: studentName,
+        routeBase: routeBase,
+      ),
     );
   }
 }
 
 class _PhysicalAssessmentDetailsView extends StatelessWidget {
-  const _PhysicalAssessmentDetailsView({required this.studentName});
+  const _PhysicalAssessmentDetailsView({
+    required this.studentId,
+    required this.assessmentId,
+    required this.studentName,
+    required this.routeBase,
+  });
 
+  final String studentId;
+  final String assessmentId;
   final String studentName;
-
+  final String routeBase;
   @override
   Widget build(BuildContext context) {
     final viewModel = context.watch<PhysicalAssessmentDetailsViewModel>();
@@ -69,6 +85,20 @@ class _PhysicalAssessmentDetailsView extends StatelessWidget {
                   assessment: viewModel.assessment!,
                   studentName: studentName,
                   isLatest: viewModel.isLatest,
+                  onEditTap: () async {
+                    final updated = await context.push<bool>(
+                      '/$routeBase/students/$studentId/'
+                          'physical-assessments/$assessmentId/edit',
+                      extra: EditPhysicalAssessmentArguments(
+                        studentName: studentName,
+                        assessment: viewModel.assessment!,
+                      ),
+                    );
+
+                    if (updated == true && context.mounted) {
+                      await viewModel.load();
+                    }
+                  },
                 ),
               ),
           ],
@@ -83,11 +113,13 @@ class _Content extends StatelessWidget {
     required this.assessment,
     required this.studentName,
     required this.isLatest,
+    required this.onEditTap,
   });
 
   final PhysicalAssessment assessment;
   final String studentName;
   final bool isLatest;
+  final VoidCallback onEditTap;
 
   @override
   Widget build(BuildContext context) {
@@ -99,11 +131,23 @@ class _Content extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(
-            'Detalhe da avaliação física',
-            style: theme.textTheme.headlineSmall?.copyWith(
-              fontWeight: FontWeight.w800,
-            ),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Detalhe da avaliação física',
+                  style: theme.textTheme.headlineSmall?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              IconButton(
+                tooltip: 'Editar avaliação',
+                onPressed: onEditTap,
+                icon: const Icon(Icons.edit_outlined),
+              ),
+            ],
           ),
 
           const SizedBox(height: 6),

@@ -44,11 +44,15 @@ public class ExerciseRepository : IExerciseRepository
         if (!string.IsNullOrWhiteSpace(search))
         {
             var searchTerm = search.Trim();
+            var pattern = $"%{searchTerm}%";
 
             query = query.Where(exercise =>
                 EF.Functions.ILike(
-                    exercise.Name,
-                    $"%{searchTerm}%"));
+                    EF.Functions.Unaccent(exercise.Name),
+                    EF.Functions.Unaccent(pattern)) ||
+                EF.Functions.ILike(
+                    EF.Functions.Unaccent(exercise.MuscleGroup),
+                    EF.Functions.Unaccent(pattern)));
         }
 
         if (!string.IsNullOrWhiteSpace(muscleGroup))
@@ -57,8 +61,8 @@ public class ExerciseRepository : IExerciseRepository
 
             query = query.Where(exercise =>
                 EF.Functions.ILike(
-                    exercise.MuscleGroup,
-                    muscleGroupTerm));
+                    EF.Functions.Unaccent(exercise.MuscleGroup),
+                    EF.Functions.Unaccent(muscleGroupTerm)));
         }
 
         if (isActive.HasValue)

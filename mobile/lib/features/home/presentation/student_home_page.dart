@@ -143,13 +143,36 @@ class _LoadingState extends StatelessWidget {
   }
 }
 
-class _WorkoutContent extends StatelessWidget {
+class _WorkoutContent extends StatefulWidget {
   const _WorkoutContent({required this.workout});
 
   final WorkoutDetails workout;
 
   @override
+  State<_WorkoutContent> createState() => _WorkoutContentState();
+}
+
+class _WorkoutContentState extends State<_WorkoutContent> {
+  final GlobalKey _daysSectionKey = GlobalKey();
+
+  void _scrollToWorkoutDays() {
+    final targetContext = _daysSectionKey.currentContext;
+
+    if (targetContext == null) {
+      return;
+    }
+
+    Scrollable.ensureVisible(
+      targetContext,
+      duration: const Duration(milliseconds: 450),
+      curve: Curves.easeInOutCubic,
+      alignment: 0.08,
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final workout = widget.workout;
     final totalExercises = workout.days.fold<int>(
       0,
       (total, day) => total + day.exercises.length,
@@ -168,12 +191,14 @@ class _WorkoutContent extends StatelessWidget {
           workout: workout,
           totalExercises: totalExercises,
           completedToday: completedToday,
+          onTap: _scrollToWorkoutDays,
         ),
 
         const SizedBox(height: 34),
 
         Text(
           'Seus dias de treino',
+          key: _daysSectionKey,
           style: Theme.of(context).textTheme.headlineSmall
               ?.copyWith(fontWeight: FontWeight.w800),
         ),
@@ -232,11 +257,13 @@ class _CurrentWorkoutCard extends StatelessWidget {
     required this.workout,
     required this.totalExercises,
     required this.completedToday,
+    required this.onTap,
   });
 
   final WorkoutDetails workout;
   final int totalExercises;
   final int completedToday;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -259,114 +286,126 @@ class _CurrentWorkoutCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: colorScheme.outlineVariant),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(22),
-            decoration: BoxDecoration(
-              color: colorScheme.surface,
-              border: Border(
-                bottom: BorderSide(color: colorScheme.primary.withAlpha(80)),
-              ),
-            ),
-            child: Row(
-              children: [
-                Container(
-                  width: 54,
-                  height: 54,
-                  decoration: BoxDecoration(
-                    color: colorScheme.primary.withAlpha(28),
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(
-                    Icons.calendar_month_rounded,
-                    color: colorScheme.primary,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(22),
+                decoration: BoxDecoration(
+                  color: colorScheme.surface,
+                  border: Border(
+                    bottom: BorderSide(
+                      color: colorScheme.primary.withAlpha(80),
+                    ),
                   ),
                 ),
-
-                const SizedBox(width: 16),
-
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'SEU TREINO ATUAL',
-                        style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                          color: colorScheme.primary,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-
-                      const SizedBox(height: 4),
-
-                      Text(
-                        workout.name,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          color: colorScheme.onSurface,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-
-                      const SizedBox(height: 4),
-
-                      Text(
-                        'Criado em ${_formatDate(workout.createdAt)}',
-                        style: Theme.of(context).textTheme.bodyMedium
-                            ?.copyWith(color: colorScheme.onSurfaceVariant),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 20, 20, 22),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text(
-                  'Resumo do treino',
-                  style: Theme.of(context).textTheme.titleMedium
-                      ?.copyWith(fontWeight: FontWeight.w800),
-                ),
-
-                const SizedBox(height: 22),
-
-                Row(
+                child: Row(
                   children: [
-                    Expanded(
-                      child: _SummaryMetric(
-                        icon: Icons.calendar_today_rounded,
-                        value: '${workout.days.length}',
-                        label: workout.days.length == 1 ? 'dia' : 'dias',
+                    Container(
+                      width: 54,
+                      height: 54,
+                      decoration: BoxDecoration(
+                        color: colorScheme.primary.withAlpha(28),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        Icons.calendar_month_rounded,
+                        color: colorScheme.primary,
                       ),
                     ),
+
+                    const SizedBox(width: 16),
+
                     Expanded(
-                      child: _SummaryMetric(
-                        icon: Icons.fitness_center_rounded,
-                        value: '$totalExercises',
-                        label: totalExercises == 1 ? 'exercício' : 'exercícios',
-                      ),
-                    ),
-                    Expanded(
-                      child: _SummaryMetric(
-                        icon: Icons.check_circle_outline_rounded,
-                        value: '$completedToday',
-                        label: 'concluído hoje',
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'SEU TREINO ATUAL',
+                            style: Theme.of(context).textTheme.labelLarge
+                                ?.copyWith(
+                                  color: colorScheme.primary,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                          ),
+
+                          const SizedBox(height: 4),
+
+                          Text(
+                            workout.name,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context).textTheme.titleLarge
+                                ?.copyWith(
+                                  color: colorScheme.onSurface,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                          ),
+
+                          const SizedBox(height: 4),
+
+                          Text(
+                            'Criado em ${_formatDate(workout.createdAt)}',
+                            style: Theme.of(context).textTheme.bodyMedium
+                                ?.copyWith(color: colorScheme.onSurfaceVariant),
+                          ),
+                        ],
                       ),
                     ),
                   ],
                 ),
-              ],
-            ),
+              ),
+
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 20, 20, 22),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(
+                      'Resumo do treino',
+                      style: Theme.of(context).textTheme.titleMedium
+                          ?.copyWith(fontWeight: FontWeight.w800),
+                    ),
+
+                    const SizedBox(height: 22),
+
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _SummaryMetric(
+                            icon: Icons.calendar_today_rounded,
+                            value: '${workout.days.length}',
+                            label: workout.days.length == 1 ? 'dia' : 'dias',
+                          ),
+                        ),
+                        Expanded(
+                          child: _SummaryMetric(
+                            icon: Icons.fitness_center_rounded,
+                            value: '$totalExercises',
+                            label: totalExercises == 1
+                                ? 'exercício'
+                                : 'exercícios',
+                          ),
+                        ),
+                        Expanded(
+                          child: _SummaryMetric(
+                            icon: Icons.check_circle_outline_rounded,
+                            value: '$completedToday',
+                            label: 'concluído hoje',
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }

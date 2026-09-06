@@ -11,6 +11,11 @@ public interface IPhysicalAssessmentRepository
         Guid studentId,
         Guid gymId);
 
+    Task<PhysicalAssessment?> GetByIdForUpdateAsync(
+    Guid assessmentId,
+    Guid studentId,
+    Guid gymId);
+
     Task<PhysicalAssessment?> GetLatestByStudentAsync(
         Guid studentId,
         Guid gymId);

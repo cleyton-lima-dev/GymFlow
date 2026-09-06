@@ -10,4 +10,5 @@ const spaceBranding = GymBranding(
   surfaceColor: Color(0xFF100B2A),
   brightness: Brightness.dark,
   logoAsset: 'assets/branding/space/space_logo.png',
+  primaryButtonForegroundColor: Colors.white,
 );

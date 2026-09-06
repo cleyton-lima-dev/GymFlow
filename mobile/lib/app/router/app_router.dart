@@ -404,7 +404,22 @@ class AppRouter {
               state.pathParameters['assessmentId']!,
               studentName:
               state.extra as String? ?? 'Aluno',
+              routeBase: 'admin',
             ),
+      ),
+      GoRoute(
+        path:
+        '/admin/students/:studentId/physical-assessments/:assessmentId/edit',
+        builder: (context, state) {
+          final arguments =
+          state.extra as EditPhysicalAssessmentArguments;
+
+          return CreatePhysicalAssessmentPage(
+            studentId: state.pathParameters['studentId']!,
+            studentName: arguments.studentName,
+            assessment: arguments.assessment,
+          );
+        },
       ),
       GoRoute(
         path:
@@ -426,7 +441,22 @@ class AppRouter {
               state.pathParameters['assessmentId']!,
               studentName:
               state.extra as String? ?? 'Aluno',
+              routeBase: 'professor',
             ),
+      ),
+      GoRoute(
+        path:
+        '/professor/students/:studentId/physical-assessments/:assessmentId/edit',
+        builder: (context, state) {
+          final arguments =
+          state.extra as EditPhysicalAssessmentArguments;
+
+          return CreatePhysicalAssessmentPage(
+            studentId: state.pathParameters['studentId']!,
+            studentName: arguments.studentName,
+            assessment: arguments.assessment,
+          );
+        },
       ),
       GoRoute(
         path: '/admin/students/:studentId/physical-assessments',
@@ -689,6 +719,7 @@ class AppRouter {
         path: '/admin/students/:studentId/workouts/edit',
         builder: (context, state) {
           final extra = state.extra;
+          final studentId = state.pathParameters['studentId']!;
 
           if (extra is! Map<String, dynamic>) {
             throw StateError(
@@ -705,6 +736,26 @@ class AppRouter {
           return EditWorkoutPage(
             workout: workout,
             studentName: studentName,
+            onReplaceWithTemplateTap: () async {
+              final template = await context.push<WorkoutTemplateDetails>(
+                '/admin/students/$studentId/workouts/select-template',
+                extra: studentName,
+              );
+
+              if (!context.mounted || template == null) {
+                return false;
+              }
+
+              final replaced = await context.push<bool>(
+                '/admin/students/$studentId/workouts/manual',
+                extra: {
+                  'studentName': studentName,
+                  'template': template,
+                },
+              );
+
+              return replaced ?? false;
+            },
             onUpdated: () {
               context.pop(true);
             },
@@ -804,6 +855,7 @@ class AppRouter {
         path:
         '/professor/students/:studentId/workouts/edit',
         builder: (context, state) {
+          final studentId = state.pathParameters['studentId']!;
           final extra = state.extra;
 
           if (extra is! Map<String, dynamic>) {
@@ -821,6 +873,26 @@ class AppRouter {
           return EditWorkoutPage(
             workout: workout,
             studentName: studentName,
+            onReplaceWithTemplateTap: () async {
+              final template = await context.push<WorkoutTemplateDetails>(
+                '/professor/students/$studentId/workouts/select-template',
+                extra: studentName,
+              );
+
+              if (!context.mounted || template == null) {
+                return false;
+              }
+
+              final replaced = await context.push<bool>(
+                '/professor/students/$studentId/workouts/manual',
+                extra: {
+                  'studentName': studentName,
+                  'template': template,
+                },
+              );
+
+              return replaced ?? false;
+            },
             onUpdated: () {
               context.pop(true);
             },
