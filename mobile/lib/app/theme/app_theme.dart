@@ -18,6 +18,15 @@ class AppTheme {
       useMaterial3: true,
       colorScheme: colorScheme,
       scaffoldBackgroundColor: branding.backgroundColor,
+      filledButtonTheme: branding.primaryButtonForegroundColor == null
+          ? null
+          : FilledButtonThemeData(
+        style: ButtonStyle(
+          foregroundColor: WidgetStatePropertyAll(
+            branding.primaryButtonForegroundColor!,
+          ),
+        ),
+      ),
     );
   }
 }

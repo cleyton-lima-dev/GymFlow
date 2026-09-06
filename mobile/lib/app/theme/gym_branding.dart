@@ -10,6 +10,7 @@ class GymBranding {
     required this.brightness,
     this.surfaceColor,
     this.logoAsset,
+    this.primaryButtonForegroundColor,
   });
 
   final String id;
@@ -20,4 +21,5 @@ class GymBranding {
   final Brightness brightness;
   final Color? surfaceColor;
   final String? logoAsset;
+  final Color? primaryButtonForegroundColor;
 }
