@@ -157,6 +157,7 @@ class _ConfigureWorkoutTemplateDayPageState
                       exercises: _exercises,
                       onEdit: _editExercise,
                       onRemove: _removeExercise,
+                      onReorder: _reorderExercise,
                     ),
 
                   const SizedBox(height: 14),
@@ -298,6 +299,20 @@ class _ConfigureWorkoutTemplateDayPageState
     });
   }
 
+  void _reorderExercise(
+      int oldIndex,
+      int newIndex,
+      ) {
+    setState(() {
+      final exercise = _exercises.removeAt(oldIndex);
+
+      _exercises.insert(
+        newIndex,
+        exercise,
+      );
+    });
+  }
+
   void _save() {
     final name = _nameController.text.trim();
 
@@ -338,11 +353,16 @@ class _ExercisesCard extends StatelessWidget {
     required this.exercises,
     required this.onEdit,
     required this.onRemove,
+    required this.onReorder,
   });
 
   final List<WorkoutTemplateDraftExercise> exercises;
   final ValueChanged<int> onEdit;
   final ValueChanged<int> onRemove;
+  final void Function(
+      int oldIndex,
+      int newIndex,
+      ) onReorder;
 
   @override
   Widget build(BuildContext context) {
@@ -358,25 +378,49 @@ class _ExercisesCard extends StatelessWidget {
           colorScheme.outlineVariant.withAlpha(120),
         ),
       ),
-      child: Column(
-        children: [
-          for (var index = 0;
-          index < exercises.length;
-          index++) ...[
-            _ExerciseRow(
-              position: index + 1,
-              exercise: exercises[index],
-              onTap: () => onEdit(index),
-              onRemove: () => onRemove(index),
+      child: ReorderableListView.builder(
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        buildDefaultDragHandles: false,
+        itemCount: exercises.length,
+        onReorderItem: onReorder,
+        proxyDecorator: (
+            child,
+            index,
+            animation,
+            ) {
+          return Material(
+            elevation: 6,
+            color: Colors.transparent,
+            borderRadius: BorderRadius.circular(12),
+            child: child,
+          );
+        },
+        itemBuilder: (context, index) {
+          final exercise = exercises[index];
+
+          return ReorderableDelayedDragStartListener(
+            key: ObjectKey(exercise),
+            index: index,
+            child: Column(
+              children: [
+                _ExerciseRow(
+                  position: index + 1,
+                  exercise: exercise,
+                  onTap: () => onEdit(index),
+                  onRemove: () => onRemove(index),
+                ),
+
+                if (index < exercises.length - 1)
+                  Divider(
+                    height: 1,
+                    color: colorScheme.outlineVariant
+                        .withAlpha(100),
+                  ),
+              ],
             ),
-            if (index < exercises.length - 1)
-              Divider(
-                height: 1,
-                color: colorScheme.outlineVariant
-                    .withAlpha(100),
-              ),
-          ],
-        ],
+          );
+        },
       ),
     );
   }

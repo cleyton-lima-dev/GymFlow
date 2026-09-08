@@ -223,25 +223,52 @@ class _CreateWorkoutView extends StatelessWidget {
                   if (viewModel.days.isEmpty)
                     const _EmptyDaysCard()
                   else
-                    for (var index = 0;
-                    index < viewModel.days.length;
-                    index++) ...[
-                      _DraftDayCard(
-                        day: viewModel.days[index],
-                        position: index + 1,
-                        onTap: () => _editDay(
-                          context,
-                          viewModel,
+                    ReorderableListView.builder(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      buildDefaultDragHandles: false,
+                      itemCount: viewModel.days.length,
+                      onReorderItem: viewModel.reorderDay,
+                      proxyDecorator: (
+                          child,
                           index,
-                        ),
-                        onRemove: () =>
-                            viewModel.removeDay(index),
-                      ),
+                          animation,
+                          ) {
+                        return Material(
+                          elevation: 6,
+                          color: Colors.transparent,
+                          borderRadius: BorderRadius.circular(16),
+                          child: child,
+                        );
+                      },
+                      itemBuilder: (context, index) {
+                        final day = viewModel.days[index];
 
-                      if (index <
-                          viewModel.days.length - 1)
-                        const SizedBox(height: 12),
-                    ],
+                        return ReorderableDelayedDragStartListener(
+                          key: ObjectKey(day),
+                          index: index,
+                          child: Padding(
+                            padding: EdgeInsets.only(
+                              bottom:
+                              index < viewModel.days.length - 1
+                                  ? 12
+                                  : 0,
+                            ),
+                            child: _DraftDayCard(
+                              day: day,
+                              position: index + 1,
+                              onTap: () => _editDay(
+                                context,
+                                viewModel,
+                                index,
+                              ),
+                              onRemove: () =>
+                                  viewModel.removeDay(index),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
 
                   const SizedBox(height: 14),
 
