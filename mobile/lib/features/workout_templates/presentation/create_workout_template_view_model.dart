@@ -75,6 +75,22 @@ class CreateWorkoutTemplateViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
+  void reorderDay(
+      int oldIndex,
+      int newIndex,
+      ) {
+    if (!_isValidDayIndex(oldIndex) ||
+        newIndex < 0 ||
+        newIndex >= _days.length) {
+      return;
+    }
+
+    final day = _days.removeAt(oldIndex);
+    _days.insert(newIndex, day);
+
+    notifyListeners();
+  }
+
   void addExercise(
       int dayIndex,
       WorkoutTemplateDraftExercise exercise,

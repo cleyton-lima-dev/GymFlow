@@ -77,6 +77,22 @@ class EditWorkoutViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
+  void reorderDay(
+      int oldIndex,
+      int newIndex,
+      ) {
+    if (!_isValidIndex(oldIndex) ||
+        newIndex < 0 ||
+        newIndex >= _days.length) {
+      return;
+    }
+
+    final day = _days.removeAt(oldIndex);
+    _days.insert(newIndex, day);
+
+    notifyListeners();
+  }
+
   Future<bool> submit() async {
     if (_isSubmitting) {
       return false;
