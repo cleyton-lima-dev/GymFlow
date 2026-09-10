@@ -240,8 +240,13 @@ class _StudentWorkoutDayView extends StatelessWidget {
         onHomeTap: viewModel.isCompleting
             ? null
             : () {
-                context.go('/student');
-              },
+          if (context.canPop()) {
+            context.pop();
+            return;
+          }
+
+          context.go('/student');
+        },
         onHistoryTap: viewModel.isCompleting
             ? null
             : () {
