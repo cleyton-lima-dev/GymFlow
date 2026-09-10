@@ -184,6 +184,14 @@ class _WorkoutContentState extends State<_WorkoutContent> {
 
     final days = [...workout.days]..sort((a, b) => a.order.compareTo(b.order));
 
+    final inProgressDays = days.where((day) {
+      return !day.completedToday &&
+          day.exercises.any((exercise) => exercise.isCompleted);
+    }).toList(growable: false);
+
+    final inProgressDay =
+    inProgressDays.isEmpty ? null : inProgressDays.first;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -193,6 +201,42 @@ class _WorkoutContentState extends State<_WorkoutContent> {
           completedToday: completedToday,
           onTap: _scrollToWorkoutDays,
         ),
+
+        if (inProgressDay != null) ...[
+          const SizedBox(height: 16),
+
+          _ResumeWorkoutCard(
+            day: inProgressDay,
+            onPressed: () async {
+              final index = days.indexWhere(
+                    (day) => day.id == inProgressDay.id,
+              );
+
+              await context.push(
+                '/student/workout/day',
+                extra: StudentWorkoutDayArguments(
+                  workout: workout,
+                  day: inProgressDay,
+                  position: index + 1,
+                  totalDays: days.length,
+                  onCompleted: () {
+                    return context
+                        .read<CurrentWorkoutViewModel>()
+                        .refresh();
+                  },
+                ),
+              );
+
+              if (!context.mounted) {
+                return;
+              }
+
+              await context
+                  .read<CurrentWorkoutViewModel>()
+                  .refresh();
+            },
+          ),
+        ],
 
         const SizedBox(height: 34),
 
@@ -223,8 +267,8 @@ class _WorkoutContentState extends State<_WorkoutContent> {
               padding: const EdgeInsets.only(bottom: 10),
               child: _WorkoutDayCard(
                 day: days[index],
-                onTap: () {
-                  context.push(
+                onTap: () async {
+                  await context.push(
                     '/student/workout/day',
                     extra: StudentWorkoutDayArguments(
                       workout: workout,
@@ -237,7 +281,14 @@ class _WorkoutContentState extends State<_WorkoutContent> {
                             .refresh();
                       },
                     ),
-                  );
+                  )
+                  ;if (!context.mounted) {
+                    return;
+                  }
+
+                  await context
+                      .read<CurrentWorkoutViewModel>()
+                      .refresh();
                 },
               ),
             ),
@@ -248,6 +299,71 @@ class _WorkoutContentState extends State<_WorkoutContent> {
           text: 'Foco, consistência e descanso. O resultado é consequência!',
         ),
       ],
+    );
+  }
+}
+
+class _ResumeWorkoutCard extends StatelessWidget {
+  const _ResumeWorkoutCard({
+    required this.day,
+    required this.onPressed,
+  });
+
+  final WorkoutDayDetails day;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    final completed = day.exercises
+        .where((exercise) => exercise.isCompleted)
+        .length;
+
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: colorScheme.primary.withAlpha(12),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: colorScheme.primary.withAlpha(70),
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            Icons.play_circle_outline_rounded,
+            color: colorScheme.primary,
+            size: 34,
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Treino em andamento',
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  '${day.name} • $completed de ${day.exercises.length} concluídos',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 10),
+          FilledButton(
+            onPressed: onPressed,
+            child: const Text('Retomar'),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -472,7 +588,10 @@ class _SummaryMetric extends StatelessWidget {
 }
 
 class _WorkoutDayCard extends StatelessWidget {
-  const _WorkoutDayCard({required this.day, required this.onTap});
+  const _WorkoutDayCard({
+    required this.day,
+    required this.onTap,
+  });
 
   final WorkoutDayDetails day;
   final VoidCallback onTap;
@@ -487,11 +606,16 @@ class _WorkoutDayCard extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(18),
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+          padding: const EdgeInsets.symmetric(
+            horizontal: 18,
+            vertical: 16,
+          ),
           decoration: BoxDecoration(
             color: colorScheme.surface,
             borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: colorScheme.outlineVariant),
+            border: Border.all(
+              color: colorScheme.outlineVariant,
+            ),
           ),
           child: Row(
             children: [
@@ -501,11 +625,17 @@ class _WorkoutDayCard extends StatelessWidget {
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  border: Border.all(color: colorScheme.primary, width: 1.5),
+                  border: Border.all(
+                    color: colorScheme.primary,
+                    width: 1.5,
+                  ),
                 ),
                 child: Text(
                   '${day.order}',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  style: Theme.of(context)
+                      .textTheme
+                      .titleMedium
+                      ?.copyWith(
                     color: colorScheme.primary,
                     fontWeight: FontWeight.w800,
                   ),
@@ -522,17 +652,26 @@ class _WorkoutDayCard extends StatelessWidget {
                       day.name,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.titleMedium
-                          ?.copyWith(fontWeight: FontWeight.w800),
+                      style: Theme.of(context)
+                          .textTheme
+                          .titleMedium
+                          ?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
                     ),
 
                     const SizedBox(height: 4),
 
                     Text(
                       '${day.exercises.length} '
-                      '${day.exercises.length == 1 ? 'exercício' : 'exercícios'}',
-                      style: Theme.of(context).textTheme.bodyMedium
-                          ?.copyWith(color: colorScheme.onSurfaceVariant),
+                          '${day.exercises.length == 1 ? 'exercício' : 'exercícios'}',
+                      style: Theme.of(context)
+                          .textTheme
+                          .bodyMedium
+                          ?.copyWith(
+                        color:
+                        colorScheme.onSurfaceVariant,
+                      ),
                     ),
                   ],
                 ),
@@ -541,7 +680,9 @@ class _WorkoutDayCard extends StatelessWidget {
               const SizedBox(width: 12),
 
               if (day.completedToday)
-                _CompletedBadge(completedAt: day.lastCompletedAt)
+                _CompletedBadge(
+                  completedAt: day.lastCompletedAt,
+                )
               else
                 const _PendingBadge(),
 
