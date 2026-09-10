@@ -399,9 +399,17 @@ class _ExercisesViewState extends State<_ExercisesView> {
                   ),
                 )
               else if (viewModel.items.isEmpty)
-                  const SliverFillRemaining(
+                  SliverFillRemaining(
                     hasScrollBody: false,
-                    child: _EmptyState(),
+                    child: _EmptyState(
+                      hasSearch: viewModel.search.trim().isNotEmpty,
+                      hasFilter:
+                      viewModel.muscleGroup != null ||
+                          viewModel.statusFilter != ExerciseStatusFilter.all,
+                      onCreate: widget.onNewExerciseTap == null
+                          ? null
+                          : () => _openNewExercise(viewModel),
+                    ),
                   )
                 else ...[
                     SliverPadding(
@@ -776,12 +784,20 @@ class _Pagination extends StatelessWidget {
 }
 
 class _EmptyState extends StatelessWidget {
-  const _EmptyState();
+  const _EmptyState({
+    required this.hasSearch,
+    required this.hasFilter,
+    this.onCreate,
+  });
 
+  final bool hasSearch;
+  final bool hasFilter;
+  final VoidCallback? onCreate;
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
+    final filtered = hasSearch || hasFilter;
 
     return Padding(
       padding: const EdgeInsets.all(32),
@@ -795,20 +811,36 @@ class _EmptyState extends StatelessWidget {
           ),
           const SizedBox(height: 16),
           Text(
-            'Nenhum exercício encontrado',
+            filtered
+                ? 'Nenhum exercício encontrado'
+                : 'Nenhum exercício cadastrado',
             textAlign: TextAlign.center,
             style: theme.textTheme.titleLarge?.copyWith(
               fontWeight: FontWeight.w800,
             ),
           ),
+
           const SizedBox(height: 8),
+
           Text(
-            'Tente alterar a busca ou os filtros aplicados.',
+            filtered
+                ? 'Tente alterar a busca ou os filtros aplicados.'
+                : 'Cadastre o primeiro exercício do banco desta academia.',
             textAlign: TextAlign.center,
             style: theme.textTheme.bodyMedium?.copyWith(
               color: colorScheme.onSurfaceVariant,
             ),
           ),
+
+          if (!filtered && onCreate != null) ...[
+            const SizedBox(height: 18),
+
+            FilledButton.icon(
+              onPressed: onCreate,
+              icon: const Icon(Icons.add_rounded),
+              label: const Text('Cadastrar exercício'),
+            ),
+          ],
         ],
       ),
     );
