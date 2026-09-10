@@ -142,12 +142,14 @@ class _StudentWorkoutDayView extends StatelessWidget {
                         ),
                         const SizedBox(width: 8),
                         Expanded(
+
                           child: Text(
                             'Exercícios do dia',
                             style: Theme.of(context).textTheme.titleLarge
                                 ?.copyWith(fontWeight: FontWeight.w800),
                           ),
                         ),
+                        const SizedBox(width: 8),
                         Container(
                           padding: const EdgeInsets.symmetric(
                             horizontal: 10,
@@ -183,6 +185,21 @@ class _StudentWorkoutDayView extends StatelessWidget {
                         _ExerciseRow(
                           exercise: exercises[index],
                           position: index + 1,
+                          isCompleted: viewModel.isExerciseCompleted(
+                            exercises[index].id,
+                          ),
+                          isUpdating: viewModel.isExerciseUpdating(
+                            exercises[index].id,
+                          ),
+                          onToggle: viewModel.completedToday
+                              ? null
+                              : () {
+                            context
+                                .read<StudentWorkoutDayViewModel>()
+                                .toggleExercise(
+                              exercises[index].id,
+                            );
+                          },
                         ),
                         if (index < exercises.length - 1)
                           const SizedBox(height: 10),
@@ -196,6 +213,9 @@ class _StudentWorkoutDayView extends StatelessWidget {
                       _CompleteDayCard(
                         isLoading: viewModel.isCompleting,
                         errorMessage: viewModel.errorMessage,
+                        completedExercises: viewModel.completedExerciseCount,
+                        totalExercises: viewModel.totalExerciseCount,
+                        canComplete: viewModel.canComplete,
                         onPressed: () async {
                           final completed = await context
                               .read<StudentWorkoutDayViewModel>()
@@ -315,11 +335,19 @@ class _DayInfoCard extends StatelessWidget {
 }
 
 class _ExerciseRow extends StatelessWidget {
-  const _ExerciseRow({required this.exercise, required this.position});
+  const _ExerciseRow({
+    required this.exercise,
+    required this.position,
+    required this.isCompleted,
+    required this.isUpdating,
+    required this.onToggle,
+  });
 
   final WorkoutExerciseDetails exercise;
   final int position;
-
+  final bool isCompleted;
+  final bool isUpdating;
+  final VoidCallback? onToggle;
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -381,6 +409,33 @@ class _ExerciseRow extends StatelessWidget {
                       ),
                     ],
                   ],
+                ),
+              ),const SizedBox(width: 8),
+
+              SizedBox(
+                width: 40,
+                height: 40,
+                child: IconButton(
+                  tooltip: isCompleted
+                      ? 'Desmarcar exercício'
+                      : 'Marcar exercício como concluído',
+                  onPressed: isUpdating ? null : onToggle,
+                  icon: isUpdating
+                      ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                    ),
+                  )
+                      : Icon(
+                    isCompleted
+                        ? Icons.check_circle_rounded
+                        : Icons.radio_button_unchecked_rounded,
+                  ),
+                  color: isCompleted
+                      ? colorScheme.primary
+                      : colorScheme.onSurfaceVariant,
                 ),
               ),
             ],
@@ -602,11 +657,17 @@ class _CompleteDayCard extends StatelessWidget {
   const _CompleteDayCard({
     required this.isLoading,
     required this.errorMessage,
+    required this.completedExercises,
+    required this.totalExercises,
+    required this.canComplete,
     required this.onPressed,
   });
 
   final bool isLoading;
   final String? errorMessage;
+  final int completedExercises;
+  final int totalExercises;
+  final bool canComplete;
   final VoidCallback onPressed;
 
   @override
@@ -654,6 +715,18 @@ class _CompleteDayCard extends StatelessWidget {
                         color: colorScheme.onSurfaceVariant,
                         height: 1.4,
                       ),
+                      ),
+                    const SizedBox(height: 8),
+
+                    Text(
+                      '$completedExercises de $totalExercises '
+                          '${totalExercises == 1 ? 'exercício concluído' : 'exercícios concluídos'}',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: canComplete
+                            ? colorScheme.primary
+                            : colorScheme.onSurfaceVariant,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                   ],
                 ),
@@ -675,7 +748,7 @@ class _CompleteDayCard extends StatelessWidget {
           const SizedBox(height: 18),
 
           FilledButton.icon(
-            onPressed: isLoading ? null : onPressed,
+            onPressed: isLoading || !canComplete ? null : onPressed,
             icon: isLoading
                 ? SizedBox(
                     width: 18,

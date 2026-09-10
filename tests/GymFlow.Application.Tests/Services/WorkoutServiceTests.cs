@@ -16,6 +16,7 @@ public class WorkoutServiceTests
     private readonly IWorkoutTemplateRepository _workoutTemplateRepository;
     private readonly IWorkoutExecutionRepository _workoutExecutionRepository;
     private readonly IGymTimeZoneProvider _gymTimeZoneProvider;
+    private readonly IWorkoutDayProgressRepository _workoutDayProgressRepository;
 
     private readonly WorkoutService _service;
 
@@ -36,6 +37,9 @@ public class WorkoutServiceTests
         _workoutExecutionRepository =
             Substitute.For<IWorkoutExecutionRepository>();
 
+        _workoutDayProgressRepository =
+            Substitute.For<IWorkoutDayProgressRepository>();
+
         _gymTimeZoneProvider =
             Substitute.For<IGymTimeZoneProvider>();
 
@@ -49,6 +53,7 @@ public class WorkoutServiceTests
             _exerciseRepository,
             _workoutTemplateRepository,
             _workoutExecutionRepository,
+            _workoutDayProgressRepository,
             _gymTimeZoneProvider);
     }
 
@@ -1189,11 +1194,50 @@ public class WorkoutServiceTests
                 gymId)
             .Returns(true);
 
+
+
+        var dayProgress = new WorkoutDayProgress
+        {
+            Id = Guid.NewGuid(),
+            StudentId = student.Id,
+            WorkoutDayId = workoutDayId,
+            WorkoutDay = new WorkoutDay
+            {
+                Id = workoutDayId,
+                Workout = new Workout
+                {
+                    IsActive = true
+                }
+            },
+            CompletedExercises =
+    [
+        new WorkoutExerciseCompletion
+        {
+            Id = Guid.NewGuid(),
+            WorkoutExerciseId = Guid.NewGuid()
+        }
+    ]
+        };
+
+        _workoutDayProgressRepository
+            .GetByStudentAsync(
+                student.Id,
+                gymId)
+            .Returns(dayProgress);
+
+        _workoutDayProgressRepository
+            .CountExercisesInDayAsync(
+                workoutDayId,
+                student.Id,
+                gymId)
+            .Returns(1);
+
         _workoutExecutionRepository
             .ExistsForWorkoutDayOnDateAsync(
                 workoutDayId,
                 Arg.Any<DateOnly>())
             .Returns(false);
+
 
         WorkoutExecution? capturedExecution = null;
 
@@ -1208,6 +1252,10 @@ public class WorkoutServiceTests
             gymId,
             student.Id,
             workoutDayId);
+
+        _workoutDayProgressRepository
+            .Received(1)
+            .RemoveProgress(dayProgress);
 
         Assert.NotNull(capturedExecution);
 
@@ -2033,6 +2081,42 @@ public class WorkoutServiceTests
                 gymId)
             .Returns(true);
 
+        var dayProgress = new WorkoutDayProgress
+        {
+            Id = Guid.NewGuid(),
+            StudentId = student.Id,
+            WorkoutDayId = workoutDayId,
+            WorkoutDay = new WorkoutDay
+            {
+                Id = workoutDayId,
+                Workout = new Workout
+                {
+                    IsActive = true
+                }
+            },
+            CompletedExercises =
+    [
+        new WorkoutExerciseCompletion
+        {
+            Id = Guid.NewGuid(),
+            WorkoutExerciseId = Guid.NewGuid()
+        }
+    ]
+        };
+
+        _workoutDayProgressRepository
+            .GetByStudentAsync(
+                student.Id,
+                gymId)
+            .Returns(dayProgress);
+
+        _workoutDayProgressRepository
+            .CountExercisesInDayAsync(
+                workoutDayId,
+                student.Id,
+                gymId)
+            .Returns(1);
+
         _workoutExecutionRepository
             .ExistsForWorkoutDayOnDateAsync(
                 workoutDayId,
@@ -2073,7 +2157,10 @@ public class WorkoutServiceTests
                     execution =>
                         execution.WorkoutDayId ==
                         workoutDayId));
+
+
     }
+
 
     [Fact]
     public async Task GetHistoryForUserAsync_WhenStudentDoesNotExist_ShouldThrowKeyNotFoundException()
@@ -3464,6 +3551,382 @@ public class WorkoutServiceTests
                 request));
 
         Assert.Contains("no máximo 150", exception.Message);
+    }
+
+    [Fact]
+    public async Task CompleteExerciseAsync_FirstExercise_ShouldCreateProgressAndCompletion()
+    {
+        var gymId = Guid.NewGuid();
+        var workoutDayId = Guid.NewGuid();
+        var workoutExerciseId = Guid.NewGuid();
+
+        var student = CreateStudent(gymId, true);
+
+        _studentRepository
+            .GetByIdAndGymIdAsync(
+                student.Id,
+                gymId)
+            .Returns(student);
+
+        _workoutDayProgressRepository
+            .IsWorkoutExerciseInActiveDayAsync(
+                workoutExerciseId,
+                workoutDayId,
+                student.Id,
+                gymId)
+            .Returns(true);
+
+        _workoutDayProgressRepository
+            .GetByStudentAsync(
+                student.Id,
+                gymId)
+            .Returns((WorkoutDayProgress?)null);
+
+        _workoutDayProgressRepository
+            .CountExercisesInDayAsync(
+                workoutDayId,
+                student.Id,
+                gymId)
+            .Returns(3);
+
+        WorkoutDayProgress? capturedProgress = null;
+        WorkoutExerciseCompletion? capturedCompletion = null;
+
+        _workoutDayProgressRepository
+            .When(x => x.AddProgressAsync(
+                Arg.Any<WorkoutDayProgress>()))
+            .Do(call =>
+                capturedProgress =
+                    call.Arg<WorkoutDayProgress>());
+
+        _workoutDayProgressRepository
+            .When(x => x.AddCompletionAsync(
+                Arg.Any<WorkoutExerciseCompletion>()))
+            .Do(call =>
+                capturedCompletion =
+                    call.Arg<WorkoutExerciseCompletion>());
+
+        var result = await _service.CompleteExerciseAsync(
+            gymId,
+            student.Id,
+            workoutDayId,
+            workoutExerciseId);
+
+        Assert.NotNull(capturedProgress);
+        Assert.NotNull(capturedCompletion);
+
+        Assert.Equal(
+            student.Id,
+            capturedProgress.StudentId);
+
+        Assert.Equal(
+            workoutDayId,
+            capturedProgress.WorkoutDayId);
+
+        Assert.Equal(
+            capturedProgress.Id,
+            capturedCompletion.WorkoutDayProgressId);
+
+        Assert.Equal(
+            workoutExerciseId,
+            capturedCompletion.WorkoutExerciseId);
+
+        Assert.True(result.IsCompleted);
+        Assert.Equal(1, result.CompletedExercises);
+        Assert.Equal(3, result.TotalExercises);
+
+        await _workoutDayProgressRepository
+            .Received(1)
+            .SaveChangesAsync();
+    }
+
+    [Fact]
+    public async Task UncompleteExerciseAsync_LastExercise_ShouldRemoveProgress()
+    {
+        var gymId = Guid.NewGuid();
+        var workoutDayId = Guid.NewGuid();
+        var workoutExerciseId = Guid.NewGuid();
+
+        var student = CreateStudent(gymId, true);
+
+        var completion = new WorkoutExerciseCompletion
+        {
+            Id = Guid.NewGuid(),
+            WorkoutExerciseId = workoutExerciseId
+        };
+
+        var progress = new WorkoutDayProgress
+        {
+            Id = Guid.NewGuid(),
+            StudentId = student.Id,
+            WorkoutDayId = workoutDayId,
+            CompletedExercises =
+            [
+                completion
+            ]
+        };
+
+        _studentRepository
+            .GetByIdAndGymIdAsync(
+                student.Id,
+                gymId)
+            .Returns(student);
+
+        _workoutDayProgressRepository
+            .IsWorkoutExerciseInActiveDayAsync(
+                workoutExerciseId,
+                workoutDayId,
+                student.Id,
+                gymId)
+            .Returns(true);
+
+        _workoutDayProgressRepository
+            .GetByStudentAsync(
+                student.Id,
+                gymId)
+            .Returns(progress);
+
+        _workoutDayProgressRepository
+            .CountExercisesInDayAsync(
+                workoutDayId,
+                student.Id,
+                gymId)
+            .Returns(3);
+
+        var result = await _service.UncompleteExerciseAsync(
+            gymId,
+            student.Id,
+            workoutDayId,
+            workoutExerciseId);
+
+        Assert.False(result.IsCompleted);
+        Assert.Equal(0, result.CompletedExercises);
+        Assert.Equal(3, result.TotalExercises);
+
+        _workoutDayProgressRepository
+            .Received(1)
+            .RemoveCompletion(completion);
+
+        _workoutDayProgressRepository
+            .Received(1)
+            .RemoveProgress(progress);
+
+        await _workoutDayProgressRepository
+            .Received(1)
+            .SaveChangesAsync();
+    }
+
+    [Fact]
+    public async Task CompleteDayAsync_WithIncompleteExercises_ShouldNotCreateExecution()
+    {
+        var gymId = Guid.NewGuid();
+        var workoutDayId = Guid.NewGuid();
+
+        var student = CreateStudent(gymId, true);
+
+        var progress = new WorkoutDayProgress
+        {
+            Id = Guid.NewGuid(),
+            StudentId = student.Id,
+            WorkoutDayId = workoutDayId,
+            CompletedExercises =
+            [
+                new WorkoutExerciseCompletion
+            {
+                Id = Guid.NewGuid(),
+                WorkoutExerciseId = Guid.NewGuid()
+            }
+            ]
+        };
+
+        _studentRepository
+            .GetByIdAndGymIdAsync(
+                student.Id,
+                gymId)
+            .Returns(student);
+
+        _workoutExecutionRepository
+            .IsActiveWorkoutDayForStudentAsync(
+                workoutDayId,
+                student.Id,
+                gymId)
+            .Returns(true);
+
+        _workoutDayProgressRepository
+            .GetByStudentAsync(
+                student.Id,
+                gymId)
+            .Returns(progress);
+
+        _workoutDayProgressRepository
+            .CountExercisesInDayAsync(
+                workoutDayId,
+                student.Id,
+                gymId)
+            .Returns(2);
+        
+
+        var exception =
+            await Assert.ThrowsAsync<InvalidOperationException>(
+                () => _service.CompleteDayAsync(
+                    gymId,
+                    student.Id,
+                    workoutDayId));
+
+        Assert.Equal(
+            "Conclua todos os exercícios antes de finalizar o dia.",
+            exception.Message);
+
+        await _workoutExecutionRepository
+            .DidNotReceive()
+            .AddAsync(
+                Arg.Any<WorkoutExecution>());
+
+    }
+
+    [Fact]
+    public async Task CompleteExerciseAsync_WithAnotherDayInProgress_ShouldThrow()
+    {
+        var gymId = Guid.NewGuid();
+        var currentWorkoutDayId = Guid.NewGuid();
+        var requestedWorkoutDayId = Guid.NewGuid();
+        var workoutExerciseId = Guid.NewGuid();
+
+        var student = CreateStudent(gymId, true);
+
+        var progress = new WorkoutDayProgress
+        {
+            Id = Guid.NewGuid(),
+            StudentId = student.Id,
+            WorkoutDayId = currentWorkoutDayId,
+            WorkoutDay = new WorkoutDay
+            {
+                Id = currentWorkoutDayId,
+                Workout = new Workout
+                {
+                    IsActive = true
+                }
+            }
+        };
+
+        _studentRepository
+            .GetByIdAndGymIdAsync(
+                student.Id,
+                gymId)
+            .Returns(student);
+
+        _workoutDayProgressRepository
+            .IsWorkoutExerciseInActiveDayAsync(
+                workoutExerciseId,
+                requestedWorkoutDayId,
+                student.Id,
+                gymId)
+            .Returns(true);
+
+        _workoutDayProgressRepository
+            .GetByStudentAsync(
+                student.Id,
+                gymId)
+            .Returns(progress);
+
+        var exception =
+            await Assert.ThrowsAsync<InvalidOperationException>(
+                () => _service.CompleteExerciseAsync(
+                    gymId,
+                    student.Id,
+                    requestedWorkoutDayId,
+                    workoutExerciseId));
+
+        Assert.Equal(
+            "Você já possui outro dia de treino em andamento.",
+            exception.Message);
+
+        await _workoutDayProgressRepository
+            .DidNotReceive()
+            .AddProgressAsync(
+                Arg.Any<WorkoutDayProgress>());
+
+        await _workoutDayProgressRepository
+            .DidNotReceive()
+            .AddCompletionAsync(
+                Arg.Any<WorkoutExerciseCompletion>());
+    }
+
+    [Fact]
+    public async Task CompleteExerciseAsync_WhenAlreadyCompleted_ShouldBeIdempotent()
+    {
+        var gymId = Guid.NewGuid();
+        var workoutDayId = Guid.NewGuid();
+        var workoutExerciseId = Guid.NewGuid();
+
+        var student = CreateStudent(gymId, true);
+
+        var existingCompletion = new WorkoutExerciseCompletion
+        {
+            Id = Guid.NewGuid(),
+            WorkoutExerciseId = workoutExerciseId
+        };
+
+        var progress = new WorkoutDayProgress
+        {
+            Id = Guid.NewGuid(),
+            StudentId = student.Id,
+            WorkoutDayId = workoutDayId,
+            WorkoutDay = new WorkoutDay
+            {
+                Id = workoutDayId,
+                Workout = new Workout
+                {
+                    IsActive = true
+                }
+            },
+            CompletedExercises =
+            [
+                existingCompletion
+            ]
+        };
+
+        _studentRepository
+            .GetByIdAndGymIdAsync(
+                student.Id,
+                gymId)
+            .Returns(student);
+
+        _workoutDayProgressRepository
+            .IsWorkoutExerciseInActiveDayAsync(
+                workoutExerciseId,
+                workoutDayId,
+                student.Id,
+                gymId)
+            .Returns(true);
+
+        _workoutDayProgressRepository
+            .GetByStudentAsync(
+                student.Id,
+                gymId)
+            .Returns(progress);
+
+        _workoutDayProgressRepository
+            .CountExercisesInDayAsync(
+                workoutDayId,
+                student.Id,
+                gymId)
+            .Returns(3);
+
+        var result = await _service.CompleteExerciseAsync(
+            gymId,
+            student.Id,
+            workoutDayId,
+            workoutExerciseId);
+
+        Assert.True(result.IsCompleted);
+        Assert.Equal(1, result.CompletedExercises);
+        Assert.Equal(3, result.TotalExercises);
+
+        await _workoutDayProgressRepository
+            .DidNotReceive()
+            .AddCompletionAsync(
+                Arg.Any<WorkoutExerciseCompletion>());
     }
 
     private static UpdateWorkoutRequest CreateValidUpdateWorkoutRequest(

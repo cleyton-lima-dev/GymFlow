@@ -218,6 +218,86 @@ public class WorkoutsController : ControllerBase
     }
 
     [Authorize(Roles = "Student")]
+    [HttpPost(
+    "me/days/{workoutDayId:guid}/exercises/{workoutExerciseId:guid}/complete")]
+    public async Task<IActionResult> CompleteMyExercise(
+    Guid workoutDayId,
+    Guid workoutExerciseId)
+    {
+        if (!TryGetGymId(out var gymId) ||
+            !TryGetUserId(out var userId))
+        {
+            return Unauthorized();
+        }
+
+        try
+        {
+            var result = await _workoutService
+                .CompleteExerciseForUserAsync(
+                    gymId,
+                    userId,
+                    workoutDayId,
+                    workoutExerciseId);
+
+            return Ok(result);
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new
+            {
+                message = ex.Message
+            });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Conflict(new
+            {
+                message = ex.Message
+            });
+        }
+    }
+
+    [Authorize(Roles = "Student")]
+    [HttpDelete(
+    "me/days/{workoutDayId:guid}/exercises/{workoutExerciseId:guid}/complete")]
+    public async Task<IActionResult> UncompleteMyExercise(
+    Guid workoutDayId,
+    Guid workoutExerciseId)
+    {
+        if (!TryGetGymId(out var gymId) ||
+            !TryGetUserId(out var userId))
+        {
+            return Unauthorized();
+        }
+
+        try
+        {
+            var result = await _workoutService
+                .UncompleteExerciseForUserAsync(
+                    gymId,
+                    userId,
+                    workoutDayId,
+                    workoutExerciseId);
+
+            return Ok(result);
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new
+            {
+                message = ex.Message
+            });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Conflict(new
+            {
+                message = ex.Message
+            });
+        }
+    }
+
+    [Authorize(Roles = "Student")]
     [HttpPost("me/days/{workoutDayId:guid}/complete")]
     public async Task<IActionResult> CompleteMyDay(
         Guid workoutDayId)

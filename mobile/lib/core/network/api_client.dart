@@ -62,6 +62,29 @@ class ApiClient {
     return decodeJson(validatedResponse);
   }
 
+  Future<Object?> delete(
+      String path, {
+        Map<String, String>? headers,
+        bool authenticated = true,
+      }) async {
+    final response = await _client
+        .delete(
+      buildUri(path),
+      headers: _buildHeaders(
+        headers: headers,
+        authenticated: authenticated,
+      ),
+    )
+        .timeout(requestTimeout);
+
+    final validatedResponse = await _validateResponse(
+      response,
+      authenticated: authenticated,
+    );
+
+    return decodeJson(validatedResponse);
+  }
+
   Future<Object?> post(
       String path, {
         Map<String, String>? headers,
