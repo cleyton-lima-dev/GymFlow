@@ -15,6 +15,7 @@ import 'package:gymflow/features/home/presentation/widgets/professor_admin_page_
 import 'package:gymflow/features/workouts/data/workouts_service.dart';
 import 'package:gymflow/features/workouts/presentation/current_workout_view_model.dart';
 import 'package:gymflow/features/workouts/presentation/widgets/current_workout_summary_card.dart';
+import 'package:gymflow/features/workouts/data/workout_export_service.dart';
 
 class StudentDetailsPage extends StatelessWidget {
   const StudentDetailsPage({
@@ -337,6 +338,42 @@ class _StudentDetailsContent extends StatelessWidget {
                   }
 
                   await workoutViewModel.load();
+                },
+                onExportWorkoutTap: () async {
+                  final workout = context
+                      .read<CurrentWorkoutViewModel>()
+                      .workout;
+
+                  if (workout == null) {
+                    return;
+                  }
+
+                  try {
+                    await WorkoutExportService().exportCsv(
+                      workout: workout,
+                      studentName: student.name,
+                    );
+
+                    if (!context.mounted) {
+                      return;
+                    }
+
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Treino exportado com sucesso.'),
+                      ),
+                    );
+                  } catch (_) {
+                    if (!context.mounted) {
+                      return;
+                    }
+
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Não foi possível exportar o treino.'),
+                      ),
+                    );
+                  }
                 },
               ),
 

@@ -7,11 +7,13 @@ class CurrentWorkoutSummaryCard extends StatelessWidget {
   const CurrentWorkoutSummaryCard({
     this.onCreateWorkoutTap,
     this.onEditWorkoutTap,
+    this.onExportWorkoutTap,
     super.key,
   });
 
   final VoidCallback? onCreateWorkoutTap;
   final VoidCallback? onEditWorkoutTap;
+  final VoidCallback? onExportWorkoutTap;
 
   @override
   Widget build(BuildContext context) {
@@ -34,15 +36,24 @@ class CurrentWorkoutSummaryCard extends StatelessWidget {
       return _EmptyWorkoutCard(onCreateWorkoutTap: onCreateWorkoutTap);
     }
 
-    return _WorkoutCard(workout: workout, onEditWorkoutTap: onEditWorkoutTap);
+    return _WorkoutCard(
+      workout: workout,
+      onEditWorkoutTap: onEditWorkoutTap,
+      onExportWorkoutTap: onExportWorkoutTap,
+    );
   }
 }
 
 class _WorkoutCard extends StatelessWidget {
-  const _WorkoutCard({required this.workout, required this.onEditWorkoutTap});
+  const _WorkoutCard({
+    required this.workout,
+    required this.onEditWorkoutTap,
+    required this.onExportWorkoutTap,
+  });
 
   final WorkoutDetails workout;
   final VoidCallback? onEditWorkoutTap;
+  final VoidCallback? onExportWorkoutTap;
 
   @override
   Widget build(BuildContext context) {
@@ -116,6 +127,15 @@ class _WorkoutCard extends StatelessWidget {
                   ],
                 ),
               ),
+              if (onExportWorkoutTap != null) ...[
+                const SizedBox(width: 4),
+
+                IconButton(
+                  tooltip: 'Exportar treino',
+                  onPressed: onExportWorkoutTap,
+                  icon: const Icon(Icons.download_outlined),
+                ),
+              ],
 
               if (onEditWorkoutTap != null) ...[
                 const SizedBox(width: 12),
