@@ -258,6 +258,21 @@ class _StudentsViewState extends State<_StudentsView> {
                     child: _EmptyStudentsState(
                       hasSearch: viewModel.hasSearch,
                       hasFilter: viewModel.hasActiveFilter,
+                      onCreateStudentTap: isAdmin
+                          ? () async {
+                        final created = await context.push<bool>(
+                          '/admin/students/new',
+                        );
+
+                        if (!context.mounted || created != true) {
+                          return;
+                        }
+
+                        await context
+                            .read<StudentsViewModel>()
+                            .loadInitial();
+                      }
+                          : null,
                     ),
                   )
                 else
@@ -748,10 +763,12 @@ class _EmptyStudentsState extends StatelessWidget {
   const _EmptyStudentsState({
     required this.hasSearch,
     required this.hasFilter,
+    this.onCreateStudentTap,
   });
 
   final bool hasSearch;
   final bool hasFilter;
+  final VoidCallback? onCreateStudentTap;
 
   @override
   Widget build(BuildContext context) {
@@ -793,6 +810,15 @@ class _EmptyStudentsState extends StatelessWidget {
                 color: colorScheme.onSurfaceVariant,
               ),
             ),
+            if (!filtered && onCreateStudentTap != null) ...[
+              const SizedBox(height: 18),
+
+              FilledButton.icon(
+                onPressed: onCreateStudentTap,
+                icon: const Icon(Icons.person_add_alt_1_rounded),
+                label: const Text('Cadastrar aluno'),
+              ),
+            ],
           ],
         ),
       ),

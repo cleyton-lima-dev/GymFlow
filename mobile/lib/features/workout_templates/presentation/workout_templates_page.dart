@@ -250,9 +250,24 @@ class _WorkoutTemplatesViewState
                   ),
                 )
               else if (viewModel.items.isEmpty)
-                  const SliverFillRemaining(
+                  SliverFillRemaining(
                     hasScrollBody: false,
-                    child: _EmptyState(),
+                    child: _EmptyState(
+                      hasSearch: viewModel.search.trim().isNotEmpty,
+                      hasFilter:
+                      viewModel.statusFilter != WorkoutTemplateStatusFilter.all,
+                      onCreateTemplateTap: widget.onNewTemplateTap == null
+                          ? null
+                          : () async {
+                        final created = await widget.onNewTemplateTap!();
+
+                        if (!context.mounted || !created) {
+                          return;
+                        }
+
+                        await viewModel.refresh();
+                      },
+                    ),
                   )
                 else ...[
                     SliverPadding(
@@ -702,14 +717,22 @@ class _Pagination extends StatelessWidget {
 }
 
 class _EmptyState extends StatelessWidget {
-  const _EmptyState();
+  const _EmptyState({
+    required this.hasSearch,
+    required this.hasFilter,
+    this.onCreateTemplateTap,
+  });
+
+  final bool hasSearch;
+  final bool hasFilter;
+  final VoidCallback? onCreateTemplateTap;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme =
         theme.colorScheme;
-
+    final filtered = hasSearch || hasFilter;
     return Padding(
       padding:
       const EdgeInsets.all(32),
@@ -728,28 +751,36 @@ class _EmptyState extends StatelessWidget {
           const SizedBox(height: 16),
 
           Text(
-            'Nenhum modelo encontrado',
+            filtered
+                ? 'Nenhum modelo encontrado'
+                : 'Nenhum modelo cadastrado',
             textAlign: TextAlign.center,
-            style:
-            theme.textTheme.titleLarge
-                ?.copyWith(
-              fontWeight:
-              FontWeight.w800,
+            style: theme.textTheme.titleLarge?.copyWith(
+              fontWeight: FontWeight.w800,
             ),
           ),
 
           const SizedBox(height: 8),
 
           Text(
-            'Tente alterar a busca ou o filtro de status.',
+            filtered
+                ? 'Tente alterar a busca ou o filtro de status.'
+                : 'Crie um modelo para reutilizar a mesma estrutura de treino com diferentes alunos.',
             textAlign: TextAlign.center,
-            style:
-            theme.textTheme.bodyMedium
-                ?.copyWith(
-              color: colorScheme
-                  .onSurfaceVariant,
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: colorScheme.onSurfaceVariant,
             ),
           ),
+
+          if (!filtered && onCreateTemplateTap != null) ...[
+            const SizedBox(height: 18),
+
+            FilledButton.icon(
+              onPressed: onCreateTemplateTap,
+              icon: const Icon(Icons.add_rounded),
+              label: const Text('Criar modelo'),
+            ),
+          ],
         ],
       ),
     );
