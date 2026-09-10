@@ -19,4 +19,6 @@ public class WorkoutExerciseResponse
     public string? Notes { get; set; }
 
     public int Order { get; set; }
+
+    public bool IsCompleted { get; set; }
 }

@@ -16,6 +16,7 @@ public class WorkoutService
 
     private readonly IGymTimeZoneProvider
     _gymTimeZoneProvider;
+    private readonly IWorkoutDayProgressRepository _workoutDayProgressRepository;
 
     public WorkoutService(
     IWorkoutRepository workoutRepository,
@@ -23,6 +24,7 @@ public class WorkoutService
     IExerciseRepository exerciseRepository,
     IWorkoutTemplateRepository workoutTemplateRepository,
     IWorkoutExecutionRepository workoutExecutionRepository,
+    IWorkoutDayProgressRepository workoutDayProgressRepository,
     IGymTimeZoneProvider gymTimeZoneProvider)
     {
         _workoutRepository = workoutRepository;
@@ -30,6 +32,7 @@ public class WorkoutService
         _exerciseRepository = exerciseRepository;
         _workoutTemplateRepository = workoutTemplateRepository;
         _workoutExecutionRepository = workoutExecutionRepository;
+        _workoutDayProgressRepository = workoutDayProgressRepository;
         _gymTimeZoneProvider = gymTimeZoneProvider;
     }
 
@@ -382,6 +385,30 @@ public class WorkoutService
                 "Dia de treino não encontrado no treino ativo do aluno.");
         }
 
+        var progress = await _workoutDayProgressRepository
+    .GetByStudentAsync(studentId, gymId);
+
+        if (progress is null ||
+            progress.WorkoutDayId != workoutDayId)
+        {
+            throw new InvalidOperationException(
+                "Conclua todos os exercícios antes de finalizar o dia.");
+        }
+
+        var totalExercises =
+            await _workoutDayProgressRepository
+                .CountExercisesInDayAsync(
+                    workoutDayId,
+                    studentId,
+                    gymId);
+
+        if (totalExercises == 0 ||
+            progress.CompletedExercises.Count != totalExercises)
+        {
+            throw new InvalidOperationException(
+                "Conclua todos os exercícios antes de finalizar o dia.");
+        }
+
         var nowUtc = DateTime.UtcNow;
 
         var timeZone =
@@ -414,6 +441,9 @@ public class WorkoutService
         await _workoutExecutionRepository
             .AddAsync(execution);
 
+        _workoutDayProgressRepository
+            .RemoveProgress(progress);
+
         await _workoutExecutionRepository
             .SaveChangesAsync();
 
@@ -427,6 +457,224 @@ public class WorkoutService
                 timeZone,
                 execution.CompletedAt)
         };
+    }
+
+    public async Task<WorkoutExerciseCompletionResponse> UncompleteExerciseAsync(
+    Guid gymId,
+    Guid studentId,
+    Guid workoutDayId,
+    Guid workoutExerciseId)
+    {
+        var student = await _studentRepository
+            .GetByIdAndGymIdAsync(studentId, gymId);
+
+        if (student is null)
+            throw new KeyNotFoundException("Aluno não encontrado.");
+
+        if (!student.User.IsActive)
+        {
+            throw new InvalidOperationException(
+                "Aluno inativo não pode alterar progresso de treino.");
+        }
+
+        var validExercise =
+            await _workoutDayProgressRepository
+                .IsWorkoutExerciseInActiveDayAsync(
+                    workoutExerciseId,
+                    workoutDayId,
+                    studentId,
+                    gymId);
+
+        if (!validExercise)
+        {
+            throw new KeyNotFoundException(
+                "Exercício não encontrado neste dia do treino ativo.");
+        }
+
+        var progress = await _workoutDayProgressRepository
+            .GetByStudentAsync(studentId, gymId);
+
+        if (progress is null ||
+            progress.WorkoutDayId != workoutDayId)
+        {
+            throw new InvalidOperationException(
+                "Este dia não possui progresso em andamento.");
+        }
+
+        var completion = progress.CompletedExercises
+            .FirstOrDefault(x =>
+                x.WorkoutExerciseId == workoutExerciseId);
+
+        if (completion is not null)
+        {
+            _workoutDayProgressRepository
+                .RemoveCompletion(completion);
+
+            progress.CompletedExercises.Remove(completion);
+
+            if (progress.CompletedExercises.Count == 0)
+            {
+                _workoutDayProgressRepository
+                    .RemoveProgress(progress);
+            }
+            else
+            {
+                progress.UpdatedAt = DateTime.UtcNow;
+            }
+
+            await _workoutDayProgressRepository
+                .SaveChangesAsync();
+        }
+
+        var totalExercises =
+            await _workoutDayProgressRepository
+                .CountExercisesInDayAsync(
+                    workoutDayId,
+                    studentId,
+                    gymId);
+
+        return new WorkoutExerciseCompletionResponse
+        {
+            WorkoutDayId = workoutDayId,
+            WorkoutExerciseId = workoutExerciseId,
+            IsCompleted = false,
+            CompletedExercises = progress.CompletedExercises.Count,
+            TotalExercises = totalExercises
+        };
+    }
+
+    public async Task<WorkoutExerciseCompletionResponse> CompleteExerciseAsync(
+    Guid gymId,
+    Guid studentId,
+    Guid workoutDayId,
+    Guid workoutExerciseId)
+    {
+        var student = await _studentRepository
+            .GetByIdAndGymIdAsync(studentId, gymId);
+
+        if (student is null)
+            throw new KeyNotFoundException("Aluno não encontrado.");
+
+        if (!student.User.IsActive)
+        {
+            throw new InvalidOperationException(
+                "Aluno inativo não pode registrar progresso de treino.");
+        }
+
+        var validExercise =
+            await _workoutDayProgressRepository
+                .IsWorkoutExerciseInActiveDayAsync(
+                    workoutExerciseId,
+                    workoutDayId,
+                    studentId,
+                    gymId);
+
+        if (!validExercise)
+        {
+            throw new KeyNotFoundException(
+                "Exercício não encontrado neste dia do treino ativo.");
+        }
+
+        var progress = await _workoutDayProgressRepository
+            .GetByStudentAsync(studentId, gymId);
+
+        if (progress is not null)
+        {
+            // Progresso antigo de um treino que foi substituído.
+            if (!progress.WorkoutDay.Workout.IsActive)
+            {
+                _workoutDayProgressRepository
+                    .RemoveProgress(progress);
+
+                await _workoutDayProgressRepository
+                    .SaveChangesAsync();
+
+                progress = null;
+            }
+            else if (progress.WorkoutDayId != workoutDayId)
+            {
+                throw new InvalidOperationException(
+                    "Você já possui outro dia de treino em andamento.");
+            }
+        }
+
+        var nowUtc = DateTime.UtcNow;
+
+        if (progress is null)
+        {
+            progress = new WorkoutDayProgress
+            {
+                Id = Guid.NewGuid(),
+                StudentId = studentId,
+                WorkoutDayId = workoutDayId,
+                StartedAt = nowUtc,
+                UpdatedAt = nowUtc
+            };
+
+            await _workoutDayProgressRepository
+                .AddProgressAsync(progress);
+        }
+
+        var existingCompletion = progress.CompletedExercises
+            .FirstOrDefault(x =>
+                x.WorkoutExerciseId == workoutExerciseId);
+
+        // Deixamos a operação idempotente:
+        // tocar novamente em "concluir" não duplica o registro.
+        if (existingCompletion is null)
+        {
+            var completion = new WorkoutExerciseCompletion
+            {
+                Id = Guid.NewGuid(),
+                WorkoutDayProgressId = progress.Id,
+                WorkoutExerciseId = workoutExerciseId,
+                CompletedAt = nowUtc
+            };
+
+            await _workoutDayProgressRepository
+                .AddCompletionAsync(completion);
+
+            progress.CompletedExercises.Add(completion);
+            progress.UpdatedAt = nowUtc;
+
+            await _workoutDayProgressRepository
+                .SaveChangesAsync();
+        }
+
+        var totalExercises =
+            await _workoutDayProgressRepository
+                .CountExercisesInDayAsync(
+                    workoutDayId,
+                    studentId,
+                    gymId);
+
+        return new WorkoutExerciseCompletionResponse
+        {
+            WorkoutDayId = workoutDayId,
+            WorkoutExerciseId = workoutExerciseId,
+            IsCompleted = true,
+            CompletedExercises = progress.CompletedExercises.Count,
+            TotalExercises = totalExercises
+        };
+    }
+
+    public async Task<WorkoutExerciseCompletionResponse> UncompleteExerciseForUserAsync(
+    Guid gymId,
+    Guid userId,
+    Guid workoutDayId,
+    Guid workoutExerciseId)
+    {
+        var student = await _studentRepository
+            .GetByUserIdAndGymIdAsync(userId, gymId);
+
+        if (student is null)
+            throw new KeyNotFoundException("Aluno não encontrado.");
+
+        return await UncompleteExerciseAsync(
+            gymId,
+            student.Id,
+            workoutDayId,
+            workoutExerciseId);
     }
 
     public async Task<PagedResponse<WorkoutHistoryItemResponse>> GetHistoryAsync(
@@ -525,6 +773,25 @@ public class WorkoutService
             gymId,
             student.Id,
             workoutDayId);
+    }
+
+    public async Task<WorkoutExerciseCompletionResponse> CompleteExerciseForUserAsync(
+    Guid gymId,
+    Guid userId,
+    Guid workoutDayId,
+    Guid workoutExerciseId)
+    {
+        var student = await _studentRepository
+            .GetByUserIdAndGymIdAsync(userId, gymId);
+
+        if (student is null)
+            throw new KeyNotFoundException("Aluno não encontrado.");
+
+        return await CompleteExerciseAsync(
+            gymId,
+            student.Id,
+            workoutDayId,
+            workoutExerciseId);
     }
 
     public async Task<PagedResponse<WorkoutHistoryItemResponse>> GetHistoryForUserAsync(
@@ -820,6 +1087,18 @@ public class WorkoutService
         var latestExecutions = await _workoutExecutionRepository
             .GetLatestByWorkoutDayIdsAsync(workoutDayIds);
 
+        var progress = await _workoutDayProgressRepository
+            .GetByStudentAsync(studentId, gymId);
+
+        var completedExerciseIds =
+            progress is not null &&
+            progress.WorkoutDay.WorkoutId == workout.Id &&
+            progress.WorkoutDay.Workout.IsActive
+                ? progress.CompletedExercises
+                    .Select(x => x.WorkoutExerciseId)
+                    .ToHashSet()
+                : new HashSet<Guid>();
+
         var timeZone =
              _gymTimeZoneProvider.GetTimeZone(gymId);
 
@@ -831,14 +1110,16 @@ public class WorkoutService
             workout,
             latestExecutions,
             today,
-            timeZone);
+            timeZone,
+            completedExerciseIds);
     }
 
     private static WorkoutDetailResponse MapToDetailResponse(
     Workout workout,
     List<WorkoutExecution>? latestExecutions,
     DateOnly today,
-    TimeZoneInfo timeZone)
+    TimeZoneInfo timeZone,
+    HashSet<Guid> completedExerciseIds)
     {
         var executionsByDay = latestExecutions?
             .ToDictionary(
@@ -899,7 +1180,8 @@ public class WorkoutService
                             Repetitions = exercise.Repetitions,
                             RestSeconds = exercise.RestSeconds,
                             Notes = exercise.Notes,
-                            Order = exercise.Order
+                            Order = exercise.Order,
+                            IsCompleted = completedExerciseIds.Contains(exercise.Id)
                         })
                         .ToList()
                 })

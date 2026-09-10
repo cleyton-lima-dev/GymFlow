@@ -40,7 +40,10 @@ public static class DependencyInjection
         services.AddScoped<IPhysicalAssessmentRepository, PhysicalAssessmentRepository>();
         services.AddScoped<
             IWorkoutExecutionRepository,
-            WorkoutExecutionRepository>();
+             WorkoutExecutionRepository>();
+        services.AddScoped<
+            IWorkoutDayProgressRepository,
+             WorkoutDayProgressRepository>();
         services.AddScoped<ITokenService, JwtTokenService>();
         services.AddSingleton<
             IGymTimeZoneProvider,

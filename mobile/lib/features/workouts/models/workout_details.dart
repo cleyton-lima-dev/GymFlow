@@ -114,6 +114,7 @@ class WorkoutExerciseDetails {
     required this.restSeconds,
     required this.notes,
     required this.order,
+    required this.isCompleted,
   });
 
   final String id;
@@ -129,6 +130,7 @@ class WorkoutExerciseDetails {
   final String? notes;
 
   final int order;
+  final bool isCompleted;
 
   factory WorkoutExerciseDetails.fromJson(Map<String, dynamic> json) {
     return WorkoutExerciseDetails(
@@ -143,6 +145,7 @@ class WorkoutExerciseDetails {
           : (json['restSeconds'] as num).toInt(),
       notes: json['notes'] as String?,
       order: (json['order'] as num).toInt(),
+      isCompleted: json['isCompleted'] as bool,
     );
   }
 }

@@ -6,6 +6,7 @@ import 'package:gymflow/features/workouts/models/create_workout_request.dart';
 import 'package:gymflow/features/workouts/models/update_workout_request.dart';
 import 'package:gymflow/features/workouts/models/paged_workout_history_response.dart';
 import 'package:gymflow/features/workouts/models/workout_execution_response.dart';
+import 'package:gymflow/features/workouts/models/workout_exercise_completion_response.dart';
 
 class WorkoutsService {
   const WorkoutsService(this._apiClient);
@@ -33,6 +34,45 @@ class WorkoutsService {
     }
 
     return WorkoutExecutionResponse.fromJson(
+      Map<String, dynamic>.from(response),
+    );
+  }
+
+  Future<WorkoutExerciseCompletionResponse> completeMyExercise({
+    required String workoutDayId,
+    required String workoutExerciseId,
+  }) async {
+    final response = await _apiClient.post(
+      'api/workouts/me/days/$workoutDayId/exercises/$workoutExerciseId/complete',
+      body: const {},
+    );
+
+    if (response is! Map) {
+      throw const FormatException(
+        'Invalid workout exercise completion response.',
+      );
+    }
+
+    return WorkoutExerciseCompletionResponse.fromJson(
+      Map<String, dynamic>.from(response),
+    );
+  }
+
+  Future<WorkoutExerciseCompletionResponse> uncompleteMyExercise({
+    required String workoutDayId,
+    required String workoutExerciseId,
+  }) async {
+    final response = await _apiClient.delete(
+      'api/workouts/me/days/$workoutDayId/exercises/$workoutExerciseId/complete',
+    );
+
+    if (response is! Map) {
+      throw const FormatException(
+        'Invalid workout exercise completion response.',
+      );
+    }
+
+    return WorkoutExerciseCompletionResponse.fromJson(
       Map<String, dynamic>.from(response),
     );
   }
