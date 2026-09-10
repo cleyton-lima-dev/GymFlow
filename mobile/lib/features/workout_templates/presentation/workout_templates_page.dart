@@ -5,7 +5,7 @@ import 'package:gymflow/features/workout_templates/data/workout_templates_servic
 import 'package:gymflow/features/workout_templates/models/workout_template_summary.dart';
 import 'package:gymflow/features/workout_templates/presentation/workout_templates_view_model.dart';
 import 'package:provider/provider.dart';
-import 'package:gymflow/features/home/presentation/widgets/professor_admin_page_header.dart';
+import 'package:gymflow/features/home/presentation/widgets/professor_admin_brand_header.dart';
 
 class WorkoutTemplatesPage extends StatelessWidget {
   const WorkoutTemplatesPage({
@@ -95,7 +95,7 @@ class _WorkoutTemplatesViewState
                     crossAxisAlignment:
                     CrossAxisAlignment.stretch,
                     children: [
-                      const ProfessorAdminPageHeader(),
+                      const ProfessorAdminBrandHeader(),
 
                       const SizedBox(height: 18),
 

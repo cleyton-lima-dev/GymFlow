@@ -8,7 +8,7 @@ import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import 'package:gymflow/app/session/app_role.dart';
 import 'package:gymflow/app/session/session_controller.dart';
-import 'package:gymflow/features/home/presentation/widgets/professor_admin_page_header.dart';
+import 'package:gymflow/features/home/presentation/widgets/professor_admin_brand_header.dart';
 
 class StudentsPage extends StatelessWidget {
   const StudentsPage({super.key});
@@ -62,7 +62,7 @@ class _StudentsViewState extends State<_StudentsView> {
               const SliverPadding(
                 padding: EdgeInsets.fromLTRB(24, 22, 24, 0),
                 sliver: SliverToBoxAdapter(
-                  child: ProfessorAdminPageHeader(
+                  child: ProfessorAdminBrandHeader(
                     height: 100,
                   ),
                 ),
