@@ -23,3 +23,5 @@ Thumbs.db
 artifacts/release/*.apk
 artifacts/release/*.aab
 artifacts/release/*.sql
+# IntelliJ / Android Studio
+.idea/
