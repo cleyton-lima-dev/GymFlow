@@ -13,11 +13,7 @@ class CreateWorkoutTemplateRequest {
     return {
       'name': name,
       'description': description,
-      'days': days
-          .map(
-            (day) => day.toJson(),
-      )
-          .toList(growable: false),
+      'days': days.map((day) => day.toJson()).toList(growable: false),
     };
   }
 }
@@ -25,22 +21,23 @@ class CreateWorkoutTemplateRequest {
 class CreateWorkoutTemplateDayRequest {
   const CreateWorkoutTemplateDayRequest({
     required this.name,
+    required this.notes,
     required this.order,
     required this.exercises,
   });
 
   final String name;
+  final String? notes;
   final int order;
   final List<CreateWorkoutTemplateExerciseRequest> exercises;
 
   Map<String, dynamic> toJson() {
     return {
       'name': name,
+      'notes': notes,
       'order': order,
       'exercises': exercises
-          .map(
-            (exercise) => exercise.toJson(),
-      )
+          .map((exercise) => exercise.toJson())
           .toList(growable: false),
     };
   }

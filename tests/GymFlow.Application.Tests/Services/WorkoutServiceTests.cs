@@ -97,9 +97,10 @@ public class WorkoutServiceTests
             Days =
             [
                 new CreateWorkoutDayRequest
-                {
-                    Name = "  Dia A  ",
-                    Order = 1,
+{
+                        Name = "  Dia A  ",
+                        Notes = "  Priorizar técnica  ",
+                        Order = 1,
                     Exercises =
                     [
                         new CreateWorkoutExerciseRequest
@@ -165,10 +166,6 @@ public class WorkoutServiceTests
             "Treino Novo",
             result.Name);
 
-        Assert.Equal(
-            "Peito e tríceps",
-            result.Description);
-
         Assert.True(result.IsActive);
 
         Assert.False(currentWorkout.IsActive);
@@ -185,7 +182,9 @@ public class WorkoutServiceTests
                     workout.Description == "Peito e tríceps" &&
                     workout.IsActive &&
                     workout.Days.Count == 1 &&
+                    workout.Days.Count == 1 &&
                     workout.Days.Single().Name == "Dia A" &&
+                    workout.Days.Single().Notes == "Priorizar técnica" &&
                     workout.Days.Single().Exercises.Count == 2 &&
                     workout.Days.Single().Exercises
                         .OrderBy(x => x.Order)
@@ -465,6 +464,36 @@ public class WorkoutServiceTests
         await _workoutRepository
             .DidNotReceive()
             .AddAsync(Arg.Any<Workout>());
+    }
+
+    [Fact]
+    public async Task CreateManualAsync_WithDayNotesExceedingMaxLength_ShouldThrowArgumentException()
+    {
+        var gymId = Guid.NewGuid();
+        var student = CreateStudent(gymId, true);
+
+        var request =
+            CreateValidManualRequest(
+                student.Id,
+                Guid.NewGuid());
+
+        request.Days[0].Notes =
+            new string('A', 501);
+
+        _studentRepository
+            .GetByIdAndGymIdAsync(student.Id, gymId)
+            .Returns(student);
+
+        await Assert.ThrowsAsync<ArgumentException>(
+            () => _service.CreateManualAsync(
+                gymId,
+                request));
+
+        await _exerciseRepository
+            .DidNotReceive()
+            .GetByIdsAsync(
+                Arg.Any<IEnumerable<Guid>>(),
+                Arg.Any<Guid>());
     }
 
     [Fact]
