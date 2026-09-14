@@ -136,6 +136,7 @@ public class WorkoutService
                 Id = Guid.NewGuid(),
                 WorkoutId = workout.Id,
                 Name = dayRequest.Name.Trim(),
+                Notes = dayRequest.Notes?.Trim(),
                 Order = dayRequest.Order
             };
 
@@ -301,6 +302,7 @@ public class WorkoutService
                 Id = Guid.NewGuid(),
                 WorkoutId = workout.Id,
                 Name = dayRequest.Name.Trim(),
+                Notes = dayRequest.Notes?.Trim(),
                 Order = dayRequest.Order
             };
 
@@ -922,6 +924,7 @@ public class WorkoutService
                     Id = Guid.NewGuid(),
                     WorkoutId = newWorkout.Id,
                     Name = dayRequest.Name.Trim(),
+                    Notes = dayRequest.Notes?.Trim(),
                     Order = dayRequest.Order
                 };
 
@@ -1022,6 +1025,7 @@ public class WorkoutService
                 }
 
                 day.Name = dayRequest.Name.Trim();
+                day.Notes = dayRequest.Notes?.Trim();
                 day.Order = dayRequest.Order;
             }
             else
@@ -1031,6 +1035,7 @@ public class WorkoutService
                     Id = Guid.NewGuid(),
                     WorkoutId = workout.Id,
                     Name = dayRequest.Name.Trim(),
+                    Notes = dayRequest.Notes?.Trim(),
                     Order = dayRequest.Order
                 };
 
@@ -1144,6 +1149,7 @@ public class WorkoutService
                 {
                     Id = day.Id,
                     Name = day.Name,
+                    Notes = day.Notes,
                     Order = day.Order,
 
                     CompletedToday =
@@ -1337,6 +1343,11 @@ public class WorkoutService
 
         foreach (var day in days)
         {
+            PersistenceTextPolicy.ValidateMaxLength(
+                day.Notes,
+                PersistenceTextPolicy.NotesMaxLength,
+                "As observações do dia");
+
             if (day.Exercises.Count == 0)
             {
                 throw new ArgumentException(
@@ -1452,6 +1463,11 @@ public class WorkoutService
                 day.Name,
                 PersistenceTextPolicy.DayNameMaxLength,
                 "O nome do dia");
+
+            PersistenceTextPolicy.ValidateMaxLength(
+                day.Notes,
+                PersistenceTextPolicy.NotesMaxLength,
+                "As observações do dia");
 
             foreach (var exercise in day.Exercises)
             {

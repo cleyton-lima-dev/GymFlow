@@ -16,6 +16,9 @@ public class WorkoutTemplateDayConfiguration : IEntityTypeConfiguration<WorkoutT
             .IsRequired()
             .HasMaxLength(100);
 
+        builder.Property(x => x.Notes)
+            .HasMaxLength(500);
+
         builder.Property(x => x.Order)
             .IsRequired();
 

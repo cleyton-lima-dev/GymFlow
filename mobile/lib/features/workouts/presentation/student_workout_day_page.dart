@@ -51,6 +51,7 @@ class _StudentWorkoutDayView extends StatelessWidget {
     final viewModel = context.watch<StudentWorkoutDayViewModel>();
 
     final day = arguments.day;
+    final dayNotes = day.notes?.trim();
 
     final exercises = [...day.exercises]
       ..sort((a, b) => a.order.compareTo(b.order));
@@ -115,6 +116,52 @@ class _StudentWorkoutDayView extends StatelessWidget {
                       ),
                     ),
 
+                    if (dayNotes != null && dayNotes.isNotEmpty) ...[
+                      const SizedBox(height: 16),
+
+                      Container(
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: colorScheme.primary.withAlpha(12),
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(
+                            color: colorScheme.primary.withAlpha(35),
+                          ),
+                        ),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Icon(
+                              Icons.notes_rounded,
+                              size: 20,
+                              color: colorScheme.primary,
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text.rich(
+                                TextSpan(
+                                  children: [
+                                    const TextSpan(
+                                      text: 'Observação da divisão: ',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                    TextSpan(text: dayNotes),
+                                  ],
+                                ),
+                                style: Theme.of(context).textTheme.bodyMedium
+                                    ?.copyWith(
+                                      color: colorScheme.onSurfaceVariant,
+                                      height: 1.4,
+                                    ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+
                     if (viewModel.completedToday) ...[
                       const SizedBox(height: 24),
                       _CompletedDayBanner(
@@ -142,7 +189,6 @@ class _StudentWorkoutDayView extends StatelessWidget {
                         ),
                         const SizedBox(width: 8),
                         Expanded(
-
                           child: Text(
                             'Exercícios do dia',
                             style: Theme.of(context).textTheme.titleLarge
@@ -194,12 +240,10 @@ class _StudentWorkoutDayView extends StatelessWidget {
                           onToggle: viewModel.completedToday
                               ? null
                               : () {
-                            context
-                                .read<StudentWorkoutDayViewModel>()
-                                .toggleExercise(
-                              exercises[index].id,
-                            );
-                          },
+                                  context
+                                      .read<StudentWorkoutDayViewModel>()
+                                      .toggleExercise(exercises[index].id);
+                                },
                         ),
                         if (index < exercises.length - 1)
                           const SizedBox(height: 10),
@@ -240,13 +284,13 @@ class _StudentWorkoutDayView extends StatelessWidget {
         onHomeTap: viewModel.isCompleting
             ? null
             : () {
-          if (context.canPop()) {
-            context.pop();
-            return;
-          }
+                if (context.canPop()) {
+                  context.pop();
+                  return;
+                }
 
-          context.go('/student');
-        },
+                context.go('/student');
+              },
         onHistoryTap: viewModel.isCompleting
             ? null
             : () {
@@ -415,7 +459,8 @@ class _ExerciseRow extends StatelessWidget {
                     ],
                   ],
                 ),
-              ),const SizedBox(width: 8),
+              ),
+              const SizedBox(width: 8),
 
               SizedBox(
                 width: 40,
@@ -427,17 +472,15 @@ class _ExerciseRow extends StatelessWidget {
                   onPressed: isUpdating ? null : onToggle,
                   icon: isUpdating
                       ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                    ),
-                  )
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
                       : Icon(
-                    isCompleted
-                        ? Icons.check_circle_rounded
-                        : Icons.radio_button_unchecked_rounded,
-                  ),
+                          isCompleted
+                              ? Icons.check_circle_rounded
+                              : Icons.radio_button_unchecked_rounded,
+                        ),
                   color: isCompleted
                       ? colorScheme.primary
                       : colorScheme.onSurfaceVariant,
@@ -720,12 +763,12 @@ class _CompleteDayCard extends StatelessWidget {
                         color: colorScheme.onSurfaceVariant,
                         height: 1.4,
                       ),
-                      ),
+                    ),
                     const SizedBox(height: 8),
 
                     Text(
                       '$completedExercises de $totalExercises '
-                          '${totalExercises == 1 ? 'exercício concluído' : 'exercícios concluídos'}',
+                      '${totalExercises == 1 ? 'exercício concluído' : 'exercícios concluídos'}',
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
                         color: canComplete
                             ? colorScheme.primary

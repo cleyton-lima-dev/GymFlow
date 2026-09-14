@@ -13,9 +13,7 @@ class UpdateWorkoutRequest {
     return {
       'name': name,
       'description': description,
-      'days': days
-          .map((day) => day.toJson())
-          .toList(growable: false),
+      'days': days.map((day) => day.toJson()).toList(growable: false),
     };
   }
 }
@@ -24,12 +22,14 @@ class UpdateWorkoutDayRequest {
   const UpdateWorkoutDayRequest({
     required this.id,
     required this.name,
+    required this.notes,
     required this.order,
     required this.exercises,
   });
 
   final String? id;
   final String name;
+  final String? notes;
   final int order;
   final List<UpdateWorkoutExerciseRequest> exercises;
 
@@ -37,6 +37,7 @@ class UpdateWorkoutDayRequest {
     return {
       'id': id,
       'name': name,
+      'notes': notes,
       'order': order,
       'exercises': exercises
           .map((exercise) => exercise.toJson())
