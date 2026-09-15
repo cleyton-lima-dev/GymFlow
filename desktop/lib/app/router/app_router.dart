@@ -12,6 +12,7 @@ import 'package:avelri_gestao/features/dashboard/presentation/module_placeholder
 import 'package:avelri_gestao/features/students/presentation/students_page.dart';
 import 'package:avelri_gestao/features/students/presentation/create_student_page.dart';
 import 'package:avelri_gestao/features/students/presentation/edit_student_page.dart';
+import 'package:avelri_gestao/app/session/app_role.dart';
 
 class AppRouter {
   AppRouter(this._sessionController, this._brandingController);
@@ -40,6 +41,11 @@ class AppRouter {
       final user = _sessionController.user;
 
       if (user == null) {
+        return '/login';
+      }
+
+      if (user.role != AppRole.admin) {
+        _sessionController.invalidateSession();
         return '/login';
       }
 
