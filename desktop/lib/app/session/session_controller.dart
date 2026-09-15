@@ -7,12 +7,12 @@ import 'package:avelri_gestao/core/network/api_exception.dart';
 import 'package:avelri_gestao/core/storage/token_storage.dart';
 import 'package:avelri_gestao/features/auth/data/auth_service.dart';
 
+class ManagementAccessDeniedException implements Exception {
+  const ManagementAccessDeniedException();
+}
+
 class SessionController extends ChangeNotifier {
-  SessionController(
-      this._tokenStorage,
-      this._authService,
-      this._apiClient,
-      );
+  SessionController(this._tokenStorage, this._authService, this._apiClient);
 
   final TokenStorage _tokenStorage;
   final AuthService _authService;
@@ -38,12 +38,19 @@ class SessionController extends ChangeNotifier {
     try {
       final currentUser = await _authService.getCurrentUser();
 
+      final role = AppRole.fromApiValue(currentUser.role);
+
+      if (role != AppRole.admin) {
+        await invalidateSession();
+        return;
+      }
+
       _user = SessionUser(
         userId: currentUser.userId,
         gymId: currentUser.gymId,
         name: currentUser.name,
         email: currentUser.email,
-        role: AppRole.fromApiValue(currentUser.role),
+        role: role,
       );
 
       _status = SessionStatus.authenticated;
@@ -58,14 +65,14 @@ class SessionController extends ChangeNotifier {
     }
   }
 
-  Future<void> login({
-    required String email,
-    required String password,
-  }) async {
-    final response = await _authService.login(
-      email: email,
-      password: password,
-    );
+  Future<void> login({required String email, required String password}) async {
+    final response = await _authService.login(email: email, password: password);
+
+    final role = AppRole.fromApiValue(response.role);
+
+    if (role != AppRole.admin) {
+      throw const ManagementAccessDeniedException();
+    }
 
     await startSession(
       user: SessionUser(
@@ -73,7 +80,7 @@ class SessionController extends ChangeNotifier {
         gymId: response.gymId,
         name: response.name,
         email: response.email,
-        role: AppRole.fromApiValue(response.role),
+        role: role,
       ),
       token: response.token,
     );
