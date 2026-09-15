@@ -5,46 +5,38 @@ class WorkoutDraftDay {
   WorkoutDraftDay({
     this.id,
     required this.name,
+    this.notes,
     List<WorkoutDraftExercise>? exercises,
   }) : exercises = exercises ?? [];
 
   final String? id;
   String name;
+  String? notes;
   final List<WorkoutDraftExercise> exercises;
 
-  CreateWorkoutDayRequest toRequest({
-    required int order,
-  }) {
+  CreateWorkoutDayRequest toRequest({required int order}) {
     return CreateWorkoutDayRequest(
       name: name.trim(),
+      notes: _nullableTrimmed(notes),
       order: order,
       exercises: exercises
           .asMap()
           .entries
-          .map(
-            (entry) => entry.value.toRequest(
-          order: entry.key + 1,
-        ),
-      )
+          .map((entry) => entry.value.toRequest(order: entry.key + 1))
           .toList(growable: false),
     );
   }
 
-  UpdateWorkoutDayRequest toUpdateRequest({
-    required int order,
-  }) {
+  UpdateWorkoutDayRequest toUpdateRequest({required int order}) {
     return UpdateWorkoutDayRequest(
       id: id,
       name: name.trim(),
+      notes: _nullableTrimmed(notes),
       order: order,
       exercises: exercises
           .asMap()
           .entries
-          .map(
-            (entry) => entry.value.toUpdateRequest(
-          order: entry.key + 1,
-        ),
-      )
+          .map((entry) => entry.value.toUpdateRequest(order: entry.key + 1))
           .toList(growable: false),
     );
   }
@@ -76,9 +68,7 @@ class WorkoutDraftExercise {
   int restSeconds;
   String? notes;
 
-  CreateWorkoutExerciseRequest toRequest({
-    required int order,
-  }) {
+  CreateWorkoutExerciseRequest toRequest({required int order}) {
     return CreateWorkoutExerciseRequest(
       exerciseId: exerciseId,
       sets: sets,
@@ -89,9 +79,7 @@ class WorkoutDraftExercise {
     );
   }
 
-  UpdateWorkoutExerciseRequest toUpdateRequest({
-    required int order,
-  }) {
+  UpdateWorkoutExerciseRequest toUpdateRequest({required int order}) {
     return UpdateWorkoutExerciseRequest(
       id: id,
       exerciseId: exerciseId,

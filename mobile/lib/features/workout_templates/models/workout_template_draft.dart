@@ -3,26 +3,23 @@ import 'package:gymflow/features/workout_templates/models/create_workout_templat
 class WorkoutTemplateDraftDay {
   WorkoutTemplateDraftDay({
     required this.name,
+    this.notes,
     List<WorkoutTemplateDraftExercise>? exercises,
   }) : exercises = exercises ?? [];
 
   String name;
+  String? notes;
   final List<WorkoutTemplateDraftExercise> exercises;
 
-  CreateWorkoutTemplateDayRequest toRequest({
-    required int order,
-  }) {
+  CreateWorkoutTemplateDayRequest toRequest({required int order}) {
     return CreateWorkoutTemplateDayRequest(
       name: name.trim(),
+      notes: _nullableTrimmed(notes),
       order: order,
       exercises: exercises
           .asMap()
           .entries
-          .map(
-            (entry) => entry.value.toRequest(
-          order: entry.key + 1,
-        ),
-      )
+          .map((entry) => entry.value.toRequest(order: entry.key + 1))
           .toList(growable: false),
     );
   }
@@ -51,9 +48,7 @@ class WorkoutTemplateDraftExercise {
   int restSeconds;
   String? notes;
 
-  CreateWorkoutTemplateExerciseRequest toRequest({
-    required int order,
-  }) {
+  CreateWorkoutTemplateExerciseRequest toRequest({required int order}) {
     return CreateWorkoutTemplateExerciseRequest(
       exerciseId: exerciseId,
       sets: sets,

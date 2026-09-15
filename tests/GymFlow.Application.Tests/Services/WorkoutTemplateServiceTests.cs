@@ -49,6 +49,7 @@ public class WorkoutTemplateServiceTests
                 new CreateWorkoutTemplateDayRequest
                 {
                     Name = "  Dia A  ",
+                    Notes = "  Priorizar técnica  ",
                     Order = 1,
                     Exercises =
                     [
@@ -110,6 +111,7 @@ public class WorkoutTemplateServiceTests
                     template.IsActive &&
                     template.Days.Count == 1 &&
                     template.Days.Single().Name == "Dia A" &&
+                    template.Days.Single().Notes == "Priorizar técnica" &&
                     template.Days.Single().Exercises.Count == 2));
 
         await _exerciseRepository

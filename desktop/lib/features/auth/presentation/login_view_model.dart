@@ -18,10 +18,7 @@ class LoginViewModel extends ChangeNotifier {
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
 
-  Future<void> login({
-    required String email,
-    required String password,
-  }) async {
+  Future<void> login({required String email, required String password}) async {
     if (_isLoading) {
       return;
     }
@@ -31,21 +28,20 @@ class LoginViewModel extends ChangeNotifier {
     notifyListeners();
 
     try {
-      await _sessionController.login(
-        email: email.trim(),
-        password: password,
-      );
+      await _sessionController.login(email: email.trim(), password: password);
+    } on ManagementAccessDeniedException {
+      _errorMessage =
+          'Acesso ao Avelri Gestão restrito aos administradores da academia.';
     } on ApiException catch (exception) {
       _errorMessage = _messageFromApiException(exception);
     } on TimeoutException {
-      _errorMessage =
-      'A conexão demorou mais que o esperado. Tente novamente.';
+      _errorMessage = 'A conexão demorou mais que o esperado. Tente novamente.';
     } on http.ClientException {
       _errorMessage =
-      'Não foi possível conectar ao servidor. Verifique sua conexão.';
+          'Não foi possível conectar ao servidor. Verifique sua conexão.';
     } on FormatException {
       _errorMessage =
-      'O servidor retornou uma resposta inválida. Tente novamente.';
+          'O servidor retornou uma resposta inválida. Tente novamente.';
     } catch (_) {
       _errorMessage = 'Não foi possível entrar. Tente novamente.';
     } finally {

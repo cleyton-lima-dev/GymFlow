@@ -1,6 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:go_router/go_router.dart';
-
+import 'package:avelri_gestao/features/students/presentation/student_details_page.dart';
 import 'package:avelri_gestao/app/router/management_shell_page.dart';
 import 'package:avelri_gestao/app/router/session_loading_page.dart';
 import 'package:avelri_gestao/app/session/session_controller.dart';
@@ -9,12 +9,13 @@ import 'package:avelri_gestao/app/theme/branding_controller.dart';
 import 'package:avelri_gestao/features/auth/presentation/login_page.dart';
 import 'package:avelri_gestao/features/dashboard/presentation/dashboard_page.dart';
 import 'package:avelri_gestao/features/dashboard/presentation/module_placeholder_page.dart';
+import 'package:avelri_gestao/features/students/presentation/students_page.dart';
+import 'package:avelri_gestao/features/students/presentation/create_student_page.dart';
+import 'package:avelri_gestao/features/students/presentation/edit_student_page.dart';
+import 'package:avelri_gestao/app/session/app_role.dart';
 
 class AppRouter {
-  AppRouter(
-      this._sessionController,
-      this._brandingController,
-      );
+  AppRouter(this._sessionController, this._brandingController);
 
   final SessionController _sessionController;
   final BrandingController _brandingController;
@@ -43,6 +44,11 @@ class AppRouter {
         return '/login';
       }
 
+      if (user.role != AppRole.admin) {
+        _sessionController.invalidateSession();
+        return '/login';
+      }
+
       if (!_brandingController.isLoadedForGym(user.gymId)) {
         return location == '/bootstrap' ? null : '/bootstrap';
       }
@@ -58,16 +64,10 @@ class AppRouter {
         path: '/bootstrap',
         builder: (context, state) => const SessionLoadingPage(),
       ),
-      GoRoute(
-        path: '/login',
-        builder: (context, state) => const LoginPage(),
-      ),
+      GoRoute(path: '/login', builder: (context, state) => const LoginPage()),
       ShellRoute(
         builder: (context, state, child) {
-          return ManagementShellPage(
-            location: state.uri.path,
-            child: child,
-          );
+          return ManagementShellPage(location: state.uri.path, child: child);
         },
         routes: [
           GoRoute(
@@ -76,33 +76,47 @@ class AppRouter {
           ),
           GoRoute(
             path: '/students',
+            builder: (context, state) => const StudentsPage(),
+          ),
+          GoRoute(
+            path: '/students/new',
+            builder: (context, state) => const CreateStudentPage(),
+          ),
+          GoRoute(
+            path: '/students/:studentId',
+            builder: (context, state) => StudentDetailsPage(
+              studentId: state.pathParameters['studentId']!,
+            ),
+          ),
+          GoRoute(
+            path: '/students/:studentId/edit',
             builder: (context, state) =>
-            const ModulePlaceholderPage(title: 'Alunos'),
+                EditStudentPage(studentId: state.pathParameters['studentId']!),
           ),
           GoRoute(
             path: '/plans',
             builder: (context, state) =>
-            const ModulePlaceholderPage(title: 'Planos'),
+                const ModulePlaceholderPage(title: 'Planos'),
           ),
           GoRoute(
             path: '/finance',
             builder: (context, state) =>
-            const ModulePlaceholderPage(title: 'Financeiro'),
+                const ModulePlaceholderPage(title: 'Financeiro'),
           ),
           GoRoute(
             path: '/check-in',
             builder: (context, state) =>
-            const ModulePlaceholderPage(title: 'Check-in'),
+                const ModulePlaceholderPage(title: 'Check-in'),
           ),
           GoRoute(
             path: '/reports',
             builder: (context, state) =>
-            const ModulePlaceholderPage(title: 'Relatórios'),
+                const ModulePlaceholderPage(title: 'Relatórios'),
           ),
           GoRoute(
             path: '/settings',
             builder: (context, state) =>
-            const ModulePlaceholderPage(title: 'Configurações'),
+                const ModulePlaceholderPage(title: 'Configurações'),
           ),
         ],
       ),

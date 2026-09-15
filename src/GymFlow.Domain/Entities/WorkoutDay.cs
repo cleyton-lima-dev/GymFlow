@@ -8,6 +8,8 @@ public class WorkoutDay
 
     public string Name { get; set; } = string.Empty;
 
+    public string? Notes { get; set; }
+
     public int Order { get; set; }
 
     public Workout Workout { get; set; } = null!;

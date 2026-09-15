@@ -25,6 +25,7 @@ class ConfigureWorkoutTemplateDayPage extends StatefulWidget {
 class _ConfigureWorkoutTemplateDayPageState
     extends State<ConfigureWorkoutTemplateDayPage> {
   late final TextEditingController _nameController;
+  late final TextEditingController _notesController;
   late final List<WorkoutTemplateDraftExercise> _exercises;
 
   String? _errorMessage;
@@ -36,16 +37,17 @@ class _ConfigureWorkoutTemplateDayPageState
     _nameController = TextEditingController(
       text: widget.initialDay?.name ?? '',
     );
+    _notesController = TextEditingController(
+      text: widget.initialDay?.notes ?? '',
+    );
 
-    _exercises = widget.initialDay?.exercises
-        .map(_copyExercise)
-        .toList() ??
-        [];
+    _exercises = widget.initialDay?.exercises.map(_copyExercise).toList() ?? [];
   }
 
   @override
   void dispose() {
     _nameController.dispose();
+    _notesController.dispose();
     super.dispose();
   }
 
@@ -57,31 +59,20 @@ class _ConfigureWorkoutTemplateDayPageState
     return Scaffold(
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(
-            20,
-            12,
-            20,
-            32,
-          ),
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
           child: Center(
             child: ConstrainedBox(
-              constraints: const BoxConstraints(
-                maxWidth: 680,
-              ),
+              constraints: const BoxConstraints(maxWidth: 680),
               child: Column(
-                crossAxisAlignment:
-                CrossAxisAlignment.stretch,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   const ProfessorAdminPageHeader(),
 
                   const SizedBox(height: 24),
 
                   Text(
-                    widget.initialDay == null
-                        ? 'Configurar dia'
-                        : 'Editar dia',
-                    style:
-                    theme.textTheme.headlineSmall?.copyWith(
+                    widget.initialDay == null ? 'Configurar dia' : 'Editar dia',
+                    style: theme.textTheme.headlineSmall?.copyWith(
                       fontWeight: FontWeight.w800,
                     ),
                   ),
@@ -99,8 +90,7 @@ class _ConfigureWorkoutTemplateDayPageState
 
                   TextField(
                     controller: _nameController,
-                    textCapitalization:
-                    TextCapitalization.sentences,
+                    textCapitalization: TextCapitalization.sentences,
                     onChanged: (_) {
                       if (_errorMessage != null) {
                         setState(() {
@@ -113,6 +103,20 @@ class _ConfigureWorkoutTemplateDayPageState
                       hintText: 'Ex.: Treino A - Peito',
                     ),
                   ),
+                  const SizedBox(height: 16),
+
+                  TextField(
+                    controller: _notesController,
+                    textCapitalization: TextCapitalization.sentences,
+                    minLines: 3,
+                    maxLines: 4,
+                    maxLength: 500,
+                    decoration: const InputDecoration(
+                      labelText: 'Observações da divisão',
+                      hintText:
+                          'Ex.: Priorizar técnica e controlar a execução.',
+                    ),
+                  ),
 
                   const SizedBox(height: 30),
 
@@ -121,18 +125,15 @@ class _ConfigureWorkoutTemplateDayPageState
                       Expanded(
                         child: Text(
                           'Exercícios',
-                          style:
-                          theme.textTheme.titleLarge?.copyWith(
+                          style: theme.textTheme.titleLarge?.copyWith(
                             fontWeight: FontWeight.w800,
                           ),
                         ),
                       ),
                       Text(
                         _exerciseLabel(_exercises.length),
-                        style:
-                        theme.textTheme.bodyMedium?.copyWith(
-                          color:
-                          colorScheme.onSurfaceVariant,
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
@@ -164,12 +165,8 @@ class _ConfigureWorkoutTemplateDayPageState
 
                   OutlinedButton.icon(
                     onPressed: _addExercise,
-                    icon: const Icon(
-                      Icons.add_rounded,
-                    ),
-                    label: const Text(
-                      'Adicionar exercício',
-                    ),
+                    icon: const Icon(Icons.add_rounded),
+                    label: const Text('Adicionar exercício'),
                   ),
 
                   if (_errorMessage != null) ...[
@@ -178,18 +175,14 @@ class _ConfigureWorkoutTemplateDayPageState
                     Container(
                       padding: const EdgeInsets.all(14),
                       decoration: BoxDecoration(
-                        color:
-                        colorScheme.error.withAlpha(15),
-                        borderRadius:
-                        BorderRadius.circular(12),
+                        color: colorScheme.error.withAlpha(15),
+                        borderRadius: BorderRadius.circular(12),
                         border: Border.all(
-                          color:
-                          colorScheme.error.withAlpha(70),
+                          color: colorScheme.error.withAlpha(70),
                         ),
                       ),
                       child: Row(
-                        crossAxisAlignment:
-                        CrossAxisAlignment.start,
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Icon(
                             Icons.error_outline_rounded,
@@ -200,9 +193,7 @@ class _ConfigureWorkoutTemplateDayPageState
                           Expanded(
                             child: Text(
                               _errorMessage!,
-                              style: TextStyle(
-                                color: colorScheme.error,
-                              ),
+                              style: TextStyle(color: colorScheme.error),
                             ),
                           ),
                         ],
@@ -214,12 +205,8 @@ class _ConfigureWorkoutTemplateDayPageState
 
                   FilledButton.icon(
                     onPressed: _save,
-                    icon: const Icon(
-                      Icons.check_rounded,
-                    ),
-                    label: const Text(
-                      'Salvar dia',
-                    ),
+                    icon: const Icon(Icons.check_rounded),
+                    label: const Text('Salvar dia'),
                   ),
                 ],
               ),
@@ -231,11 +218,9 @@ class _ConfigureWorkoutTemplateDayPageState
   }
 
   Future<void> _addExercise() async {
-    final selectedExercise =
-    await Navigator.of(context).push<ExerciseSummary>(
+    final selectedExercise = await Navigator.of(context).push<ExerciseSummary>(
       MaterialPageRoute(
-        builder: (_) =>
-        const SelectWorkoutTemplateExercisePage(),
+        builder: (_) => const SelectWorkoutTemplateExercisePage(),
       ),
     );
 
@@ -243,18 +228,16 @@ class _ConfigureWorkoutTemplateDayPageState
       return;
     }
 
-    final configuredExercise =
-    await Navigator.of(context)
+    final configuredExercise = await Navigator.of(context)
         .push<WorkoutTemplateDraftExercise>(
-      MaterialPageRoute(
-        builder: (_) =>
-            ConfigureWorkoutTemplateExercisePage(
+          MaterialPageRoute(
+            builder: (_) => ConfigureWorkoutTemplateExercisePage(
               exerciseId: selectedExercise.id,
               exerciseName: selectedExercise.name,
               muscleGroup: selectedExercise.muscleGroup,
             ),
-      ),
-    );
+          ),
+        );
 
     if (!mounted || configuredExercise == null) {
       return;
@@ -268,21 +251,17 @@ class _ConfigureWorkoutTemplateDayPageState
   Future<void> _editExercise(int index) async {
     final currentExercise = _exercises[index];
 
-    final editedExercise =
-    await Navigator.of(context)
+    final editedExercise = await Navigator.of(context)
         .push<WorkoutTemplateDraftExercise>(
-      MaterialPageRoute(
-        builder: (_) =>
-            ConfigureWorkoutTemplateExercisePage(
+          MaterialPageRoute(
+            builder: (_) => ConfigureWorkoutTemplateExercisePage(
               exerciseId: currentExercise.exerciseId,
-              exerciseName:
-              currentExercise.exerciseName,
-              muscleGroup:
-              currentExercise.muscleGroup,
+              exerciseName: currentExercise.exerciseName,
+              muscleGroup: currentExercise.muscleGroup,
               initialExercise: currentExercise,
             ),
-      ),
-    );
+          ),
+        );
 
     if (!mounted || editedExercise == null) {
       return;
@@ -299,27 +278,21 @@ class _ConfigureWorkoutTemplateDayPageState
     });
   }
 
-  void _reorderExercise(
-      int oldIndex,
-      int newIndex,
-      ) {
+  void _reorderExercise(int oldIndex, int newIndex) {
     setState(() {
       final exercise = _exercises.removeAt(oldIndex);
 
-      _exercises.insert(
-        newIndex,
-        exercise,
-      );
+      _exercises.insert(newIndex, exercise);
     });
   }
 
   void _save() {
     final name = _nameController.text.trim();
+    final notes = _notesController.text.trim();
 
     if (name.isEmpty) {
       setState(() {
-        _errorMessage =
-        'Informe o nome do dia de treino.';
+        _errorMessage = 'Informe o nome do dia de treino.';
       });
 
       return;
@@ -328,14 +301,15 @@ class _ConfigureWorkoutTemplateDayPageState
     Navigator.of(context).pop(
       WorkoutTemplateDraftDay(
         name: name,
+        notes: notes.isEmpty ? null : notes,
         exercises: _exercises,
       ),
     );
   }
 
   WorkoutTemplateDraftExercise _copyExercise(
-      WorkoutTemplateDraftExercise exercise,
-      ) {
+    WorkoutTemplateDraftExercise exercise,
+  ) {
     return WorkoutTemplateDraftExercise(
       exerciseId: exercise.exerciseId,
       exerciseName: exercise.exerciseName,
@@ -359,24 +333,17 @@ class _ExercisesCard extends StatelessWidget {
   final List<WorkoutTemplateDraftExercise> exercises;
   final ValueChanged<int> onEdit;
   final ValueChanged<int> onRemove;
-  final void Function(
-      int oldIndex,
-      int newIndex,
-      ) onReorder;
+  final void Function(int oldIndex, int newIndex) onReorder;
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme =
-        Theme.of(context).colorScheme;
+    final colorScheme = Theme.of(context).colorScheme;
 
     return Container(
       decoration: BoxDecoration(
         color: colorScheme.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color:
-          colorScheme.outlineVariant.withAlpha(120),
-        ),
+        border: Border.all(color: colorScheme.outlineVariant.withAlpha(120)),
       ),
       child: ReorderableListView.builder(
         shrinkWrap: true,
@@ -384,11 +351,7 @@ class _ExercisesCard extends StatelessWidget {
         buildDefaultDragHandles: false,
         itemCount: exercises.length,
         onReorderItem: onReorder,
-        proxyDecorator: (
-            child,
-            index,
-            animation,
-            ) {
+        proxyDecorator: (child, index, animation) {
           return Material(
             elevation: 6,
             color: Colors.transparent,
@@ -414,8 +377,7 @@ class _ExercisesCard extends StatelessWidget {
                 if (index < exercises.length - 1)
                   Divider(
                     height: 1,
-                    color: colorScheme.outlineVariant
-                        .withAlpha(100),
+                    color: colorScheme.outlineVariant.withAlpha(100),
                   ),
               ],
             ),
@@ -445,104 +407,85 @@ class _ExerciseRow extends StatelessWidget {
     final colorScheme = theme.colorScheme;
 
     return InkWell(
-        onTap: onTap,
-        child: Padding(
-      padding: const EdgeInsets.fromLTRB(
-        14,
-        12,
-        8,
-        12,
-      ),
-      child: Row(
-        crossAxisAlignment:
-        CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 30,
-            height: 30,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color:
-              colorScheme.primary.withAlpha(18),
-            ),
-            child: Text(
-              '$position',
-              style: TextStyle(
-                color: colorScheme.primary,
-                fontWeight: FontWeight.w800,
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(14, 12, 8, 12),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 30,
+              height: 30,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: colorScheme.primary.withAlpha(18),
+              ),
+              child: Text(
+                '$position',
+                style: TextStyle(
+                  color: colorScheme.primary,
+                  fontWeight: FontWeight.w800,
+                ),
               ),
             ),
-          ),
 
-          const SizedBox(width: 12),
+            const SizedBox(width: 12),
 
-          Expanded(
-            child: Column(
-              crossAxisAlignment:
-              CrossAxisAlignment.start,
-              children: [
-                Text(
-                  exercise.exerciseName,
-                  style:
-                  theme.textTheme.bodyLarge?.copyWith(
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-
-                const SizedBox(height: 3),
-
-                Text(
-                  exercise.muscleGroup,
-                  style:
-                  theme.textTheme.bodySmall?.copyWith(
-                    color:
-                    colorScheme.onSurfaceVariant,
-                  ),
-                ),
-
-                const SizedBox(height: 6),
-
-                Text(
-                  '${exercise.sets} séries  •  '
-                      '${exercise.repetitions} reps  •  '
-                      '${_restText(exercise.restSeconds)}',
-                  style:
-                  theme.textTheme.bodySmall?.copyWith(
-                    color:
-                    colorScheme.onSurfaceVariant,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-
-                if (exercise.notes != null &&
-                    exercise.notes!
-                        .trim()
-                        .isNotEmpty) ...[
-                  const SizedBox(height: 5),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
                   Text(
-                    exercise.notes!.trim(),
-                    style: theme.textTheme.bodySmall
-                        ?.copyWith(
-                      color:
-                      colorScheme.onSurfaceVariant,
+                    exercise.exerciseName,
+                    style: theme.textTheme.bodyLarge?.copyWith(
+                      fontWeight: FontWeight.w800,
                     ),
                   ),
-                ],
-              ],
-            ),
-          ),
 
-          IconButton(
-            tooltip: 'Remover exercício',
-            onPressed: onRemove,
-            icon: const Icon(
-              Icons.delete_outline_rounded,
+                  const SizedBox(height: 3),
+
+                  Text(
+                    exercise.muscleGroup,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+
+                  const SizedBox(height: 6),
+
+                  Text(
+                    '${exercise.sets} séries  •  '
+                    '${exercise.repetitions} reps  •  '
+                    '${_restText(exercise.restSeconds)}',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+
+                  if (exercise.notes != null &&
+                      exercise.notes!.trim().isNotEmpty) ...[
+                    const SizedBox(height: 5),
+                    Text(
+                      exercise.notes!.trim(),
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
             ),
-          ),
-        ],
-      ),
+
+            IconButton(
+              tooltip: 'Remover exercício',
+              onPressed: onRemove,
+              icon: const Icon(Icons.delete_outline_rounded),
+            ),
+          ],
         ),
+      ),
     );
   }
 }
@@ -556,17 +499,11 @@ class _EmptyExercisesCard extends StatelessWidget {
     final colorScheme = theme.colorScheme;
 
     return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: 20,
-        vertical: 24,
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
       decoration: BoxDecoration(
         color: colorScheme.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color:
-          colorScheme.outlineVariant.withAlpha(120),
-        ),
+        border: Border.all(color: colorScheme.outlineVariant.withAlpha(120)),
       ),
       child: Column(
         children: [
@@ -575,8 +512,7 @@ class _EmptyExercisesCard extends StatelessWidget {
             height: 48,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color:
-              colorScheme.primary.withAlpha(18),
+              color: colorScheme.primary.withAlpha(18),
             ),
             child: Icon(
               Icons.fitness_center_rounded,
@@ -609,9 +545,7 @@ class _EmptyExercisesCard extends StatelessWidget {
 }
 
 String _exerciseLabel(int count) {
-  return count == 1
-      ? '1 exercício'
-      : '$count exercícios';
+  return count == 1 ? '1 exercício' : '$count exercícios';
 }
 
 String _restText(int seconds) {
@@ -622,9 +556,7 @@ String _restText(int seconds) {
   if (seconds % 60 == 0) {
     final minutes = seconds ~/ 60;
 
-    return minutes == 1
-        ? '1 min descanso'
-        : '$minutes min descanso';
+    return minutes == 1 ? '1 min descanso' : '$minutes min descanso';
   }
 
   final minutes = seconds ~/ 60;

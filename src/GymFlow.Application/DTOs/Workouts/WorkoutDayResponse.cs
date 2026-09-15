@@ -6,6 +6,8 @@ public class WorkoutDayResponse
 
     public string Name { get; set; } = string.Empty;
 
+    public string? Notes { get; set; }
+
     public int Order { get; set; }
 
     public List<WorkoutExerciseResponse> Exercises { get; set; } = new();

@@ -58,6 +58,7 @@ class WorkoutDayDetails {
   const WorkoutDayDetails({
     required this.id,
     required this.name,
+    required this.notes,
     required this.order,
     required this.exercises,
     required this.completedToday,
@@ -67,6 +68,7 @@ class WorkoutDayDetails {
 
   final String id;
   final String name;
+  final String? notes;
   final int order;
 
   final List<WorkoutExerciseDetails> exercises;
@@ -85,6 +87,7 @@ class WorkoutDayDetails {
     return WorkoutDayDetails(
       id: json['id'] as String,
       name: json['name'] as String,
+      notes: json['notes'] as String?,
       order: (json['order'] as num).toInt(),
       exercises: rawExercises
           .map(

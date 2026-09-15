@@ -100,6 +100,7 @@ public class WorkoutTemplateService
                 Id = Guid.NewGuid(),
                 WorkoutTemplateId = workoutTemplate.Id,
                 Name = dayRequest.Name.Trim(),
+                Notes = dayRequest.Notes?.Trim(),
                 Order = dayRequest.Order
             };
 
@@ -210,6 +211,7 @@ public class WorkoutTemplateService
                 {
                     Id = day.Id,
                     Name = day.Name,
+                    Notes = day.Notes,
                     Order = day.Order,
 
                     Exercises = day.Exercises
@@ -322,6 +324,7 @@ public class WorkoutTemplateService
                 Id = Guid.NewGuid(),
                 WorkoutTemplateId = template.Id,
                 Name = dayRequest.Name.Trim(),
+                Notes = dayRequest.Notes?.Trim(),
                 Order = dayRequest.Order
             };
 
@@ -375,6 +378,12 @@ public class WorkoutTemplateService
 
         foreach (var day in days)
         {
+
+            PersistenceTextPolicy.ValidateMaxLength(
+                day.Notes,
+                 PersistenceTextPolicy.NotesMaxLength,
+                 "As observações do dia");
+
             if (day.Exercises.Count == 0)
                 throw new ArgumentException(
                     $"O dia '{day.Name}' deve possuir pelo menos um exercício.");
@@ -424,6 +433,11 @@ public class WorkoutTemplateService
                 day.Name,
                 PersistenceTextPolicy.DayNameMaxLength,
                 "O nome do dia");
+
+            PersistenceTextPolicy.ValidateMaxLength(
+             day.Notes,
+                PersistenceTextPolicy.NotesMaxLength,
+                 "As observações do dia");
 
             foreach (var exercise in day.Exercises)
             {

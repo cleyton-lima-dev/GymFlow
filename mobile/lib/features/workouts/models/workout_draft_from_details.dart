@@ -14,6 +14,7 @@ extension WorkoutDetailsToDraft on WorkoutDetails {
           return WorkoutDraftDay(
             id: day.id,
             name: day.name,
+            notes: day.notes,
             exercises: sortedExercises
                 .map(
                   (exercise) => WorkoutDraftExercise(
