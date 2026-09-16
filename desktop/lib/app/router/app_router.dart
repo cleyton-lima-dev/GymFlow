@@ -13,6 +13,10 @@ import 'package:avelri_gestao/features/students/presentation/students_page.dart'
 import 'package:avelri_gestao/features/students/presentation/create_student_page.dart';
 import 'package:avelri_gestao/features/students/presentation/edit_student_page.dart';
 import 'package:avelri_gestao/app/session/app_role.dart';
+import 'package:avelri_gestao/features/plans/presentation/plans_page.dart';
+import 'package:avelri_gestao/features/plans/presentation/create_plan_page.dart';
+import 'package:avelri_gestao/features/plans/presentation/edit_plan_page.dart';
+import 'package:avelri_gestao/features/plans/models/plan_summary.dart';
 
 class AppRouter {
   AppRouter(this._sessionController, this._brandingController);
@@ -95,8 +99,19 @@ class AppRouter {
           ),
           GoRoute(
             path: '/plans',
-            builder: (context, state) =>
-                const ModulePlaceholderPage(title: 'Planos'),
+            builder: (context, state) => const PlansPage(),
+          ),
+          GoRoute(
+            path: '/plans/new',
+            builder: (context, state) => const CreatePlanPage(),
+          ),
+          GoRoute(
+            path: '/plans/edit',
+            builder: (context, state) {
+              final plan = state.extra as PlanSummary;
+
+              return EditPlanPage(plan: plan);
+            },
           ),
           GoRoute(
             path: '/finance',

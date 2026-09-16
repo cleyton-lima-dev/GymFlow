@@ -7,6 +7,7 @@ public static class PersistenceTextPolicy
     public const int PhoneMaxLength = 20;
 
     public const int ExerciseNameMaxLength = 150;
+    public const int PlanNameMaxLength = 150;
     public const int MuscleGroupMaxLength = 100;
 
     public const int WorkoutNameMaxLength = 150;
