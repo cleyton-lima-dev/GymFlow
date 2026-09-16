@@ -2,6 +2,8 @@
 using GymFlow.Domain.Entities;
 using GymFlow.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
+using GymFlow.Application.DTOs.Students;
+using GymFlow.Domain.Enums;
 
 namespace GymFlow.Infrastructure.Persistence.Repositories;
 
@@ -26,6 +28,8 @@ public class StudentRepository : IStudentRepository
     Guid gymId,
     string? search,
     bool? isActive,
+    StudentEnrollmentFilter? enrollmentFilter,
+    DateOnly referenceDate,
     int skip,
     int take)
     {
@@ -58,6 +62,54 @@ public class StudentRepository : IStudentRepository
         {
             query = query.Where(student =>
                 student.User.IsActive == isActive.Value);
+        }
+        if (enrollmentFilter.HasValue)
+        {
+            if (enrollmentFilter == StudentEnrollmentFilter.None)
+            {
+                query = query.Where(student =>
+                    !_context.Enrollments.Any(enrollment =>
+                        enrollment.StudentId == student.Id &&
+                        enrollment.Plan.GymId == gymId));
+            }
+            else
+            {
+                var desiredStatus = enrollmentFilter.Value switch
+                {
+                    StudentEnrollmentFilter.Active =>
+                        EnrollmentStatus.Active,
+
+                    StudentEnrollmentFilter.Cancelled =>
+                        EnrollmentStatus.Cancelled,
+
+                    StudentEnrollmentFilter.Expired =>
+                        EnrollmentStatus.Expired,
+
+                    _ => throw new ArgumentOutOfRangeException()
+                };
+
+                query = query.Where(student =>
+                    _context.Enrollments
+                        .Where(enrollment =>
+                            enrollment.StudentId == student.Id &&
+                            enrollment.Plan.GymId == gymId)
+                        .OrderByDescending(enrollment =>
+                            enrollment.Status ==
+                                EnrollmentStatus.Active &&
+                            enrollment.StartDate <= referenceDate &&
+                            enrollment.EndDate > referenceDate)
+                        .ThenByDescending(enrollment =>
+                            enrollment.StartDate)
+                        .ThenByDescending(enrollment =>
+                            enrollment.CreatedAt)
+                        .Select(enrollment =>
+                            enrollment.Status ==
+                                EnrollmentStatus.Active &&
+                            enrollment.EndDate <= referenceDate
+                                ? EnrollmentStatus.Expired
+                                : enrollment.Status)
+                        .FirstOrDefault() == desiredStatus);
+            }
         }
 
         var totalCount = await query.CountAsync();

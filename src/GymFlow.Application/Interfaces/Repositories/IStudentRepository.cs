@@ -1,4 +1,5 @@
 ﻿using GymFlow.Domain.Entities;
+using GymFlow.Application.DTOs.Students;
 
 namespace GymFlow.Application.Interfaces.Repositories;
 
@@ -10,6 +11,8 @@ public interface IStudentRepository
     Guid gymId,
     string? search,
     bool? isActive,
+    StudentEnrollmentFilter? enrollmentFilter,
+    DateOnly referenceDate,
     int skip,
     int take);
 

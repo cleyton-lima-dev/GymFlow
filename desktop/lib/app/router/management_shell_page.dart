@@ -32,6 +32,11 @@ class ManagementShellPage extends StatelessWidget {
       icon: Icons.sell_outlined,
     ),
     _NavigationItem(
+      path: '/enrollments',
+      label: 'Matrículas',
+      icon: Icons.assignment_ind_outlined,
+    ),
+    _NavigationItem(
       path: '/finance',
       label: 'Financeiro',
       icon: Icons.account_balance_wallet_outlined,

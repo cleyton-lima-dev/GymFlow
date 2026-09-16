@@ -10,6 +10,7 @@ class StudentsService {
   Future<PagedStudentsResponse> getStudents({
     String? search,
     bool? isActive,
+    int? enrollmentFilter,
     int page = 1,
     int pageSize = 20,
   }) async {
@@ -21,6 +22,8 @@ class StudentsService {
       if (normalizedSearch != null && normalizedSearch.isNotEmpty)
         'search': normalizedSearch,
       if (isActive != null) 'isActive': isActive.toString(),
+      if (enrollmentFilter != null)
+        'enrollmentFilter': enrollmentFilter.toString(),
     };
 
     final query = Uri(queryParameters: queryParameters).query;
