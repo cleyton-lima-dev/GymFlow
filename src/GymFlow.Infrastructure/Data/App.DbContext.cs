@@ -29,6 +29,7 @@ public class AppDbContext : DbContext
     public DbSet<WorkoutExerciseCompletion> WorkoutExerciseCompletions =>
         Set<WorkoutExerciseCompletion>();
     public DbSet<Plan> Plans { get; set; }
+    public DbSet<Enrollment> Enrollments { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

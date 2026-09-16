@@ -17,6 +17,8 @@ import 'package:avelri_gestao/features/plans/presentation/plans_page.dart';
 import 'package:avelri_gestao/features/plans/presentation/create_plan_page.dart';
 import 'package:avelri_gestao/features/plans/presentation/edit_plan_page.dart';
 import 'package:avelri_gestao/features/plans/models/plan_summary.dart';
+import 'package:avelri_gestao/features/enrollments/presentation/enrollments_page.dart';
+import 'package:avelri_gestao/features/enrollments/presentation/create_enrollment_page.dart';
 
 class AppRouter {
   AppRouter(this._sessionController, this._brandingController);
@@ -100,6 +102,16 @@ class AppRouter {
           GoRoute(
             path: '/plans',
             builder: (context, state) => const PlansPage(),
+          ),
+          GoRoute(
+            path: '/enrollments',
+            builder: (context, state) =>
+            const EnrollmentsPage(),
+          ),
+          GoRoute(
+            path: '/enrollments/new',
+            builder: (context, state) =>
+            const CreateEnrollmentPage(),
           ),
           GoRoute(
             path: '/plans/new',

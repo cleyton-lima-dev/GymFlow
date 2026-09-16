@@ -1,4 +1,6 @@
-﻿namespace GymFlow.Application.DTOs.Students;
+﻿using GymFlow.Domain.Enums;
+
+namespace GymFlow.Application.DTOs.Students;
 
 public class StudentResponse
 {
@@ -13,6 +15,12 @@ public class StudentResponse
     public DateOnly? BirthDate { get; set; }
 
     public bool IsActive { get; set; }
+
+    public EnrollmentStatus? EnrollmentStatus { get; set; }
+
+    public string? PlanName { get; set; }
+
+    public DateOnly? EnrollmentEndDate { get; set; }
 
     public DateTime CreatedAt { get; set; }
 }

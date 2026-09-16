@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
 
+
 namespace GymFlow.Api.Controllers;
 
 [ApiController]
@@ -60,6 +61,7 @@ public class StudentsController : ControllerBase
     public async Task<IActionResult> GetAll(
     [FromQuery] string? search,
     [FromQuery] bool? isActive,
+    [FromQuery] StudentEnrollmentFilter? enrollmentFilter,
     [FromQuery] int page = 1,
     [FromQuery] int pageSize = 20)
     {
@@ -72,6 +74,7 @@ public class StudentsController : ControllerBase
                 gymId,
                 search,
                 isActive,
+                enrollmentFilter,
                 page,
                 pageSize);
 

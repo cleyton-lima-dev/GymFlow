@@ -5,6 +5,7 @@ using GymFlow.Application.Services;
 using GymFlow.Domain.Entities;
 using GymFlow.Domain.Enums;
 using NSubstitute;
+using GymFlow.Application.Interfaces.Time;
 
 namespace GymFlow.Application.Tests.Services;
 
@@ -14,6 +15,8 @@ public class StudentServiceTests
     private readonly IStudentRepository _studentRepository;
     private readonly IPasswordHasher _passwordHasher;
     private readonly StudentService _service;
+    private readonly IEnrollmentRepository _enrollmentRepository;
+    private readonly IGymTimeZoneProvider _gymTimeZoneProvider;
 
     public StudentServiceTests()
     {
@@ -26,10 +29,28 @@ public class StudentServiceTests
         _passwordHasher =
             Substitute.For<IPasswordHasher>();
 
+        _enrollmentRepository =
+            Substitute.For<IEnrollmentRepository>();
+
+        _gymTimeZoneProvider =
+            Substitute.For<IGymTimeZoneProvider>();
+
+        _gymTimeZoneProvider
+            .GetTimeZone(Arg.Any<Guid>())
+            .Returns(TimeZoneInfo.Utc);
+
+        _enrollmentRepository
+            .GetByStudentIdsAsync(
+                Arg.Any<IReadOnlyCollection<Guid>>(),
+                Arg.Any<Guid>())
+            .Returns(new List<Enrollment>());
+
         _service = new StudentService(
             _userRepository,
             _studentRepository,
-            _passwordHasher);
+            _passwordHasher,
+            _enrollmentRepository,
+            _gymTimeZoneProvider);
     }
 
     [Fact]
@@ -242,6 +263,8 @@ public class StudentServiceTests
                 gymId,
                 "aluno",
                 null,
+                null,
+Arg.Any<DateOnly>(),
                 20,
                 20)
             .Returns(
@@ -252,6 +275,7 @@ public class StudentServiceTests
             gymId,
             "aluno",
             null,
+                null,
             page: 2,
             pageSize: 20);
 
@@ -275,6 +299,8 @@ public class StudentServiceTests
                 gymId,
                 "aluno",
                 null,
+                null,
+Arg.Any<DateOnly>(),
                 20,
                 20);
     }
@@ -287,6 +313,7 @@ public class StudentServiceTests
                 Guid.NewGuid(),
                 null,
                 null,
+                null,
                 page: 0,
                 pageSize: 20));
 
@@ -296,6 +323,8 @@ public class StudentServiceTests
                 Arg.Any<Guid>(),
                 Arg.Any<string?>(),
                 Arg.Any<bool?>(),
+                null,
+                Arg.Any<DateOnly>(),
                 Arg.Any<int>(),
                 Arg.Any<int>());
     }
@@ -311,6 +340,7 @@ public class StudentServiceTests
                 Guid.NewGuid(),
                 null,
                 null,
+                null,
                 page: 1,
                 pageSize: pageSize));
 
@@ -320,6 +350,8 @@ public class StudentServiceTests
                 Arg.Any<Guid>(),
                 Arg.Any<string?>(),
                 Arg.Any<bool?>(),
+                null,
+                Arg.Any<DateOnly>(),
                 Arg.Any<int>(),
                 Arg.Any<int>());
     }

@@ -9,6 +9,8 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.RateLimiting;
 using System.Threading.RateLimiting;
 using GymFlow.Api.ExceptionHandling;
+using GymFlow.Application.Services;
+using GymFlow.Domain.Enums;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -83,6 +85,10 @@ if (!int.TryParse(
         "Jwt:ExpirationMinutes deve ser um inteiro maior que zero.");
 }
 
+var enforceStudentEnrollment =
+    builder.Configuration.GetValue<bool>(
+        "EnrollmentAccess:EnforceStudentEnrollment");
+
 builder.Services
     .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
@@ -153,10 +159,44 @@ builder.Services
                 {
                     logger.LogWarning(
                         "Token rejeitado para usuário inativo ou inexistente. UserId: {UserId}, GymId: {GymId}",
-                    userId,
-                     gymId);
+                        userId,
+                        gymId);
+
                     context.Fail(
                         "Usuário inativo ou inexistente.");
+
+                    return;
+                }
+
+                var isStudent =
+                    context.Principal?.IsInRole(
+                        UserRole.Student.ToString()) == true;
+
+                if (enforceStudentEnrollment && isStudent)
+                {
+                    var studentAccessService =
+                        context.HttpContext
+                            .RequestServices
+                            .GetRequiredService<StudentAccessService>();
+
+                    var hasActiveEnrollment =
+                        await studentAccessService
+                            .HasActiveEnrollmentAsync(
+                                userId,
+                                gymId);
+
+                    if (!hasActiveEnrollment)
+                    {
+                        logger.LogWarning(
+                            "Token rejeitado por matrícula inválida. UserId: {UserId}, GymId: {GymId}",
+                            userId,
+                            gymId);
+
+                        context.Fail(
+                            "Matrícula inexistente, vencida ou cancelada.");
+
+                        return;
+                    }
                 }
             }
         };

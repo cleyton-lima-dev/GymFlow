@@ -13,12 +13,18 @@ public class AuthController : ControllerBase
 {
     private readonly AuthenticationService _authenticationService;
     private readonly ILogger<AuthController> _logger;
+    private readonly StudentAccessService _studentAccessService;
+    private readonly IConfiguration _configuration;
 
     public AuthController(
-        AuthenticationService authenticationService,
-        ILogger<AuthController> logger)
+    AuthenticationService authenticationService,
+    StudentAccessService studentAccessService,
+    IConfiguration configuration,
+    ILogger<AuthController> logger)
     {
         _authenticationService = authenticationService;
+        _studentAccessService = studentAccessService;
+        _configuration = configuration;
         _logger = logger;
     }
 
@@ -38,6 +44,34 @@ public class AuthController : ControllerBase
             {
                 message = "E-mail ou senha inválidos."
             });
+        }
+
+        var enforceStudentEnrollment =
+            _configuration.GetValue<bool>(
+        "EnrollmentAccess:EnforceStudentEnrollment");
+
+        if (enforceStudentEnrollment &&
+            result.Role == "Student")
+        {
+            var hasActiveEnrollment =
+                await _studentAccessService
+                    .HasActiveEnrollmentAsync(
+                        result.UserId,
+                        result.GymId);
+
+            if (!hasActiveEnrollment)
+            {
+                _logger.LogWarning(
+                    "Login rejeitado por matrícula inválida. UserId: {UserId}, GymId: {GymId}",
+                    result.UserId,
+                    result.GymId);
+
+                return Unauthorized(new
+                {
+                    message =
+                        "Matrícula inexistente, vencida ou cancelada."
+                });
+            }
         }
 
         _logger.LogInformation(

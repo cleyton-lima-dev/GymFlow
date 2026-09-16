@@ -7,6 +7,13 @@ import 'package:avelri_gestao/features/students/models/student_summary.dart';
 import 'package:http/http.dart' as http;
 
 enum StudentsStatusFilter { all, active, inactive }
+enum StudentsEnrollmentFilter {
+  all,
+  active,
+  cancelled,
+  expired,
+  none,
+}
 
 class StudentsViewModel extends ChangeNotifier {
   StudentsViewModel(this._studentsService);
@@ -27,6 +34,8 @@ class StudentsViewModel extends ChangeNotifier {
   String? _errorMessage;
 
   StudentsStatusFilter _statusFilter = StudentsStatusFilter.all;
+  StudentsEnrollmentFilter _enrollmentFilter =
+      StudentsEnrollmentFilter.all;
 
   int _page = 1;
   int _totalPages = 1;
@@ -58,7 +67,12 @@ class StudentsViewModel extends ChangeNotifier {
 
   bool get hasSearch => _search.trim().isNotEmpty;
 
-  bool get hasActiveFilter => _statusFilter != StudentsStatusFilter.all;
+  bool get hasActiveFilter =>
+      _statusFilter != StudentsStatusFilter.all ||
+          _enrollmentFilter != StudentsEnrollmentFilter.all;
+
+  StudentsEnrollmentFilter get enrollmentFilter =>
+      _enrollmentFilter;
 
   Future<void> loadInitial() {
     return _loadPage(page: 1, showLoading: true);
@@ -87,6 +101,39 @@ class StudentsViewModel extends ChangeNotifier {
     _statusFilter = filter;
 
     await _loadPage(page: 1, showLoading: true);
+  }
+
+  Future<void> updateFilters({
+    required StudentsStatusFilter statusFilter,
+    required StudentsEnrollmentFilter enrollmentFilter,
+  }) async {
+    if (_statusFilter == statusFilter &&
+        _enrollmentFilter == enrollmentFilter) {
+      return;
+    }
+
+    _statusFilter = statusFilter;
+    _enrollmentFilter = enrollmentFilter;
+
+    await _loadPage(
+      page: 1,
+      showLoading: true,
+    );
+  }
+
+  Future<void> updateEnrollmentFilter(
+      StudentsEnrollmentFilter filter,
+      ) async {
+    if (_enrollmentFilter == filter) {
+      return;
+    }
+
+    _enrollmentFilter = filter;
+
+    await _loadPage(
+      page: 1,
+      showLoading: true,
+    );
   }
 
   Future<void> goToPreviousPage() async {
@@ -127,6 +174,7 @@ class StudentsViewModel extends ChangeNotifier {
       final response = await _studentsService.getStudents(
         search: _search,
         isActive: _isActiveValue,
+        enrollmentFilter: _enrollmentFilterValue,
         page: page,
         pageSize: pageSize,
       );
@@ -180,6 +228,15 @@ class StudentsViewModel extends ChangeNotifier {
         notifyListeners();
       }
     }
+  }
+  int? get _enrollmentFilterValue {
+    return switch (_enrollmentFilter) {
+      StudentsEnrollmentFilter.all => null,
+      StudentsEnrollmentFilter.active => 1,
+      StudentsEnrollmentFilter.cancelled => 2,
+      StudentsEnrollmentFilter.expired => 3,
+      StudentsEnrollmentFilter.none => 4,
+    };
   }
 
   bool? get _isActiveValue {
