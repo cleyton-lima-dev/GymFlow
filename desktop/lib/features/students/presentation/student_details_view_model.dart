@@ -15,12 +15,14 @@ class StudentDetailsViewModel extends ChangeNotifier {
   StudentSummary? _student;
   bool _isLoading = false;
   bool _isUpdatingStatus = false;
+  bool _isReactivating = false;
   String? _errorMessage;
 
   StudentSummary? get student => _student;
   bool get isLoading => _isLoading;
   bool get isUpdatingStatus => _isUpdatingStatus;
   String? get errorMessage => _errorMessage;
+  bool get isReactivating => _isReactivating;
 
   Future<void> load() async {
     if (_isLoading) {
@@ -85,6 +87,48 @@ class StudentDetailsViewModel extends ChangeNotifier {
       return false;
     } finally {
       _isUpdatingStatus = false;
+      notifyListeners();
+    }
+  }
+
+  Future<bool> reactivateArchivedStudent({
+    required String planId,
+    required DateTime startDate,
+  }) async {
+    if (_isReactivating || _student?.archivedAt == null) {
+      return false;
+    }
+
+    _isReactivating = true;
+    _errorMessage = null;
+    notifyListeners();
+
+    try {
+      await _studentsService.reactivateArchivedStudent(
+        studentId: _studentId,
+        planId: planId,
+        startDate: startDate,
+      );
+
+      await load();
+
+      return true;
+    } on ApiException catch (exception) {
+      _errorMessage = _messageFromApiException(exception);
+      return false;
+    } on TimeoutException {
+      _errorMessage =
+      'A operação demorou mais que o esperado. Tente novamente.';
+      return false;
+    } on http.ClientException {
+      _errorMessage =
+      'Não foi possível conectar ao servidor. Verifique sua conexão.';
+      return false;
+    } catch (_) {
+      _errorMessage = 'Não foi possível reativar o aluno.';
+      return false;
+    } finally {
+      _isReactivating = false;
       notifyListeners();
     }
   }

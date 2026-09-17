@@ -15,6 +15,10 @@ public class StudentConfiguration : IEntityTypeConfiguration<Student>
         builder.Property(student => student.Phone)
             .HasMaxLength(20);
 
+        builder.HasIndex(student => student.NoValidEnrollmentSince);
+
+        builder.HasIndex(student => student.ArchivedAt);
+
         builder.HasOne(student => student.User)
             .WithOne()
             .HasForeignKey<Student>(student => student.UserId)

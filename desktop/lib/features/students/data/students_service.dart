@@ -11,6 +11,7 @@ class StudentsService {
     String? search,
     bool? isActive,
     int? enrollmentFilter,
+    int? archiveFilter,
     int page = 1,
     int pageSize = 20,
   }) async {
@@ -24,6 +25,8 @@ class StudentsService {
       if (isActive != null) 'isActive': isActive.toString(),
       if (enrollmentFilter != null)
         'enrollmentFilter': enrollmentFilter.toString(),
+      if (archiveFilter != null)
+        'archiveFilter': archiveFilter.toString(),
     };
 
     final query = Uri(queryParameters: queryParameters).query;
@@ -56,6 +59,20 @@ class StudentsService {
             ? null
             : normalizedPhone,
         'birthDate': birthDate == null ? null : _formatDateOnly(birthDate),
+      },
+    );
+  }
+
+  Future<void> reactivateArchivedStudent({
+    required String studentId,
+    required String planId,
+    required DateTime startDate,
+  }) async {
+    await _apiClient.post(
+      'api/students/$studentId/reactivate',
+      body: {
+        'planId': planId,
+        'startDate': _formatDateOnly(startDate),
       },
     );
   }

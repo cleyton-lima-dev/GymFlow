@@ -60,6 +60,13 @@ public class StudentService
 
         var existingUser =
             await _userRepository.GetByEmailAsync(normalizedEmail);
+        var timeZone = _gymTimeZoneProvider.GetTimeZone(gymId);
+
+        var localNow = TimeZoneInfo.ConvertTimeFromUtc(
+            DateTime.UtcNow,
+            timeZone);
+
+        var today = DateOnly.FromDateTime(localNow);
 
         if (existingUser is not null)
             return false;
@@ -82,6 +89,7 @@ public class StudentService
             UserId = user.Id,
             Phone = request.Phone?.Trim(),
             BirthDate = request.BirthDate,
+            NoValidEnrollmentSince = today,
             CreatedAt = DateTime.UtcNow,
             User = user
         };
@@ -96,6 +104,7 @@ public class StudentService
     string? search,
     bool? isActive,
     StudentEnrollmentFilter? enrollmentFilter,
+    StudentArchiveFilter archiveFilter,
     int page,
     int pageSize)
     {
@@ -130,6 +139,7 @@ public class StudentService
                 search,
                 isActive,
                 enrollmentFilter,
+                archiveFilter,
                 today,
                 skip,
                 pageSize);
@@ -194,6 +204,7 @@ public class StudentService
                     EnrollmentStatus = enrollmentStatus,
                     PlanName = enrollment?.PlanName,
                     EnrollmentEndDate = enrollment?.EndDate,
+                    ArchivedAt = student.ArchivedAt,
                     CreatedAt = student.CreatedAt
                 };
             })
@@ -226,6 +237,7 @@ public class StudentService
             Phone = student.Phone,
             BirthDate = student.BirthDate,
             IsActive = student.User.IsActive,
+            ArchivedAt = student.ArchivedAt,
             CreatedAt = student.CreatedAt
         };
     }
@@ -293,12 +305,28 @@ public class StudentService
         var student = await _studentRepository
             .GetByIdAndGymIdAsync(studentId, gymId);
 
-        if (student is null)
+        if (student is null ||
+            student.ArchivedAt is not null)
+        {
             return false;
+        }
+
+        var now = DateTime.UtcNow;
 
         student.User.IsActive = isActive;
 
-        var now = DateTime.UtcNow;
+        if (isActive)
+        {
+            student.InactivationReason = null;
+            student.InactivatedAt = null;
+        }
+        else
+        {
+            student.InactivationReason =
+                StudentInactivationReason.Manual;
+
+            student.InactivatedAt = now;
+        }
 
         student.User.UpdatedAt = now;
         student.UpdatedAt = now;
@@ -326,6 +354,7 @@ public class StudentService
             Phone = student.Phone,
             BirthDate = student.BirthDate,
             IsActive = student.User.IsActive,
+            ArchivedAt = student.ArchivedAt,
             CreatedAt = student.CreatedAt
         };
     }

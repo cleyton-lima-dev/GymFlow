@@ -491,6 +491,7 @@ Future<void> _showStudentsFilters(
     ) async {
   var statusFilter = viewModel.statusFilter;
   var enrollmentFilter = viewModel.enrollmentFilter;
+  var archiveFilter = viewModel.archiveFilter;
 
   final apply = await showDialog<bool>(
     context: context,
@@ -567,6 +568,35 @@ Future<void> _showStudentsFilters(
                       });
                     },
                   ),
+                  const SizedBox(height: 18),
+
+                  DropdownButtonFormField<StudentsArchiveFilter>(
+                    initialValue: archiveFilter,
+                    decoration: const InputDecoration(
+                      labelText: 'Arquivamento',
+                    ),
+                    items: const [
+                      DropdownMenuItem(
+                        value: StudentsArchiveFilter.notArchived,
+                        child: Text('Não arquivados'),
+                      ),
+                      DropdownMenuItem(
+                        value: StudentsArchiveFilter.archived,
+                        child: Text('Arquivados'),
+                      ),
+                      DropdownMenuItem(
+                        value: StudentsArchiveFilter.all,
+                        child: Text('Todos'),
+                      ),
+                    ],
+                    onChanged: (value) {
+                      if (value == null) return;
+
+                      setState(() {
+                        archiveFilter = value;
+                      });
+                    },
+                  ),
                 ],
               ),
             ),
@@ -603,5 +633,6 @@ Future<void> _showStudentsFilters(
   await viewModel.updateFilters(
     statusFilter: statusFilter,
     enrollmentFilter: enrollmentFilter,
+    archiveFilter: archiveFilter,
   );
 }

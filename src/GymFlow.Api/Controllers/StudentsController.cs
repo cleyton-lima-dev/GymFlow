@@ -13,10 +13,14 @@ namespace GymFlow.Api.Controllers;
 public class StudentsController : ControllerBase
 {
     private readonly StudentService _studentService;
+    private readonly EnrollmentService _enrollmentService;
 
-    public StudentsController(StudentService studentService)
+    public StudentsController(
+    StudentService studentService,
+    EnrollmentService enrollmentService)
     {
         _studentService = studentService;
+        _enrollmentService = enrollmentService;
     }
 
 
@@ -62,6 +66,7 @@ public class StudentsController : ControllerBase
     [FromQuery] string? search,
     [FromQuery] bool? isActive,
     [FromQuery] StudentEnrollmentFilter? enrollmentFilter,
+    [FromQuery] StudentArchiveFilter archiveFilter = StudentArchiveFilter.NotArchived,
     [FromQuery] int page = 1,
     [FromQuery] int pageSize = 20)
     {
@@ -75,6 +80,7 @@ public class StudentsController : ControllerBase
                 search,
                 isActive,
                 enrollmentFilter,
+                archiveFilter,
                 page,
                 pageSize);
 
@@ -177,6 +183,34 @@ public class StudentsController : ControllerBase
         }
 
         return NoContent();
+    }
+
+    [Authorize(Roles = "Admin")]
+    [HttpPost("{id:guid}/reactivate")]
+    public async Task<IActionResult> ReactivateArchived(
+    Guid id,
+    ReactivateArchivedStudentRequest request)
+    {
+        if (!TryGetGymId(out var gymId))
+            return Unauthorized();
+
+        var enrollment =
+            await _enrollmentService
+                .ReactivateArchivedStudentAsync(
+                    gymId,
+                    id,
+                    request);
+
+        if (enrollment is null)
+        {
+            return BadRequest(new
+            {
+                message =
+                    "Não foi possível reativar o aluno."
+            });
+        }
+
+        return Ok(enrollment);
     }
 
     [Authorize(Roles = "Student")]
