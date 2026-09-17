@@ -5,6 +5,7 @@ using NSubstitute;
 using GymFlow.Application.DTOs.Enrollments;
 using GymFlow.Domain.Entities;
 using GymFlow.Domain.Enums;
+using GymFlow.Application.DTOs.Students;
 
 namespace GymFlow.Application.Tests.Services;
 
@@ -335,5 +336,596 @@ public class EnrollmentServiceTests
                         currentEnrollment.EndDate &&
                     enrollment.PlanName == "Plano Anual" &&
                     enrollment.PlanPrice == 1200m));
+    }
+
+    [Fact]
+    public async Task CreateAsync_WhenStudentWasAutomaticallyInactive_ShouldCreateEnrollmentAndReactivate()
+    {
+        var gymId = Guid.NewGuid();
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+
+        var student = new Student
+        {
+            Id = Guid.NewGuid(),
+            NoValidEnrollmentSince = today.AddDays(-40),
+            InactivationReason =
+                StudentInactivationReason.NoValidEnrollment,
+            InactivatedAt = DateTime.UtcNow.AddDays(-10),
+            User = new User
+            {
+                Id = Guid.NewGuid(),
+                GymId = gymId,
+                Name = "Aluno Teste",
+                IsActive = false,
+                Role = UserRole.Student
+            }
+        };
+
+        var plan = new Plan
+        {
+            Id = Guid.NewGuid(),
+            GymId = gymId,
+            Name = "Plano Mensal",
+            Price = 150m,
+            DurationMonths = 1,
+            BillingCycle = PlanBillingCycle.Monthly,
+            IsActive = true
+        };
+
+        var request = new CreateEnrollmentRequest
+        {
+            StudentId = student.Id,
+            PlanId = plan.Id,
+            StartDate = today
+        };
+
+        _studentRepository
+            .GetByIdAndGymIdAsync(student.Id, gymId)
+            .Returns(student);
+
+        _planRepository
+            .GetByIdAsync(plan.Id, gymId)
+            .Returns(plan);
+
+        _gymTimeZoneProvider
+            .GetTimeZone(gymId)
+            .Returns(TimeZoneInfo.Utc);
+
+        _enrollmentRepository
+            .HasOverlappingEnrollmentAsync(
+                student.Id,
+                gymId,
+                today,
+                today.AddMonths(1))
+            .Returns(false);
+
+        var result =
+            await _service.CreateAsync(
+                gymId,
+                request);
+
+        Assert.NotNull(result);
+
+        Assert.True(student.User.IsActive);
+        Assert.Null(student.NoValidEnrollmentSince);
+        Assert.Null(student.InactivationReason);
+        Assert.Null(student.InactivatedAt);
+    }
+
+    [Fact]
+    public async Task CreateAsync_WhenStudentIsManuallyInactive_ShouldCreateEnrollmentButRemainInactive()
+    {
+        var gymId = Guid.NewGuid();
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+
+        var student = new Student
+        {
+            Id = Guid.NewGuid(),
+            NoValidEnrollmentSince = today.AddDays(-40),
+            InactivationReason = StudentInactivationReason.Manual,
+            InactivatedAt = DateTime.UtcNow.AddDays(-10),
+            User = new User
+            {
+                Id = Guid.NewGuid(),
+                GymId = gymId,
+                Name = "Aluno Teste",
+                IsActive = false,
+                Role = UserRole.Student
+            }
+        };
+
+        var plan = new Plan
+        {
+            Id = Guid.NewGuid(),
+            GymId = gymId,
+            Name = "Plano Mensal",
+            Price = 150m,
+            DurationMonths = 1,
+            BillingCycle = PlanBillingCycle.Monthly,
+            IsActive = true
+        };
+
+        var request = new CreateEnrollmentRequest
+        {
+            StudentId = student.Id,
+            PlanId = plan.Id,
+            StartDate = today
+        };
+
+        _studentRepository
+            .GetByIdAndGymIdAsync(student.Id, gymId)
+            .Returns(student);
+
+        _planRepository
+            .GetByIdAsync(plan.Id, gymId)
+            .Returns(plan);
+
+        _gymTimeZoneProvider
+            .GetTimeZone(gymId)
+            .Returns(TimeZoneInfo.Utc);
+
+        _enrollmentRepository
+            .HasOverlappingEnrollmentAsync(
+                student.Id,
+                gymId,
+                today,
+                today.AddMonths(1))
+            .Returns(false);
+
+        var result =
+            await _service.CreateAsync(
+                gymId,
+                request);
+
+        Assert.NotNull(result);
+        Assert.False(student.User.IsActive);
+        Assert.Null(student.NoValidEnrollmentSince);
+
+        Assert.Equal(
+            StudentInactivationReason.Manual,
+            student.InactivationReason);
+
+        Assert.NotNull(student.InactivatedAt);
+    }
+
+    [Fact]
+    public async Task CreateAsync_WhenEnrollmentStartsInFuture_ShouldNotReactivateStudentYet()
+    {
+        var gymId = Guid.NewGuid();
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var futureStartDate = today.AddDays(5);
+
+        var student = new Student
+        {
+            Id = Guid.NewGuid(),
+            NoValidEnrollmentSince = today.AddDays(-40),
+            InactivationReason =
+                StudentInactivationReason.NoValidEnrollment,
+            InactivatedAt = DateTime.UtcNow.AddDays(-10),
+            User = new User
+            {
+                Id = Guid.NewGuid(),
+                GymId = gymId,
+                Name = "Aluno Teste",
+                IsActive = false,
+                Role = UserRole.Student
+            }
+        };
+
+        var plan = new Plan
+        {
+            Id = Guid.NewGuid(),
+            GymId = gymId,
+            Name = "Plano Mensal",
+            Price = 150m,
+            DurationMonths = 1,
+            BillingCycle = PlanBillingCycle.Monthly,
+            IsActive = true
+        };
+
+        var request = new CreateEnrollmentRequest
+        {
+            StudentId = student.Id,
+            PlanId = plan.Id,
+            StartDate = futureStartDate
+        };
+
+        _studentRepository
+            .GetByIdAndGymIdAsync(student.Id, gymId)
+            .Returns(student);
+
+        _planRepository
+            .GetByIdAsync(plan.Id, gymId)
+            .Returns(plan);
+
+        _gymTimeZoneProvider
+            .GetTimeZone(gymId)
+            .Returns(TimeZoneInfo.Utc);
+
+        _enrollmentRepository
+            .HasOverlappingEnrollmentAsync(
+                student.Id,
+                gymId,
+                futureStartDate,
+                futureStartDate.AddMonths(1))
+            .Returns(false);
+
+        var result =
+            await _service.CreateAsync(
+                gymId,
+                request);
+
+        Assert.NotNull(result);
+        Assert.False(student.User.IsActive);
+
+        Assert.Equal(
+            StudentInactivationReason.NoValidEnrollment,
+            student.InactivationReason);
+
+        Assert.NotNull(student.NoValidEnrollmentSince);
+        Assert.NotNull(student.InactivatedAt);
+    }
+
+    [Fact]
+    public async Task RenewAsync_WhenAutomaticallyInactiveStudentRenewsExpiredEnrollment_ShouldReactivate()
+    {
+        var gymId = Guid.NewGuid();
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+
+        var student = new Student
+        {
+            Id = Guid.NewGuid(),
+            NoValidEnrollmentSince = today.AddDays(-40),
+            InactivationReason =
+                StudentInactivationReason.NoValidEnrollment,
+            InactivatedAt = DateTime.UtcNow.AddDays(-10),
+            User = new User
+            {
+                Id = Guid.NewGuid(),
+                GymId = gymId,
+                Name = "Aluno Teste",
+                IsActive = false,
+                Role = UserRole.Student
+            }
+        };
+
+        var currentEnrollment = new Enrollment
+        {
+            Id = Guid.NewGuid(),
+            StudentId = student.Id,
+            PlanId = Guid.NewGuid(),
+            StartDate = today.AddMonths(-2),
+            EndDate = today.AddMonths(-1),
+            Status = EnrollmentStatus.Active,
+            Student = student
+        };
+
+        var newPlan = new Plan
+        {
+            Id = Guid.NewGuid(),
+            GymId = gymId,
+            Name = "Plano Mensal",
+            Price = 150m,
+            DurationMonths = 1,
+            BillingCycle = PlanBillingCycle.Monthly,
+            IsActive = true
+        };
+
+        var request = new RenewEnrollmentRequest
+        {
+            PlanId = newPlan.Id
+        };
+
+        _enrollmentRepository
+            .GetByIdAsync(currentEnrollment.Id, gymId)
+            .Returns(currentEnrollment);
+
+        _planRepository
+            .GetByIdAsync(newPlan.Id, gymId)
+            .Returns(newPlan);
+
+        _gymTimeZoneProvider
+            .GetTimeZone(gymId)
+            .Returns(TimeZoneInfo.Utc);
+
+        _enrollmentRepository
+            .HasOverlappingEnrollmentAsync(
+                student.Id,
+                gymId,
+                today,
+                today.AddMonths(1))
+            .Returns(false);
+
+        var result =
+            await _service.RenewAsync(
+                gymId,
+                currentEnrollment.Id,
+                request);
+
+        Assert.NotNull(result);
+        Assert.True(student.User.IsActive);
+        Assert.Null(student.NoValidEnrollmentSince);
+        Assert.Null(student.InactivationReason);
+        Assert.Null(student.InactivatedAt);
+    }
+
+    [Fact]
+    public async Task RenewAsync_WhenStudentIsArchived_ShouldReturnNull()
+    {
+        var gymId = Guid.NewGuid();
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+
+        var student = new Student
+        {
+            Id = Guid.NewGuid(),
+            ArchivedAt = DateTime.UtcNow.AddDays(-1),
+            User = new User
+            {
+                Id = Guid.NewGuid(),
+                GymId = gymId,
+                Name = "Aluno Arquivado",
+                IsActive = false,
+                Role = UserRole.Student
+            }
+        };
+
+        var currentEnrollment = new Enrollment
+        {
+            Id = Guid.NewGuid(),
+            StudentId = student.Id,
+            PlanId = Guid.NewGuid(),
+            StartDate = today.AddMonths(-2),
+            EndDate = today.AddMonths(-1),
+            Status = EnrollmentStatus.Active,
+            Student = student
+        };
+
+        var newPlan = new Plan
+        {
+            Id = Guid.NewGuid(),
+            GymId = gymId,
+            Name = "Plano Mensal",
+            Price = 150m,
+            DurationMonths = 1,
+            BillingCycle = PlanBillingCycle.Monthly,
+            IsActive = true
+        };
+
+        var request = new RenewEnrollmentRequest
+        {
+            PlanId = newPlan.Id
+        };
+
+        _enrollmentRepository
+            .GetByIdAsync(currentEnrollment.Id, gymId)
+            .Returns(currentEnrollment);
+
+        _planRepository
+            .GetByIdAsync(newPlan.Id, gymId)
+            .Returns(newPlan);
+
+        _gymTimeZoneProvider
+            .GetTimeZone(gymId)
+            .Returns(TimeZoneInfo.Utc);
+
+        var result =
+            await _service.RenewAsync(
+                gymId,
+                currentEnrollment.Id,
+                request);
+
+        Assert.Null(result);
+
+        await _enrollmentRepository
+            .DidNotReceive()
+            .AddAsync(Arg.Any<Enrollment>());
+    }
+
+    [Fact]
+    public async Task ReactivateArchivedStudentAsync_WhenEnrollmentStartsToday_ShouldUnarchiveAndActivateStudent()
+    {
+        var gymId = Guid.NewGuid();
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+
+        var student = new Student
+        {
+            Id = Guid.NewGuid(),
+            ArchivedAt = DateTime.UtcNow.AddDays(-10),
+            NoValidEnrollmentSince = today.AddDays(-100),
+            InactivationReason =
+                StudentInactivationReason.NoValidEnrollment,
+            InactivatedAt = DateTime.UtcNow.AddDays(-70),
+            User = new User
+            {
+                Id = Guid.NewGuid(),
+                GymId = gymId,
+                Name = "Aluno Arquivado",
+                IsActive = false,
+                Role = UserRole.Student
+            }
+        };
+
+        var plan = new Plan
+        {
+            Id = Guid.NewGuid(),
+            GymId = gymId,
+            Name = "Plano Mensal",
+            Price = 150m,
+            DurationMonths = 1,
+            BillingCycle = PlanBillingCycle.Monthly,
+            IsActive = true
+        };
+
+        var request = new ReactivateArchivedStudentRequest
+        {
+            PlanId = plan.Id,
+            StartDate = today
+        };
+
+        _studentRepository
+            .GetByIdAndGymIdAsync(student.Id, gymId)
+            .Returns(student);
+
+        _planRepository
+            .GetByIdAsync(plan.Id, gymId)
+            .Returns(plan);
+
+        _gymTimeZoneProvider
+            .GetTimeZone(gymId)
+            .Returns(TimeZoneInfo.Utc);
+
+        _enrollmentRepository
+            .HasOverlappingEnrollmentAsync(
+                student.Id,
+                gymId,
+                today,
+                today.AddMonths(1))
+            .Returns(false);
+
+        var result =
+            await _service.ReactivateArchivedStudentAsync(
+                gymId,
+                student.Id,
+                request);
+
+        Assert.NotNull(result);
+
+        Assert.Null(student.ArchivedAt);
+        Assert.True(student.User.IsActive);
+        Assert.Null(student.NoValidEnrollmentSince);
+        Assert.Null(student.InactivationReason);
+        Assert.Null(student.InactivatedAt);
+
+        await _enrollmentRepository
+            .Received(1)
+            .AddAsync(
+                Arg.Is<Enrollment>(enrollment =>
+                    enrollment.StudentId == student.Id &&
+                    enrollment.PlanId == plan.Id &&
+                    enrollment.StartDate == today &&
+                    enrollment.EndDate == today.AddMonths(1)));
+    }
+
+    [Fact]
+    public async Task ReactivateArchivedStudentAsync_WhenEnrollmentStartsInFuture_ShouldUnarchiveButRemainInactive()
+    {
+        var gymId = Guid.NewGuid();
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var startDate = today.AddDays(10);
+
+        var student = new Student
+        {
+            Id = Guid.NewGuid(),
+            ArchivedAt = DateTime.UtcNow.AddDays(-10),
+            NoValidEnrollmentSince = today.AddDays(-100),
+            InactivationReason =
+                StudentInactivationReason.NoValidEnrollment,
+            InactivatedAt = DateTime.UtcNow.AddDays(-70),
+            User = new User
+            {
+                Id = Guid.NewGuid(),
+                GymId = gymId,
+                Name = "Aluno Arquivado",
+                IsActive = false,
+                Role = UserRole.Student
+            }
+        };
+
+        var plan = new Plan
+        {
+            Id = Guid.NewGuid(),
+            GymId = gymId,
+            Name = "Plano Mensal",
+            Price = 150m,
+            DurationMonths = 1,
+            BillingCycle = PlanBillingCycle.Monthly,
+            IsActive = true
+        };
+
+        var request = new ReactivateArchivedStudentRequest
+        {
+            PlanId = plan.Id,
+            StartDate = startDate
+        };
+
+        _studentRepository
+            .GetByIdAndGymIdAsync(student.Id, gymId)
+            .Returns(student);
+
+        _planRepository
+            .GetByIdAsync(plan.Id, gymId)
+            .Returns(plan);
+
+        _gymTimeZoneProvider
+            .GetTimeZone(gymId)
+            .Returns(TimeZoneInfo.Utc);
+
+        _enrollmentRepository
+            .HasOverlappingEnrollmentAsync(
+                student.Id,
+                gymId,
+                startDate,
+                startDate.AddMonths(1))
+            .Returns(false);
+
+        var result =
+            await _service.ReactivateArchivedStudentAsync(
+                gymId,
+                student.Id,
+                request);
+
+        Assert.NotNull(result);
+
+        Assert.Null(student.ArchivedAt);
+        Assert.False(student.User.IsActive);
+        Assert.Equal(
+            StudentInactivationReason.NoValidEnrollment,
+            student.InactivationReason);
+        Assert.NotNull(student.InactivatedAt);
+        Assert.Equal(
+            today,
+            student.NoValidEnrollmentSince);
+    }
+
+    [Fact]
+    public async Task CreateAsync_WhenStudentIsArchived_ShouldReturnNull()
+    {
+        var gymId = Guid.NewGuid();
+
+        var student = new Student
+        {
+            Id = Guid.NewGuid(),
+            ArchivedAt = DateTime.UtcNow,
+            User = new User
+            {
+                Id = Guid.NewGuid(),
+                GymId = gymId,
+                Name = "Aluno Arquivado",
+                IsActive = false,
+                Role = UserRole.Student
+            }
+        };
+
+        var request = new CreateEnrollmentRequest
+        {
+            StudentId = student.Id,
+            PlanId = Guid.NewGuid(),
+            StartDate = DateOnly.FromDateTime(DateTime.UtcNow)
+        };
+
+        _studentRepository
+            .GetByIdAndGymIdAsync(student.Id, gymId)
+            .Returns(student);
+
+        var result =
+            await _service.CreateAsync(
+                gymId,
+                request);
+
+        Assert.Null(result);
+
+        await _enrollmentRepository
+            .DidNotReceive()
+            .AddAsync(Arg.Any<Enrollment>());
     }
 }

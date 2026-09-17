@@ -12,6 +12,7 @@ class StudentSummary {
     required this.enrollmentStatus,
     required this.planName,
     required this.enrollmentEndDate,
+    required this.archivedAt,
   });
 
   final String id;
@@ -24,6 +25,7 @@ class StudentSummary {
   final EnrollmentStatus? enrollmentStatus;
   final String? planName;
   final DateTime? enrollmentEndDate;
+  final DateTime? archivedAt;
 
   factory StudentSummary.fromJson(Map<String, dynamic> json) {
     final birthDateValue = json['birthDate'] as String?;
@@ -33,6 +35,9 @@ class StudentSummary {
 
     final enrollmentEndDateValue =
     json['enrollmentEndDate'] as String?;
+
+    final archivedAtValue =
+    json['archivedAt'] as String?;
 
     return StudentSummary(
       id: json['id'] as String,
@@ -47,6 +52,9 @@ class StudentSummary {
           : EnrollmentStatus.fromValue(
         enrollmentStatusValue,
       ),
+      archivedAt: archivedAtValue == null
+          ? null
+          : DateTime.parse(archivedAtValue),
       planName: json['planName'] as String?,
       enrollmentEndDate:
       enrollmentEndDateValue == null

@@ -22,5 +22,7 @@ public class StudentResponse
 
     public DateOnly? EnrollmentEndDate { get; set; }
 
+    public DateTime? ArchivedAt { get; set; }
+
     public DateTime CreatedAt { get; set; }
 }

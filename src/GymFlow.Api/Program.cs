@@ -11,12 +11,13 @@ using System.Threading.RateLimiting;
 using GymFlow.Api.ExceptionHandling;
 using GymFlow.Application.Services;
 using GymFlow.Domain.Enums;
+using GymFlow.Api.BackgroundServices;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
-
+builder.Services.AddHostedService<StudentLifecycleBackgroundService>();
 
 // Add services to the container.
 

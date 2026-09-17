@@ -264,7 +264,8 @@ public class StudentServiceTests
                 "aluno",
                 null,
                 null,
-Arg.Any<DateOnly>(),
+                StudentArchiveFilter.NotArchived,
+                Arg.Any<DateOnly>(),
                 20,
                 20)
             .Returns(
@@ -276,6 +277,7 @@ Arg.Any<DateOnly>(),
             "aluno",
             null,
                 null,
+                StudentArchiveFilter.NotArchived,
             page: 2,
             pageSize: 20);
 
@@ -300,7 +302,8 @@ Arg.Any<DateOnly>(),
                 "aluno",
                 null,
                 null,
-Arg.Any<DateOnly>(),
+                StudentArchiveFilter.NotArchived,
+                Arg.Any<DateOnly>(),
                 20,
                 20);
     }
@@ -314,6 +317,7 @@ Arg.Any<DateOnly>(),
                 null,
                 null,
                 null,
+                StudentArchiveFilter.NotArchived,
                 page: 0,
                 pageSize: 20));
 
@@ -324,6 +328,7 @@ Arg.Any<DateOnly>(),
                 Arg.Any<string?>(),
                 Arg.Any<bool?>(),
                 null,
+                StudentArchiveFilter.NotArchived,
                 Arg.Any<DateOnly>(),
                 Arg.Any<int>(),
                 Arg.Any<int>());
@@ -341,6 +346,7 @@ Arg.Any<DateOnly>(),
                 null,
                 null,
                 null,
+                StudentArchiveFilter.NotArchived,
                 page: 1,
                 pageSize: pageSize));
 
@@ -351,6 +357,7 @@ Arg.Any<DateOnly>(),
                 Arg.Any<string?>(),
                 Arg.Any<bool?>(),
                 null,
+                StudentArchiveFilter.NotArchived,
                 Arg.Any<DateOnly>(),
                 Arg.Any<int>(),
                 Arg.Any<int>());
@@ -794,5 +801,37 @@ Arg.Any<DateOnly>(),
             CreatedAt = DateTime.UtcNow,
             User = user
         };
+    }
+
+    [Fact]
+    public async Task UpdateStatusAsync_WhenStudentIsArchived_ShouldReturnFalse()
+    {
+        var gymId = Guid.NewGuid();
+
+        var student = CreateStudent(
+            gymId,
+            "Aluno Arquivado",
+            "arquivado@gymflow.dev",
+            false);
+
+        student.ArchivedAt = DateTime.UtcNow.AddDays(-1);
+
+        _studentRepository
+            .GetByIdAndGymIdAsync(
+                student.Id,
+                gymId)
+            .Returns(student);
+
+        var result = await _service.UpdateStatusAsync(
+            student.Id,
+            gymId,
+            true);
+
+        Assert.False(result);
+        Assert.False(student.User.IsActive);
+
+        await _studentRepository
+            .DidNotReceive()
+            .UpdateAsync(Arg.Any<Student>());
     }
 }

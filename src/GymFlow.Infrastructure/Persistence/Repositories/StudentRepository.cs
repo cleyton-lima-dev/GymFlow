@@ -29,6 +29,7 @@ public class StudentRepository : IStudentRepository
     string? search,
     bool? isActive,
     StudentEnrollmentFilter? enrollmentFilter,
+    StudentArchiveFilter archiveFilter,
     DateOnly referenceDate,
     int skip,
     int take)
@@ -38,6 +39,22 @@ public class StudentRepository : IStudentRepository
             .Include(student => student.User)
             .Where(student => student.User.GymId == gymId)
             .AsQueryable();
+        query = archiveFilter switch
+        {
+            StudentArchiveFilter.NotArchived =>
+                query.Where(student =>
+                    student.ArchivedAt == null),
+
+            StudentArchiveFilter.Archived =>
+                query.Where(student =>
+                    student.ArchivedAt != null),
+
+            StudentArchiveFilter.All =>
+                query,
+
+            _ => throw new ArgumentOutOfRangeException(
+                nameof(archiveFilter))
+        };
 
         if (!string.IsNullOrWhiteSpace(search))
         {
@@ -133,7 +150,33 @@ public class StudentRepository : IStudentRepository
                 student.User.GymId == gymId);
     }
 
+    public async Task<List<Guid>> GetGymIdsForLifecycleAsync()
+    {
+        return await _context.Students
+            .AsNoTracking()
+            .Where(student => student.ArchivedAt == null)
+            .Select(student => student.User.GymId)
+            .Distinct()
+            .ToListAsync();
+    }
+
+    public async Task<List<Student>> GetByGymIdForLifecycleAsync(
+    Guid gymId)
+    {
+        return await _context.Students
+            .Include(student => student.User)
+            .Where(student =>
+                student.User.GymId == gymId &&
+                student.ArchivedAt == null)
+            .ToListAsync();
+    }
+
     public async Task UpdateAsync(Student student)
+    {
+        await _context.SaveChangesAsync();
+    }
+
+    public async Task SaveChangesAsync()
     {
         await _context.SaveChangesAsync();
     }

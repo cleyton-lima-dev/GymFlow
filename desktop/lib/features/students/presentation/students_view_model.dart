@@ -14,6 +14,11 @@ enum StudentsEnrollmentFilter {
   expired,
   none,
 }
+enum StudentsArchiveFilter {
+  notArchived,
+  archived,
+  all,
+}
 
 class StudentsViewModel extends ChangeNotifier {
   StudentsViewModel(this._studentsService);
@@ -36,6 +41,8 @@ class StudentsViewModel extends ChangeNotifier {
   StudentsStatusFilter _statusFilter = StudentsStatusFilter.all;
   StudentsEnrollmentFilter _enrollmentFilter =
       StudentsEnrollmentFilter.all;
+  StudentsArchiveFilter _archiveFilter =
+      StudentsArchiveFilter.notArchived;
 
   int _page = 1;
   int _totalPages = 1;
@@ -69,10 +76,21 @@ class StudentsViewModel extends ChangeNotifier {
 
   bool get hasActiveFilter =>
       _statusFilter != StudentsStatusFilter.all ||
-          _enrollmentFilter != StudentsEnrollmentFilter.all;
+          _enrollmentFilter != StudentsEnrollmentFilter.all ||
+          _archiveFilter != StudentsArchiveFilter.notArchived;
 
   StudentsEnrollmentFilter get enrollmentFilter =>
       _enrollmentFilter;
+
+  StudentsArchiveFilter get archiveFilter => _archiveFilter;
+
+  int get _archiveFilterValue {
+    return switch (_archiveFilter) {
+      StudentsArchiveFilter.notArchived => 1,
+      StudentsArchiveFilter.archived => 2,
+      StudentsArchiveFilter.all => 3,
+    };
+  }
 
   Future<void> loadInitial() {
     return _loadPage(page: 1, showLoading: true);
@@ -106,12 +124,15 @@ class StudentsViewModel extends ChangeNotifier {
   Future<void> updateFilters({
     required StudentsStatusFilter statusFilter,
     required StudentsEnrollmentFilter enrollmentFilter,
+    required StudentsArchiveFilter archiveFilter,
   }) async {
+
     if (_statusFilter == statusFilter &&
-        _enrollmentFilter == enrollmentFilter) {
+        _enrollmentFilter == enrollmentFilter &&
+        _archiveFilter == archiveFilter) {
       return;
     }
-
+    _archiveFilter = archiveFilter;
     _statusFilter = statusFilter;
     _enrollmentFilter = enrollmentFilter;
 
@@ -177,6 +198,7 @@ class StudentsViewModel extends ChangeNotifier {
         enrollmentFilter: _enrollmentFilterValue,
         page: page,
         pageSize: pageSize,
+        archiveFilter: _archiveFilterValue,
       );
 
       if (_isDisposed || requestVersion != _requestVersion) {

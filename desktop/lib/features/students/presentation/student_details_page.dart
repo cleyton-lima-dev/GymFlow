@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
-
+import 'package:avelri_gestao/features/plans/data/plans_service.dart';
+import 'package:avelri_gestao/features/plans/models/plan_summary.dart';
 import 'package:avelri_gestao/app/theme/branding_controller.dart';
 import 'package:avelri_gestao/core/network/api_client.dart';
 import 'package:avelri_gestao/features/students/data/students_service.dart';
@@ -94,7 +95,26 @@ class _StudentDetailsView extends StatelessWidget {
                 Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    OutlinedButton.icon(
+                    student.archivedAt != null
+                        ? FilledButton.icon(
+                      onPressed: viewModel.isReactivating
+                          ? null
+                          : () => _showReactivateArchivedStudentDialog(
+                        context,
+                        viewModel,
+                      ),
+                      icon: viewModel.isReactivating
+                          ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                        ),
+                      )
+                          : const Icon(Icons.restore_rounded),
+                      label: const Text('Reativar aluno'),
+                    )
+                        : OutlinedButton.icon(
                       style: OutlinedButton.styleFrom(
                         foregroundColor: student.isActive
                             ? const Color(0xFFB54752)
@@ -112,78 +132,88 @@ class _StudentDetailsView extends StatelessWidget {
                       onPressed: viewModel.isUpdatingStatus
                           ? null
                           : () async {
-                              final newStatus = !student.isActive;
+                        final newStatus = !student.isActive;
 
-                              final confirmed = await showDialog<bool>(
-                                context: context,
-                                builder: (dialogContext) {
-                                  return AlertDialog(
-                                    title: Text(
-                                      newStatus
-                                          ? 'Ativar aluno?'
-                                          : 'Inativar aluno?',
-                                    ),
-                                    content: Text(
-                                      newStatus
-                                          ? 'O aluno voltará a ficar ativo no Avelri.'
-                                          : 'O aluno ficará inativo até ser reativado.',
-                                    ),
-                                    actions: [
-                                      TextButton(
-                                        onPressed: () {
-                                          Navigator.of(dialogContext)
-                                              .pop(false);
-                                        },
-                                        child: const Text('Cancelar'),
-                                      ),
-                                      FilledButton(
-                                        onPressed: () {
-                                          Navigator.of(dialogContext).pop(true);
-                                        },
-                                        child: Text(
-                                          newStatus ? 'Ativar' : 'Inativar',
-                                        ),
-                                      ),
-                                    ],
-                                  );
-                                },
-                              );
-
-                              if (confirmed != true || !context.mounted) {
-                                return;
-                              }
-
-                              final success = await viewModel.updateStatus(
-                                newStatus,
-                              );
-
-                              if (!context.mounted || !success) {
-                                return;
-                              }
-
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text(
+                        final confirmed = await showDialog<bool>(
+                          context: context,
+                          builder: (dialogContext) {
+                            return AlertDialog(
+                              title: Text(
+                                newStatus
+                                    ? 'Ativar aluno?'
+                                    : 'Inativar aluno?',
+                              ),
+                              content: Text(
+                                newStatus
+                                    ? 'O aluno voltará a ficar ativo no Avelri.'
+                                    : 'O aluno ficará inativo até ser reativado.',
+                              ),
+                              actions: [
+                                TextButton(
+                                  onPressed: () {
+                                    Navigator.of(dialogContext)
+                                        .pop(false);
+                                  },
+                                  child: const Text('Cancelar'),
+                                ),
+                                FilledButton(
+                                  onPressed: () {
+                                    Navigator.of(dialogContext)
+                                        .pop(true);
+                                  },
+                                  child: Text(
                                     newStatus
-                                        ? 'Aluno ativado com sucesso.'
-                                        : 'Aluno inativado com sucesso.',
+                                        ? 'Ativar'
+                                        : 'Inativar',
                                   ),
                                 ),
-                              );
-                            },
+                              ],
+                            );
+                          },
+                        );
+
+                        if (confirmed != true ||
+                            !context.mounted) {
+                          return;
+                        }
+
+                        final success =
+                        await viewModel.updateStatus(
+                          newStatus,
+                        );
+
+                        if (!context.mounted || !success) {
+                          return;
+                        }
+
+                        ScaffoldMessenger.of(context)
+                            .showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              newStatus
+                                  ? 'Aluno ativado com sucesso.'
+                                  : 'Aluno inativado com sucesso.',
+                            ),
+                          ),
+                        );
+                      },
                       icon: viewModel.isUpdatingStatus
                           ? const SizedBox(
-                              width: 16,
-                              height: 16,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                        ),
+                      )
                           : Icon(
-                              student.isActive
-                                  ? Icons.block_outlined
-                                  : Icons.check_circle_outline,
-                            ),
+                        student.isActive
+                            ? Icons.block_outlined
+                            : Icons.check_circle_outline,
+                      ),
                       label: Text(
-                        student.isActive ? 'Inativar aluno' : 'Ativar aluno',
+                        student.isActive
+                            ? 'Inativar aluno'
+                            : 'Ativar aluno',
                       ),
                     ),
                     const SizedBox(width: 12),
@@ -523,4 +553,149 @@ class _ErrorState extends StatelessWidget {
       ),
     );
   }
+}
+Future<void> _showReactivateArchivedStudentDialog(
+    BuildContext context,
+    StudentDetailsViewModel viewModel,
+    ) async {
+  final plansService = PlansService(
+    context.read<ApiClient>(),
+  );
+
+  final plans = await plansService.getPlans(
+    isActive: true,
+  );
+
+  if (!context.mounted) return;
+
+  if (plans.isEmpty) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(
+          'Nenhum plano ativo disponível.',
+        ),
+      ),
+    );
+    return;
+  }
+
+  PlanSummary selectedPlan = plans.first;
+  DateTime startDate = DateTime.now();
+
+  final confirmed = await showDialog<bool>(
+    context: context,
+    builder: (dialogContext) {
+      return StatefulBuilder(
+        builder: (context, setState) {
+          return AlertDialog(
+            title: const Text(
+              'Reativar aluno arquivado',
+            ),
+            content: SizedBox(
+              width: 380,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  DropdownButtonFormField<PlanSummary>(
+                    initialValue: selectedPlan,
+                    decoration: const InputDecoration(
+                      labelText: 'Plano',
+                    ),
+                    items: plans
+                        .map(
+                          (plan) => DropdownMenuItem(
+                        value: plan,
+                        child: Text(plan.name),
+                      ),
+                    )
+                        .toList(),
+                    onChanged: (plan) {
+                      if (plan == null) return;
+
+                      setState(() {
+                        selectedPlan = plan;
+                      });
+                    },
+                  ),
+                  const SizedBox(height: 18),
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text(
+                      'Data de início',
+                    ),
+                    subtitle: Text(
+                      _formatDialogDate(startDate),
+                    ),
+                    trailing: const Icon(
+                      Icons.calendar_month_outlined,
+                    ),
+                    onTap: () async {
+                      final selectedDate =
+                      await showDatePicker(
+                        context: context,
+                        initialDate: startDate,
+                        firstDate: DateTime.now(),
+                        lastDate: DateTime.now().add(
+                          const Duration(days: 365),
+                        ),
+                      );
+
+                      if (selectedDate == null) return;
+
+                      setState(() {
+                        startDate = selectedDate;
+                      });
+                    },
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  Navigator.of(dialogContext).pop(false);
+                },
+                child: const Text('Cancelar'),
+              ),
+              FilledButton(
+                onPressed: () {
+                  Navigator.of(dialogContext).pop(true);
+                },
+                child: const Text('Reativar'),
+              ),
+            ],
+          );
+        },
+      );
+    },
+  );
+
+  if (confirmed != true || !context.mounted) {
+    return;
+  }
+
+  final success =
+  await viewModel.reactivateArchivedStudent(
+    planId: selectedPlan.id,
+    startDate: startDate,
+  );
+
+  if (!context.mounted) return;
+
+  ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(
+      content: Text(
+        success
+            ? 'Aluno reativado com sucesso.'
+            : 'Não foi possível reativar o aluno.',
+      ),
+    ),
+  );
+}
+
+String _formatDialogDate(DateTime date) {
+  final day = date.day.toString().padLeft(2, '0');
+  final month = date.month.toString().padLeft(2, '0');
+
+  return '$day/$month/${date.year}';
 }

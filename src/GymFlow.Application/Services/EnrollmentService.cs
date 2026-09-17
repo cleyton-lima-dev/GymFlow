@@ -3,6 +3,7 @@ using GymFlow.Application.Interfaces.Repositories;
 using GymFlow.Application.Interfaces.Time;
 using GymFlow.Domain.Entities;
 using GymFlow.Domain.Enums;
+using GymFlow.Application.DTOs.Students;
 
 namespace GymFlow.Application.Services;
 
@@ -39,8 +40,11 @@ public class EnrollmentService
         var student = await _studentRepository
             .GetByIdAndGymIdAsync(request.StudentId, gymId);
 
-        if (student is null || !student.User.IsActive)
+        if (student is null ||
+            student.ArchivedAt is not null)
+        {
             return null;
+        }
 
         var plan = await _planRepository
             .GetByIdAsync(request.PlanId, gymId);
@@ -88,6 +92,42 @@ public class EnrollmentService
 
         await _enrollmentRepository.AddAsync(enrollment);
 
+        var isValidToday =
+    enrollment.Status == EnrollmentStatus.Active &&
+    enrollment.StartDate <= today &&
+    enrollment.EndDate > today;
+
+        if (isValidToday)
+        {
+            var studentChanged = false;
+
+            if (student.NoValidEnrollmentSince is not null)
+            {
+                student.NoValidEnrollmentSince = null;
+                studentChanged = true;
+            }
+
+            if (student.InactivationReason ==
+                StudentInactivationReason.NoValidEnrollment)
+            {
+                var now = DateTime.UtcNow;
+
+                student.User.IsActive = true;
+                student.InactivationReason = null;
+                student.InactivatedAt = null;
+
+                student.User.UpdatedAt = now;
+                student.UpdatedAt = now;
+
+                studentChanged = true;
+            }
+
+            if (studentChanged)
+            {
+                await _studentRepository.SaveChangesAsync();
+            }
+        }
+
         return ToResponse(
             enrollment,
             GetEffectiveStatus(
@@ -133,8 +173,11 @@ public class EnrollmentService
         var currentEnrollment = await _enrollmentRepository
             .GetByIdAsync(enrollmentId, gymId);
 
-        if (currentEnrollment is null)
+        if (currentEnrollment is null ||
+            currentEnrollment.Student.ArchivedAt is not null)
+        {
             return null;
+        }
 
         var plan = await _planRepository
             .GetByIdAsync(request.PlanId, gymId);
@@ -192,10 +235,158 @@ public class EnrollmentService
         await _enrollmentRepository
             .AddAsync(renewedEnrollment);
 
+        var student = currentEnrollment.Student;
+
+        var isValidToday =
+            renewedEnrollment.Status == EnrollmentStatus.Active &&
+            renewedEnrollment.StartDate <= today &&
+            renewedEnrollment.EndDate > today;
+
+        if (isValidToday)
+        {
+            var studentChanged = false;
+
+            if (student.NoValidEnrollmentSince is not null)
+            {
+                student.NoValidEnrollmentSince = null;
+                studentChanged = true;
+            }
+
+            if (student.InactivationReason ==
+                StudentInactivationReason.NoValidEnrollment)
+            {
+                var now = DateTime.UtcNow;
+
+                student.User.IsActive = true;
+                student.InactivationReason = null;
+                student.InactivatedAt = null;
+
+                student.User.UpdatedAt = now;
+                student.UpdatedAt = now;
+
+                studentChanged = true;
+            }
+
+            if (studentChanged)
+            {
+                await _studentRepository.SaveChangesAsync();
+            }
+        }
+
         return ToResponse(
             renewedEnrollment,
             GetEffectiveStatus(
                 renewedEnrollment,
+                today));
+    }
+
+    public async Task<EnrollmentResponse?> ReactivateArchivedStudentAsync(
+    Guid gymId,
+    Guid studentId,
+    ReactivateArchivedStudentRequest request)
+    {
+        if (studentId == Guid.Empty ||
+            request.PlanId == Guid.Empty ||
+            request.StartDate == default)
+        {
+            return null;
+        }
+
+        var student = await _studentRepository
+            .GetByIdAndGymIdAsync(studentId, gymId);
+
+        if (student is null ||
+            student.ArchivedAt is null)
+        {
+            return null;
+        }
+
+        var plan = await _planRepository
+            .GetByIdAsync(request.PlanId, gymId);
+
+        if (plan is null || !plan.IsActive)
+            return null;
+
+        var today = GetToday(gymId);
+
+        var endDate =
+            request.StartDate.AddMonths(
+                plan.DurationMonths);
+
+        if (endDate <= today)
+            return null;
+
+        var hasOverlappingEnrollment =
+            await _enrollmentRepository
+                .HasOverlappingEnrollmentAsync(
+                    student.Id,
+                    gymId,
+                    request.StartDate,
+                    endDate);
+
+        if (hasOverlappingEnrollment)
+            return null;
+
+        var now = DateTime.UtcNow;
+
+        student.ArchivedAt = null;
+
+        var isValidToday =
+            request.StartDate <= today &&
+            endDate > today;
+
+        if (isValidToday)
+        {
+            student.User.IsActive = true;
+            student.NoValidEnrollmentSince = null;
+            student.InactivationReason = null;
+            student.InactivatedAt = null;
+        }
+        else
+        {
+            student.User.IsActive = false;
+            student.NoValidEnrollmentSince = today;
+            student.InactivationReason =
+                StudentInactivationReason.NoValidEnrollment;
+            student.InactivatedAt = now;
+        }
+
+        student.User.UpdatedAt = now;
+        student.UpdatedAt = now;
+
+        var enrollment = new Enrollment
+        {
+            Id = Guid.NewGuid(),
+
+            StudentId = student.Id,
+            PlanId = plan.Id,
+
+            StartDate = request.StartDate,
+            EndDate = endDate,
+
+            Status = EnrollmentStatus.Active,
+
+            PlanName = plan.Name,
+            PlanPrice = plan.Price,
+            PlanDurationMonths = plan.DurationMonths,
+            PlanBillingCycle = plan.BillingCycle,
+
+            CreatedAt = now,
+
+            Student = student,
+            Plan = plan
+        };
+
+        await _enrollmentRepository
+            .AddAsync(enrollment);
+
+        await _studentRepository
+            .SaveChangesAsync();
+
+        return ToResponse(
+            enrollment,
+            GetEffectiveStatus(
+                enrollment,
                 today));
     }
 
