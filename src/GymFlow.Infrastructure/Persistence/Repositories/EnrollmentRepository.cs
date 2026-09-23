@@ -29,6 +29,7 @@ public class EnrollmentRepository : IEnrollmentRepository
             .Include(enrollment => enrollment.Student)
                 .ThenInclude(student => student.User)
             .Include(enrollment => enrollment.Plan)
+            .Include(enrollment => enrollment.Charge)
             .FirstOrDefaultAsync(enrollment =>
                 enrollment.Id == enrollmentId &&
                 enrollment.Student.User.GymId == gymId &&

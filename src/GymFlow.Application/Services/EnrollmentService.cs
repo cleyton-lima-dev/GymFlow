@@ -13,16 +13,19 @@ public class EnrollmentService
     private readonly IStudentRepository _studentRepository;
     private readonly IPlanRepository _planRepository;
     private readonly IGymTimeZoneProvider _gymTimeZoneProvider;
+    private readonly IChargeRepository _chargeRepository;
 
     public EnrollmentService(
         IEnrollmentRepository enrollmentRepository,
         IStudentRepository studentRepository,
         IPlanRepository planRepository,
+        IChargeRepository chargeRepository,
         IGymTimeZoneProvider gymTimeZoneProvider)
     {
         _enrollmentRepository = enrollmentRepository;
         _studentRepository = studentRepository;
         _planRepository = planRepository;
+        _chargeRepository = chargeRepository;
         _gymTimeZoneProvider = gymTimeZoneProvider;
     }
 
@@ -90,6 +93,17 @@ public class EnrollmentService
             Plan = plan
         };
 
+        enrollment.Charge = new Charge
+        {
+            Id = Guid.NewGuid(),
+            EnrollmentId = enrollment.Id,
+            Amount = enrollment.PlanPrice,
+            DueDate = enrollment.StartDate,
+            Status = ChargeStatus.Paid,
+            PaidAt = DateTime.UtcNow,
+            CreatedAt = DateTime.UtcNow
+        };
+
         await _enrollmentRepository.AddAsync(enrollment);
 
         var isValidToday =
@@ -150,8 +164,20 @@ public class EnrollmentService
         var effectiveStatus =
             GetEffectiveStatus(enrollment, today);
 
-        if (effectiveStatus != EnrollmentStatus.Active)
+        if (effectiveStatus != EnrollmentStatus.Active &&
+            effectiveStatus != EnrollmentStatus.PendingPayment)
+        {
             return false;
+        }
+
+        if (effectiveStatus == EnrollmentStatus.PendingPayment &&
+             enrollment.Charge is not null &&
+             (enrollment.Charge.Status == ChargeStatus.Pending ||
+              enrollment.Charge.Status == ChargeStatus.Overdue))
+        {
+            enrollment.Charge.Status = ChargeStatus.Cancelled;
+            enrollment.Charge.UpdatedAt = DateTime.UtcNow;
+        }
 
         enrollment.Status = EnrollmentStatus.Cancelled;
         enrollment.CancellationDate = today;
@@ -219,7 +245,7 @@ public class EnrollmentService
             StartDate = startDate,
             EndDate = endDate,
 
-            Status = EnrollmentStatus.Active,
+            Status = EnrollmentStatus.PendingPayment,
 
             PlanName = plan.Name,
             PlanPrice = plan.Price,
@@ -230,6 +256,16 @@ public class EnrollmentService
 
             Student = currentEnrollment.Student,
             Plan = plan
+        };
+
+        renewedEnrollment.Charge = new Charge
+        {
+            Id = Guid.NewGuid(),
+            EnrollmentId = renewedEnrollment.Id,
+            Amount = renewedEnrollment.PlanPrice,
+            DueDate = renewedEnrollment.StartDate,
+            Status = ChargeStatus.Pending,
+            CreatedAt = DateTime.UtcNow
         };
 
         await _enrollmentRepository

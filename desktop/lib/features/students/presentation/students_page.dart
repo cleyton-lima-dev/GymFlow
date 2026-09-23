@@ -359,6 +359,7 @@ class _StudentsTable extends StatelessWidget {
       EnrollmentStatus.active => 'Ativa',
       EnrollmentStatus.cancelled => 'Cancelada',
       EnrollmentStatus.expired => 'Vencida',
+      EnrollmentStatus.pendingPayment => 'Aguardando pagamento',
       null => 'Sem matrícula',
     };
   }

@@ -221,9 +221,7 @@ class _EnrollmentsTable extends StatelessWidget {
         columns: const [
           DataColumn(label: Text('Aluno')),
           DataColumn(label: Text('Plano')),
-          DataColumn(label: Text('Valor')),
-          DataColumn(label: Text('Início')),
-          DataColumn(label: Text('Vencimento')),
+          DataColumn(label: Text('Período')),
           DataColumn(label: Text('Status')),
           DataColumn(label: Text('Ações')),
         ],
@@ -234,27 +232,33 @@ class _EnrollmentsTable extends StatelessWidget {
                 Text(enrollment.studentName),
               ),
               DataCell(
-                Text(enrollment.planName),
-              ),
-              DataCell(
-                Text(
-                  currency.format(
-                    enrollment.planPrice,
-                  ),
+                Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      enrollment.planName,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      currency.format(
+                        enrollment.planPrice,
+                      ),
+                      style: const TextStyle(
+                        color: Color(0xFF74798D),
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
                 ),
               ),
               DataCell(
                 Text(
-                  dateFormat.format(
-                    enrollment.startDate,
-                  ),
-                ),
-              ),
-              DataCell(
-                Text(
-                  dateFormat.format(
-                    enrollment.endDate,
-                  ),
+                  '${dateFormat.format(enrollment.startDate)} → '
+                      '${dateFormat.format(enrollment.endDate)}',
                 ),
               ),
               DataCell(
@@ -298,7 +302,9 @@ class _EnrollmentsTable extends StatelessWidget {
                       ),
                     ),
                     if (enrollment.status ==
-                        EnrollmentStatus.active)
+                        EnrollmentStatus.active ||
+                        enrollment.status ==
+                            EnrollmentStatus.pendingPayment)
                       const PopupMenuItem(
                         value: 'cancel',
                         child: ListTile(
@@ -450,6 +456,7 @@ class _EnrollmentsTable extends StatelessWidget {
       EnrollmentStatus.active => 'Ativa',
       EnrollmentStatus.cancelled => 'Cancelada',
       EnrollmentStatus.expired => 'Vencida',
+      EnrollmentStatus.pendingPayment => 'Aguardando pagamento',
     };
   }
 }

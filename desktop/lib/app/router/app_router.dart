@@ -19,6 +19,7 @@ import 'package:avelri_gestao/features/plans/presentation/edit_plan_page.dart';
 import 'package:avelri_gestao/features/plans/models/plan_summary.dart';
 import 'package:avelri_gestao/features/enrollments/presentation/enrollments_page.dart';
 import 'package:avelri_gestao/features/enrollments/presentation/create_enrollment_page.dart';
+import 'package:avelri_gestao/features/charges/presentation/charges_page.dart';
 
 class AppRouter {
   AppRouter(this._sessionController, this._brandingController);
@@ -128,7 +129,7 @@ class AppRouter {
           GoRoute(
             path: '/finance',
             builder: (context, state) =>
-                const ModulePlaceholderPage(title: 'Financeiro'),
+            const ChargesPage(),
           ),
           GoRoute(
             path: '/check-in',

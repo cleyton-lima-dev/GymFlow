@@ -16,6 +16,7 @@ public class EnrollmentServiceTests
     private readonly IPlanRepository _planRepository;
     private readonly IGymTimeZoneProvider _gymTimeZoneProvider;
     private readonly EnrollmentService _service;
+    private readonly IChargeRepository _chargeRepository;
 
     public EnrollmentServiceTests()
     {
@@ -28,6 +29,9 @@ public class EnrollmentServiceTests
         _planRepository =
             Substitute.For<IPlanRepository>();
 
+        _chargeRepository =
+            Substitute.For<IChargeRepository>();
+
         _gymTimeZoneProvider =
             Substitute.For<IGymTimeZoneProvider>();
 
@@ -35,6 +39,7 @@ public class EnrollmentServiceTests
             _enrollmentRepository,
             _studentRepository,
             _planRepository,
+            _chargeRepository,
             _gymTimeZoneProvider);
     }
 
@@ -127,7 +132,14 @@ public class EnrollmentServiceTests
                     enrollment.PlanPrice == 150m &&
                     enrollment.PlanDurationMonths == 1 &&
                     enrollment.PlanBillingCycle ==
-                        PlanBillingCycle.Monthly));
+            PlanBillingCycle.Monthly &&
+                    enrollment.Charge != null &&
+                    enrollment.Charge.EnrollmentId == enrollment.Id &&
+                    enrollment.Charge.Amount == 150m &&
+                    enrollment.Charge.DueDate ==
+                        new DateOnly(2026, 9, 16) &&
+                    enrollment.Charge.Status == ChargeStatus.Paid &&
+                    enrollment.Charge.PaidAt != null));
     }
 
     [Fact]
@@ -214,6 +226,19 @@ public class EnrollmentServiceTests
             Status = EnrollmentStatus.Active
         };
 
+        var paidAt = DateTime.UtcNow.AddDays(-5);
+
+        enrollment.Charge = new Charge
+        {
+            Id = Guid.NewGuid(),
+            EnrollmentId = enrollment.Id,
+            Amount = 150m,
+            DueDate = enrollment.StartDate,
+            Status = ChargeStatus.Paid,
+            PaidAt = paidAt,
+            Enrollment = enrollment
+        };
+
         _enrollmentRepository
             .GetByIdAsync(enrollmentId, gymId)
             .Returns(enrollment);
@@ -235,6 +260,71 @@ public class EnrollmentServiceTests
 
         Assert.NotNull(enrollment.CancellationDate);
         Assert.NotNull(enrollment.UpdatedAt);
+        Assert.Equal(
+             ChargeStatus.Paid,
+             enrollment.Charge.Status);
+
+        Assert.Equal(
+            paidAt,
+            enrollment.Charge.PaidAt);
+
+        await _enrollmentRepository
+            .Received(1)
+            .UpdateAsync(enrollment);
+    }
+
+    [Fact]
+    public async Task CancelAsync_WhenEnrollmentIsPendingPayment_ShouldCancelEnrollmentAndCharge()
+    {
+        var gymId = Guid.NewGuid();
+        var enrollmentId = Guid.NewGuid();
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+
+        var enrollment = new Enrollment
+        {
+            Id = enrollmentId,
+            StudentId = Guid.NewGuid(),
+            PlanId = Guid.NewGuid(),
+            StartDate = today.AddDays(5),
+            EndDate = today.AddMonths(1),
+            Status = EnrollmentStatus.PendingPayment
+        };
+
+        enrollment.Charge = new Charge
+        {
+            Id = Guid.NewGuid(),
+            EnrollmentId = enrollment.Id,
+            Amount = 150m,
+            DueDate = enrollment.StartDate,
+            Status = ChargeStatus.Pending,
+            Enrollment = enrollment
+        };
+
+        _enrollmentRepository
+            .GetByIdAsync(enrollmentId, gymId)
+            .Returns(enrollment);
+
+        _gymTimeZoneProvider
+            .GetTimeZone(gymId)
+            .Returns(TimeZoneInfo.Utc);
+
+        var result =
+            await _service.CancelAsync(
+                gymId,
+                enrollmentId);
+
+        Assert.True(result);
+
+        Assert.Equal(
+            EnrollmentStatus.Cancelled,
+            enrollment.Status);
+
+        Assert.Equal(
+            ChargeStatus.Cancelled,
+            enrollment.Charge.Status);
+
+        Assert.NotNull(enrollment.Charge.UpdatedAt);
+        Assert.NotNull(enrollment.CancellationDate);
 
         await _enrollmentRepository
             .Received(1)
@@ -332,10 +422,25 @@ public class EnrollmentServiceTests
                 Arg.Is<Enrollment>(enrollment =>
                     enrollment.StudentId == student.Id &&
                     enrollment.PlanId == newPlan.Id &&
-                    enrollment.StartDate ==
-                        currentEnrollment.EndDate &&
+                    enrollment.StartDate == currentEnrollment.EndDate &&
+                    enrollment.EndDate ==
+                    currentEnrollment.EndDate.AddMonths(
+                        newPlan.DurationMonths) &&
+                    enrollment.Status ==
+                EnrollmentStatus.PendingPayment &&
                     enrollment.PlanName == "Plano Anual" &&
-                    enrollment.PlanPrice == 1200m));
+                    enrollment.PlanPrice == 1200m &&
+                    enrollment.PlanBillingCycle ==
+                PlanBillingCycle.Annual &&
+                    enrollment.Charge != null &&
+                    enrollment.Charge.EnrollmentId ==
+                    enrollment.Id &&
+                    enrollment.Charge.Amount == 1200m &&
+                    enrollment.Charge.DueDate ==
+                        currentEnrollment.EndDate &&
+                    enrollment.Charge.Status ==
+                ChargeStatus.Pending &&
+                    enrollment.Charge.PaidAt == null));
     }
 
     [Fact]
@@ -567,7 +672,7 @@ public class EnrollmentServiceTests
     }
 
     [Fact]
-    public async Task RenewAsync_WhenAutomaticallyInactiveStudentRenewsExpiredEnrollment_ShouldReactivate()
+    public async Task RenewAsync_WhenAutomaticallyInactiveStudentRenewsExpiredEnrollment_ShouldRemainInactiveUntilPayment()
     {
         var gymId = Guid.NewGuid();
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
@@ -643,10 +748,15 @@ public class EnrollmentServiceTests
                 request);
 
         Assert.NotNull(result);
-        Assert.True(student.User.IsActive);
-        Assert.Null(student.NoValidEnrollmentSince);
-        Assert.Null(student.InactivationReason);
-        Assert.Null(student.InactivatedAt);
+        Assert.False(student.User.IsActive);
+
+        Assert.NotNull(student.NoValidEnrollmentSince);
+
+        Assert.Equal(
+            StudentInactivationReason.NoValidEnrollment,
+            student.InactivationReason);
+
+        Assert.NotNull(student.InactivatedAt);
     }
 
     [Fact]

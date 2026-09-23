@@ -3,7 +3,8 @@ import '../../plans/models/plan_summary.dart';
 enum EnrollmentStatus {
   active(1),
   cancelled(2),
-  expired(3);
+  expired(3),
+  pendingPayment(4);
 
   const EnrollmentStatus(this.value);
 
