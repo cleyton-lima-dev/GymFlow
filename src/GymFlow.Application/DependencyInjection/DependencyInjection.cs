@@ -13,6 +13,7 @@ public static class DependencyInjection
         services.AddScoped<ExerciseService>();
         services.AddScoped<PlanService>();
         services.AddScoped<EnrollmentService>();
+        services.AddScoped<ChargeService>();
         services.AddScoped<StudentAccessService>();
         services.AddScoped<StudentLifecycleService>();
         services.AddScoped<WorkoutTemplateService>();

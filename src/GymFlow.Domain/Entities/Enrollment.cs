@@ -34,4 +34,6 @@ public class Enrollment
     public Student Student { get; set; } = null!;
 
     public Plan Plan { get; set; } = null!;
+
+    public Charge? Charge { get; set; }
 }

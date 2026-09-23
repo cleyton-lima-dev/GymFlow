@@ -37,19 +37,14 @@ public static class DependencyInjection
         services.AddScoped<IExerciseRepository, ExerciseRepository>();
         services.AddScoped<IPlanRepository, PlanRepository>();
         services.AddScoped<IEnrollmentRepository, EnrollmentRepository>();
+        services.AddScoped<IChargeRepository, ChargeRepository>();
         services.AddScoped<IWorkoutTemplateRepository, WorkoutTemplateRepository>();
         services.AddScoped<IWorkoutRepository, WorkoutRepository>();
         services.AddScoped<IPhysicalAssessmentRepository, PhysicalAssessmentRepository>();
-        services.AddScoped<
-            IWorkoutExecutionRepository,
-             WorkoutExecutionRepository>();
-        services.AddScoped<
-            IWorkoutDayProgressRepository,
-             WorkoutDayProgressRepository>();
+        services.AddScoped<IWorkoutExecutionRepository, WorkoutExecutionRepository>();
+        services.AddScoped<IWorkoutDayProgressRepository, WorkoutDayProgressRepository>();
         services.AddScoped<ITokenService, JwtTokenService>();
-        services.AddSingleton<
-            IGymTimeZoneProvider,
-            ConfigurationGymTimeZoneProvider>();
+        services.AddSingleton<IGymTimeZoneProvider, ConfigurationGymTimeZoneProvider>();
 
         return services;
 
