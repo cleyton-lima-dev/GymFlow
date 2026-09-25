@@ -35,6 +35,8 @@ class _StudentDetailsView extends StatelessWidget {
         .watch<BrandingController>()
         .branding
         .primaryColor;
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
 
     if (viewModel.isLoading && viewModel.student == null) {
       return const Center(child: CircularProgressIndicator());
@@ -68,14 +70,14 @@ class _StudentDetailsView extends StatelessWidget {
                   icon: const Icon(Icons.arrow_back_rounded),
                 ),
                 const SizedBox(width: 8),
-                const Expanded(
+                Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
                         'Detalhes do aluno',
                         style: TextStyle(
-                          color: Color(0xFF171A2C),
+                          color: colorScheme.onSurface,
                           fontSize: 28,
                           fontWeight: FontWeight.w800,
                           letterSpacing: -0.5,
@@ -85,7 +87,7 @@ class _StudentDetailsView extends StatelessWidget {
                       Text(
                         'Consulte os dados cadastrais e o status do aluno.',
                         style: TextStyle(
-                          color: Color(0xFF74798D),
+                          color: colorScheme.onSurfaceVariant,
                           fontSize: 14,
                         ),
                       ),
@@ -240,9 +242,9 @@ class _StudentDetailsView extends StatelessWidget {
               width: double.infinity,
               padding: const EdgeInsets.all(26),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: colorScheme.surface,
                 borderRadius: BorderRadius.circular(18),
-                border: Border.all(color: const Color(0xFFE5E7EF)),
+                border: Border.all(color: theme.dividerColor),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -268,8 +270,8 @@ class _StudentDetailsView extends StatelessWidget {
                           children: [
                             Text(
                               student.name,
-                              style: const TextStyle(
-                                color: Color(0xFF202336),
+                              style: TextStyle(
+                                color: colorScheme.onSurface,
                                 fontSize: 20,
                                 fontWeight: FontWeight.w800,
                               ),
@@ -277,8 +279,8 @@ class _StudentDetailsView extends StatelessWidget {
                             const SizedBox(height: 5),
                             Text(
                               student.email,
-                              style: const TextStyle(
-                                color: Color(0xFF74798D),
+                              style: TextStyle(
+                                color: colorScheme.onSurfaceVariant,
                                 fontSize: 13,
                               ),
                             ),
@@ -289,7 +291,7 @@ class _StudentDetailsView extends StatelessWidget {
                     ],
                   ),
                   const SizedBox(height: 26),
-                  const Divider(color: Color(0xFFE8EAF1)),
+                  Divider(color: theme.dividerColor),
                   const SizedBox(height: 24),
                   _SectionTitle(
                     icon: Icons.badge_outlined,
@@ -409,16 +411,22 @@ class _InfoItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
     return Container(
       padding: const EdgeInsets.all(17),
       decoration: BoxDecoration(
-        color: const Color(0xFFF7F8FB),
+        color: colorScheme.surfaceContainerHighest,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFE8EAF1)),
+        border: Border.all(color: theme.dividerColor),
       ),
       child: Row(
         children: [
-          Icon(icon, size: 20, color: const Color(0xFF74798D)),
+          Icon(
+            icon,
+            size: 20,
+            color: colorScheme.onSurfaceVariant,
+          ),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
@@ -426,8 +434,8 @@ class _InfoItem extends StatelessWidget {
               children: [
                 Text(
                   label,
-                  style: const TextStyle(
-                    color: Color(0xFF7B8093),
+                  style: TextStyle(
+                    color: colorScheme.onSurfaceVariant,
                     fontSize: 11,
                     fontWeight: FontWeight.w600,
                   ),
@@ -436,8 +444,8 @@ class _InfoItem extends StatelessWidget {
                 Text(
                   value,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: Color(0xFF292C3E),
+                  style: TextStyle(
+                    color: colorScheme.onSurface,
                     fontSize: 13,
                     fontWeight: FontWeight.w700,
                   ),
@@ -462,8 +470,10 @@ class _SectionTitle extends StatelessWidget {
   final String title;
   final Color color;
 
+
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     return Row(
       children: [
         Container(
@@ -478,8 +488,8 @@ class _SectionTitle extends StatelessWidget {
         const SizedBox(width: 12),
         Text(
           title,
-          style: const TextStyle(
-            color: Color(0xFF24273A),
+          style: TextStyle(
+            color: colorScheme.onSurface,
             fontSize: 16,
             fontWeight: FontWeight.w800,
           ),
@@ -496,13 +506,13 @@ class _StatusBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final background = isActive
-        ? const Color(0xFFEAF8F2)
-        : const Color(0xFFFCEEEF);
-
     final foreground = isActive
-        ? const Color(0xFF218C63)
-        : const Color(0xFFB54752);
+        ? const Color(0xFF2CB67D)
+        : const Color(0xFFE35D6A);
+
+    final background = foreground.withValues(
+      alpha: Theme.of(context).brightness == Brightness.dark ? 0.16 : 0.10,
+    );
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),

@@ -35,6 +35,8 @@ class _ChargesView extends StatelessWidget {
         context.watch<BrandingController>().branding;
 
     final primaryColor = branding.primaryColor;
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(30),
@@ -48,7 +50,7 @@ class _ChargesView extends StatelessWidget {
           children: [
             Row(
               children: [
-                const Expanded(
+                Expanded(
                   child: Column(
                     crossAxisAlignment:
                     CrossAxisAlignment.start,
@@ -56,7 +58,7 @@ class _ChargesView extends StatelessWidget {
                       Text(
                         'Cobranças',
                         style: TextStyle(
-                          color: Color(0xFF171A2C),
+                          color: colorScheme.onSurface,
                           fontSize: 28,
                           fontWeight: FontWeight.w800,
                         ),
@@ -65,7 +67,7 @@ class _ChargesView extends StatelessWidget {
                       Text(
                         'Acompanhe os pagamentos das matrículas.',
                         style: TextStyle(
-                          color: Color(0xFF74798D),
+                          color: colorScheme.onSurfaceVariant,
                           fontSize: 14,
                         ),
                       ),
@@ -89,11 +91,11 @@ class _ChargesView extends StatelessWidget {
               width: double.infinity,
               padding: const EdgeInsets.all(22),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: colorScheme.surface,
                 borderRadius:
                 BorderRadius.circular(18),
                 border: Border.all(
-                  color: const Color(0xFFE5E7EF),
+                  color: theme.dividerColor,
                 ),
               ),
               child: viewModel.isLoading &&

@@ -30,6 +30,8 @@ class _StudentsView extends StatelessWidget {
     final viewModel = context.watch<StudentsViewModel>();
     final branding = context.watch<BrandingController>().branding;
     final primaryColor = branding.primaryColor;
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(30),
@@ -41,24 +43,24 @@ class _StudentsView extends StatelessWidget {
             Row(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
-                const Expanded(
+                Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
                         'Gestão de alunos',
                         style: TextStyle(
-                          color: Color(0xFF171A2C),
-                          fontSize: 28,
+                          color: colorScheme.onSurface,
                           fontWeight: FontWeight.w800,
                           letterSpacing: -0.5,
+                          fontSize: 28,
                         ),
                       ),
                       SizedBox(height: 7),
                       Text(
                         'Consulte e gerencie os alunos cadastrados na academia.',
                         style: TextStyle(
-                          color: Color(0xFF74798D),
+                          color: colorScheme.onSurfaceVariant,
                           fontSize: 14,
                         ),
                       ),
@@ -88,9 +90,9 @@ class _StudentsView extends StatelessWidget {
               width: double.infinity,
               padding: const EdgeInsets.all(22),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: colorScheme.surface,
                 borderRadius: BorderRadius.circular(18),
-                border: Border.all(color: const Color(0xFFE5E7EF)),
+                border: Border.all(color: theme.dividerColor),
               ),
               child: Column(
                 children: [
@@ -106,21 +108,21 @@ class _StudentsView extends StatelessWidget {
                               size: 21,
                             ),
                             filled: true,
-                            fillColor: const Color(0xFFF7F8FB),
+                            fillColor: colorScheme.surfaceContainerHighest,
                             contentPadding: const EdgeInsets.symmetric(
                               horizontal: 16,
                               vertical: 15,
                             ),
                             border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(11),
-                              borderSide: const BorderSide(
-                                color: Color(0xFFE3E5ED),
+                              borderSide: BorderSide(
+                                color: theme.dividerColor,
                               ),
                             ),
                             enabledBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(11),
-                              borderSide: const BorderSide(
-                                color: Color(0xFFE3E5ED),
+                              borderSide: BorderSide(
+                                color: theme.dividerColor,
                               ),
                             ),
                           ),
@@ -178,7 +180,7 @@ class _StudentsView extends StatelessWidget {
                     ),
                   if (viewModel.hasStudents) ...[
                     const SizedBox(height: 18),
-                    const Divider(color: Color(0xFFE8EAF1), height: 1),
+                    Divider(color: theme.dividerColor, height: 1),
                     const SizedBox(height: 16),
                     Row(
                       children: [
@@ -202,8 +204,8 @@ class _StudentsView extends StatelessWidget {
                           padding: const EdgeInsets.symmetric(horizontal: 8),
                           child: Text(
                             'Página ${viewModel.page} de ${viewModel.totalPages}',
-                            style: const TextStyle(
-                              color: Color(0xFF3B3F52),
+                            style: TextStyle(
+                              color: colorScheme.onSurface,
                               fontSize: 12,
                               fontWeight: FontWeight.w700,
                             ),
@@ -238,6 +240,8 @@ class _StudentsTable extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
     return ClipRRect(
       borderRadius: BorderRadius.circular(12),
       child: SingleChildScrollView(
@@ -246,11 +250,13 @@ class _StudentsTable extends StatelessWidget {
           showCheckboxColumn: false,
           columnSpacing: 28,
           horizontalMargin: 16,
-          headingRowColor: WidgetStateProperty.all(const Color(0xFFF7F8FB)),
+          headingRowColor: WidgetStateProperty.all(
+            colorScheme.surfaceContainerHighest,
+          ),
           dataRowMinHeight: 64,
           dataRowMaxHeight: 64,
-          headingTextStyle: const TextStyle(
-            color: Color(0xFF6F7487),
+          headingTextStyle: TextStyle(
+            color: colorScheme.onSurfaceVariant,
             fontSize: 11,
             fontWeight: FontWeight.w800,
           ),
@@ -291,8 +297,8 @@ class _StudentsTable extends StatelessWidget {
                           child: Text(
                             student.name,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: Color(0xFF222536),
+                            style: TextStyle(
+                              color: colorScheme.onSurface,
                               fontSize: 13,
                               fontWeight: FontWeight.w700,
                             ),
@@ -393,13 +399,13 @@ class _StatusBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final background = isActive
-        ? const Color(0xFFEAF8F2)
-        : const Color(0xFFFCEEEF);
-
     final foreground = isActive
-        ? const Color(0xFF218C63)
-        : const Color(0xFFB54752);
+        ? const Color(0xFF2CB67D)
+        : const Color(0xFFE35D6A);
+
+    final background = foreground.withValues(
+      alpha: Theme.of(context).brightness == Brightness.dark ? 0.16 : 0.10,
+    );
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),

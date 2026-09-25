@@ -78,14 +78,16 @@ class ManagementShellPage extends StatelessWidget {
     final branding = context.watch<BrandingController>().branding;
 
     final primaryColor = branding.primaryColor;
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F6FA),
+      backgroundColor: theme.scaffoldBackgroundColor,
       body: Row(
         children: [
           Container(
             width: 254,
-            color: const Color(0xFF111425),
+            color: branding.secondaryColor,
             child: SafeArea(
               child: Column(
                 children: [
@@ -98,51 +100,31 @@ class ManagementShellPage extends StatelessWidget {
                     ),
                     child: Row(
                       children: [
-                        Container(
-                          width: 44,
-                          height: 44,
-                          padding: const EdgeInsets.all(6),
-                          decoration: BoxDecoration(
-                            color: primaryColor,
-                            borderRadius: BorderRadius.circular(12),
-                          ),
+                        SizedBox(
+                          width: 48,
+                          height: 48,
                           child: branding.logoAsset == null
-                              ? const Icon(
+                              ? Icon(
                             Icons.fitness_center_rounded,
-                            color: Colors.white,
-                            size: 23,
+                            color: primaryColor,
+                            size: 28,
                           )
                               : Image.asset(
                             branding.logoAsset!,
                             fit: BoxFit.contain,
                           ),
                         ),
-                        const SizedBox(width: 13),
+                        const SizedBox(width: 14),
                         Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Text(
-                                'AVELRI',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.w900,
-                                  fontSize: 17,
-                                  letterSpacing: 1.2,
-                                ),
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                branding.displayName,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                  color: Color(0xFF9499AD),
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ],
+                          child: Text(
+                            branding.displayName,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w800,
+                              fontSize: 16,
+                            ),
                           ),
                         ),
                       ],
@@ -259,11 +241,11 @@ class ManagementShellPage extends StatelessWidget {
                 Container(
                   height: 74,
                   padding: const EdgeInsets.symmetric(horizontal: 30),
-                  decoration: const BoxDecoration(
-                    color: Colors.white,
+                  decoration: BoxDecoration(
+                    color: colorScheme.surface,
                     border: Border(
                       bottom: BorderSide(
-                        color: Color(0xFFE8EAF1),
+                        color: theme.dividerColor,
                       ),
                     ),
                   ),
@@ -271,8 +253,8 @@ class ManagementShellPage extends StatelessWidget {
                     children: [
                       Text(
                         _pageTitle,
-                        style: const TextStyle(
-                          color: Color(0xFF171A2C),
+                        style: TextStyle(
+                          color: colorScheme.onSurface,
                           fontSize: 19,
                           fontWeight: FontWeight.w800,
                         ),
@@ -284,10 +266,10 @@ class ManagementShellPage extends StatelessWidget {
                           vertical: 7,
                         ),
                         decoration: BoxDecoration(
-                          color: const Color(0xFFF4F5F9),
+                          color: colorScheme.surfaceContainerHighest,
                           borderRadius: BorderRadius.circular(30),
                           border: Border.all(
-                            color: const Color(0xFFE5E7EF),
+                            color: theme.dividerColor,
                           ),
                         ),
                         child: Row(
@@ -301,10 +283,10 @@ class ManagementShellPage extends StatelessWidget {
                               ),
                             ),
                             const SizedBox(width: 7),
-                            const Text(
+                            Text(
                               'Online',
                               style: TextStyle(
-                                color: Color(0xFF656A7E),
+                                color: colorScheme.onSurfaceVariant,
                                 fontSize: 11,
                                 fontWeight: FontWeight.w700,
                               ),

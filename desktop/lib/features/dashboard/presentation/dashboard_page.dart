@@ -12,6 +12,10 @@ class DashboardPage extends StatelessWidget {
   Widget build(BuildContext context) {
     final user = context.watch<SessionController>().user;
     final branding = context.watch<BrandingController>().branding;
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
+    const statusColor = Color(0xFF2CB67D);
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(30),
@@ -22,8 +26,8 @@ class DashboardPage extends StatelessWidget {
           children: [
             Text(
               'Olá, ${_firstName(user?.name)}.',
-              style: const TextStyle(
-                color: Color(0xFF171A2C),
+              style: TextStyle(
+                color: colorScheme.onSurface,
                 fontSize: 28,
                 fontWeight: FontWeight.w800,
                 letterSpacing: -0.5,
@@ -32,8 +36,8 @@ class DashboardPage extends StatelessWidget {
             const SizedBox(height: 7),
             Text(
               'Bem-vindo ao painel de gestão da ${branding.displayName}.',
-              style: const TextStyle(
-                color: Color(0xFF74798D),
+              style: TextStyle(
+                color: colorScheme.onSurfaceVariant,
                 fontSize: 14,
               ),
             ),
@@ -42,10 +46,10 @@ class DashboardPage extends StatelessWidget {
               width: double.infinity,
               padding: const EdgeInsets.all(26),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: colorScheme.surface,
                 borderRadius: BorderRadius.circular(18),
                 border: Border.all(
-                  color: const Color(0xFFE5E7EF),
+                  color: theme.dividerColor,
                 ),
               ),
               child: Row(
@@ -75,17 +79,17 @@ class DashboardPage extends StatelessWidget {
                       children: [
                         Text(
                           branding.displayName,
-                          style: const TextStyle(
-                            color: Color(0xFF171A2C),
+                          style: TextStyle(
+                            color: colorScheme.onSurface,
                             fontSize: 18,
                             fontWeight: FontWeight.w800,
                           ),
                         ),
                         const SizedBox(height: 5),
-                        const Text(
+                        Text(
                           'Sua área de gestão está conectada e pronta para uso.',
                           style: TextStyle(
-                            color: Color(0xFF74798D),
+                            color: colorScheme.onSurfaceVariant,
                             fontSize: 13,
                           ),
                         ),
@@ -98,21 +102,23 @@ class DashboardPage extends StatelessWidget {
                       vertical: 8,
                     ),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFEAF8F2),
+                      color: statusColor.withValues(
+                        alpha: theme.brightness == Brightness.dark ? 0.16 : 0.10,
+                      ),
                       borderRadius: BorderRadius.circular(30),
                     ),
-                    child: const Row(
+                    child: Row(
                       children: [
                         Icon(
                           Icons.check_circle_rounded,
-                          color: Color(0xFF218C63),
+                          color: statusColor,
                           size: 16,
                         ),
                         SizedBox(width: 6),
                         Text(
                           'Sistema ativo',
                           style: TextStyle(
-                            color: Color(0xFF218C63),
+                            color: statusColor,
                             fontSize: 11,
                             fontWeight: FontWeight.w700,
                           ),
@@ -124,10 +130,10 @@ class DashboardPage extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 32),
-            const Text(
+            Text(
               'Acesso rápido',
               style: TextStyle(
-                color: Color(0xFF24273A),
+                color: colorScheme.onSurface,
                 fontSize: 17,
                 fontWeight: FontWeight.w800,
               ),
@@ -171,26 +177,26 @@ class DashboardPage extends StatelessWidget {
             Container(
               padding: const EdgeInsets.all(22),
               decoration: BoxDecoration(
-                color: const Color(0xFFF0EEFA),
+                color: branding.primaryColor.withValues(alpha: 0.10),
                 borderRadius: BorderRadius.circular(16),
                 border: Border.all(
-                  color: const Color(0xFFE1DCF5),
+                  color: branding.primaryColor.withValues(alpha: 0.22),
                 ),
               ),
-              child: const Row(
+              child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Icon(
                     Icons.info_outline_rounded,
-                    color: Color(0xFF5B42AF),
+                    color: branding.primaryColor,
                     size: 21,
                   ),
-                  SizedBox(width: 12),
+                  const SizedBox(width: 12),
                   Expanded(
                     child: Text(
-                      'Os módulos de gestão serão liberados gradualmente conforme a evolução do Avelri Gestão.',
+                      'Novos módulos de gestão serão liberados gradualmente conforme a evolução do sistema.',
                       style: TextStyle(
-                        color: Color(0xFF574F73),
+                        color: colorScheme.onSurfaceVariant,
                         fontSize: 13,
                         height: 1.4,
                       ),
@@ -238,6 +244,8 @@ class _QuickAccessCardState extends State<_QuickAccessCard> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
     return MouseRegion(
       cursor: SystemMouseCursors.click,
       onEnter: (_) {
@@ -263,12 +271,12 @@ class _QuickAccessCardState extends State<_QuickAccessCard> {
             0,
           ),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: colorScheme.surface,
             borderRadius: BorderRadius.circular(16),
             border: Border.all(
               color: _hovering
                   ? widget.accentColor.withValues(alpha: 0.35)
-                  : const Color(0xFFE5E7EF),
+                  : theme.dividerColor,
             ),
             boxShadow: _hovering
                 ? const [
@@ -300,8 +308,8 @@ class _QuickAccessCardState extends State<_QuickAccessCard> {
               const Spacer(),
               Text(
                 widget.title,
-                style: const TextStyle(
-                  color: Color(0xFF202336),
+                style: TextStyle(
+                  color: colorScheme.onSurface,
                   fontSize: 15,
                   fontWeight: FontWeight.w800,
                 ),
@@ -311,8 +319,8 @@ class _QuickAccessCardState extends State<_QuickAccessCard> {
                 widget.description,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  color: Color(0xFF7B8093),
+                style: TextStyle(
+                  color: colorScheme.onSurfaceVariant,
                   fontSize: 11,
                 ),
               ),

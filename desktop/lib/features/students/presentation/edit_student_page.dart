@@ -60,6 +60,8 @@ class _EditStudentViewState extends State<_EditStudentView> {
         .watch<BrandingController>()
         .branding
         .primaryColor;
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
 
     if (viewModel.isLoading && viewModel.student == null) {
       return const Center(child: CircularProgressIndicator());
@@ -114,13 +116,13 @@ class _EditStudentViewState extends State<_EditStudentView> {
                   icon: const Icon(Icons.arrow_back_rounded),
                 ),
                 const SizedBox(width: 8),
-                const Column(
+                Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
                       'Editar aluno',
                       style: TextStyle(
-                        color: Color(0xFF171A2C),
+                        color: colorScheme.onSurface,
                         fontSize: 28,
                         fontWeight: FontWeight.w800,
                       ),
@@ -128,7 +130,9 @@ class _EditStudentViewState extends State<_EditStudentView> {
                     SizedBox(height: 7),
                     Text(
                       'Atualize os dados cadastrais do aluno.',
-                      style: TextStyle(color: Color(0xFF74798D), fontSize: 14),
+                      style: TextStyle(
+                          color: colorScheme.onSurfaceVariant,
+                          fontSize: 14),
                     ),
                   ],
                 ),
@@ -139,9 +143,9 @@ class _EditStudentViewState extends State<_EditStudentView> {
               width: double.infinity,
               padding: const EdgeInsets.all(26),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: colorScheme.surface,
                 borderRadius: BorderRadius.circular(18),
-                border: Border.all(color: const Color(0xFFE5E7EF)),
+                border: Border.all(color: theme.dividerColor),
               ),
               child: Form(
                 key: _formKey,
@@ -163,10 +167,10 @@ class _EditStudentViewState extends State<_EditStudentView> {
                           ),
                         ),
                         const SizedBox(width: 12),
-                        const Text(
+                        Text(
                           'Dados do aluno',
                           style: TextStyle(
-                            color: Color(0xFF24273A),
+                            color: colorScheme.onSurface,
                             fontSize: 16,
                             fontWeight: FontWeight.w800,
                           ),
@@ -243,7 +247,7 @@ class _EditStudentViewState extends State<_EditStudentView> {
                       ),
                     ],
                     const SizedBox(height: 28),
-                    const Divider(color: Color(0xFFE8EAF1)),
+                    Divider(color: theme.dividerColor),
                     const SizedBox(height: 20),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.end,
@@ -365,13 +369,15 @@ class _Field extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           label,
-          style: const TextStyle(
-            color: Color(0xFF303348),
+          style: TextStyle(
+            color: colorScheme.onSurfaceVariant,
             fontSize: 12,
             fontWeight: FontWeight.w700,
           ),
@@ -385,14 +391,14 @@ class _Field extends StatelessWidget {
           decoration: InputDecoration(
             prefixIcon: Icon(icon),
             filled: true,
-            fillColor: const Color(0xFFF7F8FB),
+            fillColor: colorScheme.surfaceContainerHighest,
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: Color(0xFFE3E5ED)),
+              borderSide: BorderSide(color: theme.dividerColor)
             ),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: Color(0xFFE3E5ED)),
+              borderSide: BorderSide(color: theme.dividerColor)
             ),
           ),
         ),

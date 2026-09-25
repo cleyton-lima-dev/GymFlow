@@ -7,6 +7,7 @@ const acPowerGymBranding = GymBranding(
   primaryColor: Color(0xFFFD6800),
   secondaryColor: Color(0xFF121314),
   backgroundColor: Color(0xFF030304),
+  surfaceColor: Color(0xFF121314),
   brightness: Brightness.dark,
   logoAsset: 'assets/branding/ac_power_gym/ac_power_gym_logo.png',
 );

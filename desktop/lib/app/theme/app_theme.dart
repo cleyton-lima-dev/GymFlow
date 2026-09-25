@@ -8,21 +8,21 @@ class AppTheme {
   static ThemeData fromBranding(GymBranding branding) {
     final colorScheme = ColorScheme.fromSeed(
       seedColor: branding.primaryColor,
-      brightness: Brightness.light,
+      brightness: branding.brightness,
     ).copyWith(
       primary: branding.primaryColor,
       secondary: branding.secondaryColor,
-      surface: Colors.white,
+      surface: branding.surfaceColor ?? branding.backgroundColor,
     );
 
     return ThemeData(
       useMaterial3: true,
-      brightness: Brightness.light,
+      brightness: branding.brightness,
       colorScheme: colorScheme,
-      scaffoldBackgroundColor: const Color(0xFFF5F6FA),
-      dividerColor: const Color(0xFFE8EAF1),
-      cardTheme: const CardThemeData(
-        color: Colors.white,
+      scaffoldBackgroundColor: branding.backgroundColor,
+      dividerColor: colorScheme.outlineVariant,
+      cardTheme: CardThemeData(
+        color: colorScheme.surface,
         elevation: 0,
         margin: EdgeInsets.zero,
       ),

@@ -30,6 +30,8 @@ class _PlansView extends StatelessWidget {
     final viewModel = context.watch<PlansViewModel>();
     final branding = context.watch<BrandingController>().branding;
     final primaryColor = branding.primaryColor;
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(30),
@@ -41,14 +43,14 @@ class _PlansView extends StatelessWidget {
             Row(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
-                const Expanded(
+                Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
                         'Planos',
                         style: TextStyle(
-                          color: Color(0xFF171A2C),
+                          color: colorScheme.onSurface,
                           fontSize: 28,
                           fontWeight: FontWeight.w800,
                           letterSpacing: -0.5,
@@ -58,7 +60,7 @@ class _PlansView extends StatelessWidget {
                       Text(
                         'Gerencie os planos oferecidos pela academia.',
                         style: TextStyle(
-                          color: Color(0xFF74798D),
+                          color: colorScheme.onSurfaceVariant,
                           fontSize: 14,
                         ),
                       ),
@@ -85,10 +87,10 @@ class _PlansView extends StatelessWidget {
               width: double.infinity,
               padding: const EdgeInsets.all(22),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: colorScheme.surface,
                 borderRadius: BorderRadius.circular(18),
                 border: Border.all(
-                  color: const Color(0xFFE5E7EF),
+                  color: theme.dividerColor,
                 ),
               ),
               child: Column(
@@ -187,6 +189,8 @@ class _PlansTable extends StatelessWidget {
       locale: 'pt_BR',
       symbol: 'R\$',
     );
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
 
     return SizedBox(
       width: double.infinity,
@@ -222,16 +226,18 @@ class _PlansTable extends StatelessWidget {
                   ),
                   decoration: BoxDecoration(
                     color: plan.isActive
-                        ? const Color(0xFFEDE9FE)
-                        : const Color(0xFFF1F2F6),
+                        ? const Color(0xFF2CB67D).withValues(
+                      alpha: theme.brightness == Brightness.dark ? 0.16 : 0.10,
+                    )
+                        : colorScheme.onSurfaceVariant.withValues(alpha: 0.10),
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Text(
                     plan.isActive ? 'Ativo' : 'Inativo',
                     style: TextStyle(
                       color: plan.isActive
-                          ? const Color(0xFF5B21B6)
-                          : const Color(0xFF6B7280),
+                          ? const Color(0xFF2CB67D)
+                          : colorScheme.onSurfaceVariant,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
@@ -299,15 +305,18 @@ class _FilterButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
     return OutlinedButton(
       onPressed: onTap,
       style: OutlinedButton.styleFrom(
         foregroundColor:
-        selected ? Colors.white : const Color(0xFF555A6D),
+        selected ? Colors.white : colorScheme.onSurfaceVariant,
         backgroundColor:
-        selected ? color : Colors.white,
+        selected ? color : colorScheme.surface,
         side: BorderSide(
-          color: selected ? color : const Color(0xFFE3E5ED),
+          color: selected ? color : theme.dividerColor,
         ),
       ),
       child: Text(label),
