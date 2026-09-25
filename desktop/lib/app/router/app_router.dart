@@ -79,72 +79,95 @@ class AppRouter {
         routes: [
           GoRoute(
             path: '/dashboard',
-            builder: (context, state) => const DashboardPage(),
+            pageBuilder: (context, state) => const NoTransitionPage(
+              child: DashboardPage(),
+            ),
           ),
           GoRoute(
             path: '/students',
-            builder: (context, state) => const StudentsPage(),
+            pageBuilder: (context, state) => const NoTransitionPage(
+              child: StudentsPage(),
+            ),
           ),
           GoRoute(
             path: '/students/new',
-            builder: (context, state) => const CreateStudentPage(),
+            pageBuilder: (context, state) => const NoTransitionPage(
+              child: CreateStudentPage(),
+            ),
           ),
           GoRoute(
             path: '/students/:studentId',
-            builder: (context, state) => StudentDetailsPage(
-              studentId: state.pathParameters['studentId']!,
+            pageBuilder: (context, state) => NoTransitionPage(
+              child: StudentDetailsPage(
+                studentId: state.pathParameters['studentId']!,
+              ),
             ),
           ),
           GoRoute(
             path: '/students/:studentId/edit',
-            builder: (context, state) =>
-                EditStudentPage(studentId: state.pathParameters['studentId']!),
+            pageBuilder: (context, state) => NoTransitionPage(
+              child: EditStudentPage(
+                studentId: state.pathParameters['studentId']!,
+              ),
+            ),
           ),
           GoRoute(
             path: '/plans',
-            builder: (context, state) => const PlansPage(),
-          ),
-          GoRoute(
-            path: '/enrollments',
-            builder: (context, state) =>
-            const EnrollmentsPage(),
-          ),
-          GoRoute(
-            path: '/enrollments/new',
-            builder: (context, state) =>
-            const CreateEnrollmentPage(),
+            pageBuilder: (context, state) => const NoTransitionPage(
+              child: PlansPage(),
+            ),
           ),
           GoRoute(
             path: '/plans/new',
-            builder: (context, state) => const CreatePlanPage(),
+            pageBuilder: (context, state) => const NoTransitionPage(
+              child: CreatePlanPage(),
+            ),
           ),
           GoRoute(
             path: '/plans/edit',
-            builder: (context, state) {
+            pageBuilder: (context, state) {
               final plan = state.extra as PlanSummary;
 
-              return EditPlanPage(plan: plan);
+              return NoTransitionPage(
+                child: EditPlanPage(plan: plan),
+              );
             },
           ),
           GoRoute(
+            path: '/enrollments',
+            pageBuilder: (context, state) => const NoTransitionPage(
+              child: EnrollmentsPage(),
+            ),
+          ),
+          GoRoute(
+            path: '/enrollments/new',
+            pageBuilder: (context, state) => const NoTransitionPage(
+              child: CreateEnrollmentPage(),
+            ),
+          ),
+          GoRoute(
             path: '/finance',
-            builder: (context, state) =>
-            const ChargesPage(),
+            pageBuilder: (context, state) => const NoTransitionPage(
+              child: ChargesPage(),
+            ),
           ),
           GoRoute(
             path: '/check-in',
-            builder: (context, state) =>
-                const ModulePlaceholderPage(title: 'Check-in'),
+            pageBuilder: (context, state) => const NoTransitionPage(
+              child: ModulePlaceholderPage(title: 'Check-in'),
+            ),
           ),
           GoRoute(
             path: '/reports',
-            builder: (context, state) =>
-                const ModulePlaceholderPage(title: 'Relatórios'),
+            pageBuilder: (context, state) => const NoTransitionPage(
+              child: ModulePlaceholderPage(title: 'Relatórios'),
+            ),
           ),
           GoRoute(
             path: '/settings',
-            builder: (context, state) =>
-                const ModulePlaceholderPage(title: 'Configurações'),
+            pageBuilder: (context, state) => const NoTransitionPage(
+              child: ModulePlaceholderPage(title: 'Configurações'),
+            ),
           ),
         ],
       ),

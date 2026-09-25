@@ -112,6 +112,8 @@ class _CreateEnrollmentViewState
         context.watch<BrandingController>().branding;
 
     final primaryColor = branding.primaryColor;
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
     final dateFormat = DateFormat('dd/MM/yyyy');
 
     return SingleChildScrollView(
@@ -134,14 +136,14 @@ class _CreateEnrollmentViewState
                   ),
                 ),
                 const SizedBox(width: 8),
-                const Column(
+                Column(
                   crossAxisAlignment:
                   CrossAxisAlignment.start,
                   children: [
                     Text(
                       'Nova matrícula',
                       style: TextStyle(
-                        color: Color(0xFF171A2C),
+                        color: colorScheme.onSurface,
                         fontSize: 28,
                         fontWeight: FontWeight.w800,
                       ),
@@ -150,7 +152,7 @@ class _CreateEnrollmentViewState
                     Text(
                       'Vincule um aluno a um plano da academia.',
                       style: TextStyle(
-                        color: Color(0xFF74798D),
+                        color: colorScheme.onSurfaceVariant,
                         fontSize: 14,
                       ),
                     ),
@@ -163,12 +165,11 @@ class _CreateEnrollmentViewState
               width: double.infinity,
               padding: const EdgeInsets.all(26),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: colorScheme.surface,
                 borderRadius:
                 BorderRadius.circular(18),
                 border: Border.all(
-                  color:
-                  const Color(0xFFE5E7EF),
+                  color: theme.dividerColor,
                 ),
               ),
               child: viewModel.isLoading

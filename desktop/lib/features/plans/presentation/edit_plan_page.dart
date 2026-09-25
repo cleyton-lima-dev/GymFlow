@@ -108,6 +108,8 @@ class _EditPlanViewState extends State<_EditPlanView> {
     final viewModel = context.watch<EditPlanViewModel>();
     final branding = context.watch<BrandingController>().branding;
     final primaryColor = branding.primaryColor;
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(30),
@@ -128,13 +130,13 @@ class _EditPlanViewState extends State<_EditPlanView> {
                     icon: const Icon(Icons.arrow_back_rounded),
                   ),
                   const SizedBox(width: 8),
-                  const Column(
+                  Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
                         'Editar plano',
                         style: TextStyle(
-                          color: Color(0xFF171A2C),
+                          color: colorScheme.onSurface,
                           fontSize: 28,
                           fontWeight: FontWeight.w800,
                         ),
@@ -143,7 +145,7 @@ class _EditPlanViewState extends State<_EditPlanView> {
                       Text(
                         'Atualize as condições comerciais do plano.',
                         style: TextStyle(
-                          color: Color(0xFF74798D),
+                          color: colorScheme.onSurfaceVariant,
                           fontSize: 14,
                         ),
                       ),
@@ -156,10 +158,10 @@ class _EditPlanViewState extends State<_EditPlanView> {
                 width: double.infinity,
                 padding: const EdgeInsets.all(26),
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: colorScheme.surface,
                   borderRadius: BorderRadius.circular(18),
                   border: Border.all(
-                    color: const Color(0xFFE5E7EF),
+                    color: theme.dividerColor,
                   ),
                 ),
                 child: Column(

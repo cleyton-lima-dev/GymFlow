@@ -111,6 +111,8 @@ class _CreateStudentViewState extends State<_CreateStudentView> {
     final viewModel = context.watch<CreateStudentViewModel>();
     final branding = context.watch<BrandingController>().branding;
     final primaryColor = branding.primaryColor;
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(30),
@@ -131,14 +133,14 @@ class _CreateStudentViewState extends State<_CreateStudentView> {
                     icon: const Icon(Icons.arrow_back_rounded),
                   ),
                   const SizedBox(width: 8),
-                  const Expanded(
+                  Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
                           'Cadastrar aluno',
                           style: TextStyle(
-                            color: Color(0xFF171A2C),
+                            color: colorScheme.onSurface,
                             fontSize: 28,
                             fontWeight: FontWeight.w800,
                             letterSpacing: -0.5,
@@ -146,9 +148,9 @@ class _CreateStudentViewState extends State<_CreateStudentView> {
                         ),
                         SizedBox(height: 7),
                         Text(
-                          'Crie o cadastro e o acesso do aluno ao Avelri.',
+                          'Crie o cadastro e o acesso do aluno ao aplicativo.',
                           style: TextStyle(
-                            color: Color(0xFF74798D),
+                            color: colorScheme.onSurfaceVariant,
                             fontSize: 14,
                           ),
                         ),
@@ -162,9 +164,9 @@ class _CreateStudentViewState extends State<_CreateStudentView> {
                 width: double.infinity,
                 padding: const EdgeInsets.all(26),
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: colorScheme.surface,
                   borderRadius: BorderRadius.circular(18),
-                  border: Border.all(color: const Color(0xFFE5E7EF)),
+                  border: Border.all(color: theme.dividerColor),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -201,6 +203,7 @@ class _CreateStudentViewState extends State<_CreateStudentView> {
                                 return null;
                               },
                               decoration: _decoration(
+                                context,
                                 hintText: 'Nome completo',
                                 icon: Icons.person_outline_rounded,
                               ),
@@ -237,6 +240,7 @@ class _CreateStudentViewState extends State<_CreateStudentView> {
                                 return null;
                               },
                               decoration: _decoration(
+                                context,
                                 hintText: 'aluno@email.com',
                                 icon: Icons.mail_outline_rounded,
                               ),
@@ -258,6 +262,7 @@ class _CreateStudentViewState extends State<_CreateStudentView> {
                               textInputAction: TextInputAction.next,
                               onChanged: (_) => viewModel.clearError(),
                               decoration: _decoration(
+                                context,
                                 hintText: '(21) 99999-9999',
                                 icon: Icons.phone_outlined,
                               ),
@@ -281,6 +286,7 @@ class _CreateStudentViewState extends State<_CreateStudentView> {
                                 return null;
                               },
                               decoration: _decoration(
+                                context,
                                 hintText: 'dd/mm/aaaa',
                                 icon: Icons.calendar_month_outlined,
                               ),
@@ -290,11 +296,11 @@ class _CreateStudentViewState extends State<_CreateStudentView> {
                       ],
                     ),
                     const SizedBox(height: 32),
-                    const Divider(color: Color(0xFFE8EAF1)),
+                    Divider(color: theme.dividerColor),
                     const SizedBox(height: 24),
                     _SectionTitle(
                       icon: Icons.lock_outline_rounded,
-                      title: 'Acesso ao Avelri',
+                      title: 'Acesso ao aplicativo',
                       color: primaryColor,
                     ),
                     const SizedBox(height: 24),
@@ -324,6 +330,7 @@ class _CreateStudentViewState extends State<_CreateStudentView> {
                                 return null;
                               },
                               decoration: _decoration(
+                                context,
                                 hintText: 'Mínimo de 8 caracteres',
                                 icon: Icons.lock_outline_rounded,
                                 suffixIcon: IconButton(
@@ -374,6 +381,7 @@ class _CreateStudentViewState extends State<_CreateStudentView> {
                                 return null;
                               },
                               decoration: _decoration(
+                                context,
                                 hintText: 'Repita a senha',
                                 icon: Icons.lock_outline_rounded,
                                 suffixIcon: IconButton(
@@ -418,7 +426,7 @@ class _CreateStudentViewState extends State<_CreateStudentView> {
                           const SizedBox(width: 11),
                           const Expanded(
                             child: Text(
-                              'Essa senha será utilizada pelo aluno para acessar o aplicativo Avelri.',
+                              'Essa senha será utilizada pelo aluno para acessar o aplicativo da academia.',
                               style: TextStyle(
                                 color: Color(0xFF656A7E),
                                 fontSize: 12,
@@ -518,25 +526,36 @@ class _CreateStudentViewState extends State<_CreateStudentView> {
     return '$day/$month/${date.year}';
   }
 
-  InputDecoration _decoration({
-    required String hintText,
-    required IconData icon,
-    Widget? suffixIcon,
-  }) {
+  InputDecoration _decoration(
+      BuildContext context, {
+        required String hintText,
+        required IconData icon,
+        Widget? suffixIcon,
+      }) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
     return InputDecoration(
       hintText: hintText,
       prefixIcon: Icon(icon),
       suffixIcon: suffixIcon,
       filled: true,
-      fillColor: const Color(0xFFF7F8FB),
-      contentPadding: const EdgeInsets.symmetric(horizontal: 15, vertical: 16),
+      fillColor: colorScheme.surfaceContainerHighest,
+      contentPadding: const EdgeInsets.symmetric(
+        horizontal: 15,
+        vertical: 16,
+      ),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(11),
-        borderSide: const BorderSide(color: Color(0xFFE3E5ED)),
+        borderSide: BorderSide(
+          color: theme.dividerColor,
+        ),
       ),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(11),
-        borderSide: const BorderSide(color: Color(0xFFE3E5ED)),
+        borderSide: BorderSide(
+          color: theme.dividerColor,
+        ),
       ),
     );
   }
@@ -553,8 +572,10 @@ class _SectionTitle extends StatelessWidget {
   final String title;
   final Color color;
 
+
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     return Row(
       children: [
         Container(
@@ -569,8 +590,8 @@ class _SectionTitle extends StatelessWidget {
         const SizedBox(width: 12),
         Text(
           title,
-          style: const TextStyle(
-            color: Color(0xFF24273A),
+          style: TextStyle(
+            color: colorScheme.onSurface,
             fontSize: 16,
             fontWeight: FontWeight.w800,
           ),
@@ -593,13 +614,14 @@ class _Field extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         RichText(
           text: TextSpan(
-            style: const TextStyle(
-              color: Color(0xFF3B3F52),
+            style: TextStyle(
+              color: colorScheme.onSurfaceVariant,
               fontSize: 12,
               fontWeight: FontWeight.w700,
             ),

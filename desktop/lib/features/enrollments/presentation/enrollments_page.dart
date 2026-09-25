@@ -37,6 +37,8 @@ class _EnrollmentsView extends StatelessWidget {
         context.watch<BrandingController>().branding;
 
     final primaryColor = branding.primaryColor;
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(30),
@@ -49,7 +51,7 @@ class _EnrollmentsView extends StatelessWidget {
           children: [
             Row(
               children: [
-                const Expanded(
+                Expanded(
                   child: Column(
                     crossAxisAlignment:
                     CrossAxisAlignment.start,
@@ -57,7 +59,7 @@ class _EnrollmentsView extends StatelessWidget {
                       Text(
                         'Matrículas',
                         style: TextStyle(
-                          color: Color(0xFF171A2C),
+                          color: colorScheme.onSurface,
                           fontSize: 28,
                           fontWeight: FontWeight.w800,
                         ),
@@ -66,7 +68,7 @@ class _EnrollmentsView extends StatelessWidget {
                       Text(
                         'Gerencie os vínculos dos alunos com os planos da academia.',
                         style: TextStyle(
-                          color: Color(0xFF74798D),
+                          color: colorScheme.onSurfaceVariant,
                           fontSize: 14,
                         ),
                       ),
@@ -93,12 +95,11 @@ class _EnrollmentsView extends StatelessWidget {
               width: double.infinity,
               padding: const EdgeInsets.all(22),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: colorScheme.surface,
                 borderRadius:
                 BorderRadius.circular(18),
                 border: Border.all(
-                  color:
-                  const Color(0xFFE5E7EF),
+                  color: theme.dividerColor,
                 ),
               ),
               child: Column(
@@ -214,6 +215,7 @@ class _EnrollmentsTable extends StatelessWidget {
     );
 
     final dateFormat = DateFormat('dd/MM/yyyy');
+    final colorScheme = Theme.of(context).colorScheme;
 
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
@@ -247,8 +249,8 @@ class _EnrollmentsTable extends StatelessWidget {
                       currency.format(
                         enrollment.planPrice,
                       ),
-                      style: const TextStyle(
-                        color: Color(0xFF74798D),
+                      style: TextStyle(
+                        color: colorScheme.onSurfaceVariant,
                         fontSize: 12,
                       ),
                     ),
@@ -529,20 +531,18 @@ class _FilterButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
     return OutlinedButton(
       onPressed: onTap,
       style: OutlinedButton.styleFrom(
         foregroundColor:
-        selected
-            ? Colors.white
-            : const Color(0xFF555A6D),
+        selected ? Colors.white : colorScheme.onSurfaceVariant,
         backgroundColor:
-        selected ? color : Colors.white,
+        selected ? color : colorScheme.surface,
         side: BorderSide(
-          color:
-          selected
-              ? color
-              : const Color(0xFFE3E5ED),
+          color: selected ? color : theme.dividerColor,
         ),
       ),
       child: Text(label),
