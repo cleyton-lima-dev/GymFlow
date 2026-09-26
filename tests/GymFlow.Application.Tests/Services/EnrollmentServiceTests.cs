@@ -17,6 +17,7 @@ public class EnrollmentServiceTests
     private readonly IGymTimeZoneProvider _gymTimeZoneProvider;
     private readonly EnrollmentService _service;
     private readonly IChargeRepository _chargeRepository;
+    private readonly IFinancialAuditRepository _financialAuditRepository;
 
     public EnrollmentServiceTests()
     {
@@ -35,12 +36,17 @@ public class EnrollmentServiceTests
         _gymTimeZoneProvider =
             Substitute.For<IGymTimeZoneProvider>();
 
+        _financialAuditRepository =
+             Substitute.For<IFinancialAuditRepository>();
+
         _service = new EnrollmentService(
-            _enrollmentRepository,
-            _studentRepository,
-            _planRepository,
-            _chargeRepository,
-            _gymTimeZoneProvider);
+    _enrollmentRepository,
+    _studentRepository,
+    _planRepository,
+    _chargeRepository,
+    _gymTimeZoneProvider,
+    _financialAuditRepository);
+
     }
 
     [Fact]
@@ -247,10 +253,13 @@ public class EnrollmentServiceTests
             .GetTimeZone(gymId)
             .Returns(TimeZoneInfo.Utc);
 
+        var actorUserId = Guid.NewGuid();
+
         var result =
-            await _service.CancelAsync(
-                gymId,
-                enrollmentId);
+           await _service.CancelAsync(
+    gymId,
+    actorUserId,
+    enrollmentId);
 
         Assert.True(result);
 
@@ -271,6 +280,11 @@ public class EnrollmentServiceTests
         await _enrollmentRepository
             .Received(1)
             .UpdateAsync(enrollment);
+
+        await _financialAuditRepository
+    .DidNotReceive()
+    .StageAsync(
+        Arg.Any<FinancialAuditLog>());
     }
 
     [Fact]
@@ -308,10 +322,13 @@ public class EnrollmentServiceTests
             .GetTimeZone(gymId)
             .Returns(TimeZoneInfo.Utc);
 
+        var actorUserId = Guid.NewGuid();
+
         var result =
             await _service.CancelAsync(
-                gymId,
-                enrollmentId);
+    gymId,
+    actorUserId,
+    enrollmentId);
 
         Assert.True(result);
 
@@ -322,6 +339,19 @@ public class EnrollmentServiceTests
         Assert.Equal(
             ChargeStatus.Cancelled,
             enrollment.Charge.Status);
+
+        await _financialAuditRepository
+    .Received(1)
+    .StageAsync(
+        Arg.Is<FinancialAuditLog>(audit =>
+            audit.GymId == gymId &&
+            audit.ActorUserId == actorUserId &&
+            audit.EntityType == "Charge" &&
+            audit.EntityId == enrollment.Charge.Id &&
+            audit.Action ==
+                FinancialAuditAction.ChargeCancelled &&
+            audit.PreviousValues.Contains("Pending") &&
+            audit.NewValues.Contains("Cancelled")));
 
         Assert.NotNull(enrollment.Charge.UpdatedAt);
         Assert.NotNull(enrollment.CancellationDate);

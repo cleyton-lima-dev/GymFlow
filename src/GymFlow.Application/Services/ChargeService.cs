@@ -2,6 +2,8 @@
 using GymFlow.Application.Interfaces.Time;
 using GymFlow.Domain.Enums;
 using GymFlow.Application.DTOs.Charges;
+using System.Text.Json;
+using GymFlow.Domain.Entities;
 
 
 namespace GymFlow.Application.Services;
@@ -10,13 +12,16 @@ public class ChargeService
 {
     private readonly IChargeRepository _chargeRepository;
     private readonly IGymTimeZoneProvider _gymTimeZoneProvider;
+    private readonly IFinancialAuditRepository _financialAuditRepository;
 
     public ChargeService(
-        IChargeRepository chargeRepository,
-        IGymTimeZoneProvider gymTimeZoneProvider)
+    IChargeRepository chargeRepository,
+    IGymTimeZoneProvider gymTimeZoneProvider,
+    IFinancialAuditRepository financialAuditRepository)
     {
         _chargeRepository = chargeRepository;
         _gymTimeZoneProvider = gymTimeZoneProvider;
+        _financialAuditRepository = financialAuditRepository;
     }
 
     public async Task<List<ChargeResponse>> ListAsync(Guid gymId)
@@ -54,6 +59,7 @@ public class ChargeService
 
     public async Task<bool> ConfirmPaymentAsync(
     Guid gymId,
+    Guid actorUserId,
     Guid chargeId)
     {
         var charge = await _chargeRepository
@@ -65,6 +71,13 @@ public class ChargeService
         {
             return false;
         }
+
+        var previousValues = JsonSerializer.Serialize(new
+        {
+            Status = charge.Status.ToString(),
+            charge.Amount,
+            charge.PaidAt
+        });
 
         var now = DateTime.UtcNow;
 
@@ -97,6 +110,28 @@ public class ChargeService
             student.User.UpdatedAt = now;
             student.UpdatedAt = now;
         }
+
+        var newValues = JsonSerializer.Serialize(new
+        {
+            Status = charge.Status.ToString(),
+            charge.Amount,
+            charge.PaidAt
+        });
+
+        var auditLog = new FinancialAuditLog
+        {
+            Id = Guid.NewGuid(),
+            GymId = gymId,
+            ActorUserId = actorUserId,
+            EntityType = nameof(Charge),
+            EntityId = charge.Id,
+            Action = FinancialAuditAction.PaymentConfirmed,
+            PreviousValues = previousValues,
+            NewValues = newValues,
+            OccurredAt = now
+        };
+
+        await _financialAuditRepository.StageAsync(auditLog);
 
         await _chargeRepository.UpdateAsync(charge);
 

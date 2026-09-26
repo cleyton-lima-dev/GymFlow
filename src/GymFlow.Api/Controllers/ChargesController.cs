@@ -1,6 +1,7 @@
 ﻿using GymFlow.Application.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using System.Security.Claims;
 
 namespace GymFlow.Api.Controllers;
 
@@ -31,11 +32,17 @@ public class ChargesController : ControllerBase
     [HttpPatch("{id:guid}/confirm-payment")]
     public async Task<IActionResult> ConfirmPayment(Guid id)
     {
-        if (!TryGetGymId(out var gymId))
+        if (!TryGetGymId(out var gymId) ||
+            !TryGetUserId(out var userId))
+        {
             return Unauthorized();
+        }
 
         var confirmed = await _chargeService
-            .ConfirmPaymentAsync(gymId, id);
+            .ConfirmPaymentAsync(
+                gymId,
+                userId,
+                id);
 
         if (!confirmed)
         {
@@ -53,5 +60,16 @@ public class ChargesController : ControllerBase
         var gymIdClaim = User.FindFirst("gym_id")?.Value;
 
         return Guid.TryParse(gymIdClaim, out gymId);
+    }
+
+    private bool TryGetUserId(out Guid userId)
+    {
+        var userIdClaim = User
+            .FindFirst(ClaimTypes.NameIdentifier)
+            ?.Value;
+
+        return Guid.TryParse(
+            userIdClaim,
+            out userId);
     }
 }
