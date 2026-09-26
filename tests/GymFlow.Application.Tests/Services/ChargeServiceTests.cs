@@ -11,6 +11,7 @@ public class ChargeServiceTests
 {
     private readonly IChargeRepository _chargeRepository;
     private readonly IGymTimeZoneProvider _gymTimeZoneProvider;
+    private readonly IFinancialAuditRepository _financialAuditRepository;
     private readonly ChargeService _service;
 
     public ChargeServiceTests()
@@ -19,17 +20,22 @@ public class ChargeServiceTests
             Substitute.For<IChargeRepository>();
 
         _gymTimeZoneProvider =
-            Substitute.For<IGymTimeZoneProvider>();
+        Substitute.For<IGymTimeZoneProvider>();
+
+        _financialAuditRepository =
+            Substitute.For<IFinancialAuditRepository>();
 
         _service = new ChargeService(
             _chargeRepository,
-            _gymTimeZoneProvider);
+            _gymTimeZoneProvider,
+            _financialAuditRepository);
     }
 
     [Fact]
     public async Task ConfirmPaymentAsync_WhenChargeIsPending_ShouldMarkAsPaidAndActivateEnrollment()
     {
         var gymId = Guid.NewGuid();
+        var actorUserId = Guid.NewGuid();
         var chargeId = Guid.NewGuid();
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
 
@@ -81,9 +87,9 @@ public class ChargeServiceTests
 
         var result =
             await _service.ConfirmPaymentAsync(
-                gymId,
-                chargeId);
-
+    gymId,
+    actorUserId,
+    chargeId);
         Assert.True(result);
         Assert.Equal(ChargeStatus.Paid, charge.Status);
         Assert.NotNull(charge.PaidAt);
@@ -100,6 +106,19 @@ public class ChargeServiceTests
         await _chargeRepository
             .Received(1)
             .UpdateAsync(charge);
+
+        await _financialAuditRepository
+    .Received(1)
+    .StageAsync(
+        Arg.Is<FinancialAuditLog>(audit =>
+            audit.GymId == gymId &&
+            audit.ActorUserId == actorUserId &&
+            audit.EntityType == nameof(Charge) &&
+            audit.EntityId == chargeId &&
+            audit.Action ==
+                FinancialAuditAction.PaymentConfirmed &&
+            audit.PreviousValues.Contains("Pending") &&
+            audit.NewValues.Contains("Paid")));
     }
 
     [Fact]
@@ -107,6 +126,7 @@ public class ChargeServiceTests
     {
         var gymId = Guid.NewGuid();
         var chargeId = Guid.NewGuid();
+        var actorUserId = Guid.NewGuid();
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
 
         var student = new Student
@@ -157,8 +177,9 @@ public class ChargeServiceTests
 
         var result =
             await _service.ConfirmPaymentAsync(
-                gymId,
-                chargeId);
+             gymId,
+            actorUserId,
+            chargeId);
 
         Assert.True(result);
         Assert.Equal(ChargeStatus.Paid, charge.Status);
@@ -179,6 +200,7 @@ public class ChargeServiceTests
     {
         var gymId = Guid.NewGuid();
         var chargeId = Guid.NewGuid();
+        var actorUserId = Guid.NewGuid();
 
         var charge = new Charge
         {
@@ -193,8 +215,9 @@ public class ChargeServiceTests
 
         var result =
             await _service.ConfirmPaymentAsync(
-                gymId,
-                chargeId);
+    gymId,
+    actorUserId,
+    chargeId);
 
         Assert.False(result);
 
@@ -208,6 +231,7 @@ public class ChargeServiceTests
     {
         var gymId = Guid.NewGuid();
         var chargeId = Guid.NewGuid();
+        var actorUserId = Guid.NewGuid();
 
         var charge = new Charge
         {
@@ -221,8 +245,9 @@ public class ChargeServiceTests
 
         var result =
             await _service.ConfirmPaymentAsync(
-                gymId,
-                chargeId);
+    gymId,
+    actorUserId,
+    chargeId);
 
         Assert.False(result);
 

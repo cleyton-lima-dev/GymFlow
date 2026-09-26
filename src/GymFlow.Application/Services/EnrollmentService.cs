@@ -4,6 +4,7 @@ using GymFlow.Application.Interfaces.Time;
 using GymFlow.Domain.Entities;
 using GymFlow.Domain.Enums;
 using GymFlow.Application.DTOs.Students;
+using System.Text.Json;
 
 namespace GymFlow.Application.Services;
 
@@ -14,19 +15,22 @@ public class EnrollmentService
     private readonly IPlanRepository _planRepository;
     private readonly IGymTimeZoneProvider _gymTimeZoneProvider;
     private readonly IChargeRepository _chargeRepository;
+    private readonly IFinancialAuditRepository _financialAuditRepository;
 
     public EnrollmentService(
-        IEnrollmentRepository enrollmentRepository,
-        IStudentRepository studentRepository,
-        IPlanRepository planRepository,
-        IChargeRepository chargeRepository,
-        IGymTimeZoneProvider gymTimeZoneProvider)
+    IEnrollmentRepository enrollmentRepository,
+    IStudentRepository studentRepository,
+    IPlanRepository planRepository,
+    IChargeRepository chargeRepository,
+    IGymTimeZoneProvider gymTimeZoneProvider,
+    IFinancialAuditRepository financialAuditRepository)
     {
         _enrollmentRepository = enrollmentRepository;
         _studentRepository = studentRepository;
         _planRepository = planRepository;
         _chargeRepository = chargeRepository;
         _gymTimeZoneProvider = gymTimeZoneProvider;
+        _financialAuditRepository = financialAuditRepository;
     }
 
     public async Task<EnrollmentResponse?> CreateAsync(
@@ -151,6 +155,7 @@ public class EnrollmentService
 
     public async Task<bool> CancelAsync(
     Guid gymId,
+    Guid actorUserId,
     Guid enrollmentId)
     {
         var enrollment = await _enrollmentRepository
@@ -170,18 +175,49 @@ public class EnrollmentService
             return false;
         }
 
+        var now = DateTime.UtcNow;
+
         if (effectiveStatus == EnrollmentStatus.PendingPayment &&
-             enrollment.Charge is not null &&
-             (enrollment.Charge.Status == ChargeStatus.Pending ||
-              enrollment.Charge.Status == ChargeStatus.Overdue))
+            enrollment.Charge is not null &&
+            (enrollment.Charge.Status == ChargeStatus.Pending ||
+             enrollment.Charge.Status == ChargeStatus.Overdue))
         {
+            var previousValues = JsonSerializer.Serialize(new
+            {
+                Status = enrollment.Charge.Status.ToString(),
+                enrollment.Charge.Amount,
+                enrollment.Charge.PaidAt
+            });
+
             enrollment.Charge.Status = ChargeStatus.Cancelled;
-            enrollment.Charge.UpdatedAt = DateTime.UtcNow;
+            enrollment.Charge.UpdatedAt = now;
+
+            var newValues = JsonSerializer.Serialize(new
+            {
+                Status = enrollment.Charge.Status.ToString(),
+                enrollment.Charge.Amount,
+                enrollment.Charge.PaidAt
+            });
+
+            var auditLog = new FinancialAuditLog
+            {
+                Id = Guid.NewGuid(),
+                GymId = gymId,
+                ActorUserId = actorUserId,
+                EntityType = "Charge",
+                EntityId = enrollment.Charge.Id,
+                Action = FinancialAuditAction.ChargeCancelled,
+                PreviousValues = previousValues,
+                NewValues = newValues,
+                OccurredAt = now
+            };
+
+            await _financialAuditRepository.StageAsync(auditLog);
         }
 
         enrollment.Status = EnrollmentStatus.Cancelled;
         enrollment.CancellationDate = today;
-        enrollment.UpdatedAt = DateTime.UtcNow;
+        enrollment.UpdatedAt = now;
 
         await _enrollmentRepository.UpdateAsync(enrollment);
 

@@ -3,6 +3,7 @@ using GymFlow.Application.Services;
 using GymFlow.Domain.Enums;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using System.Security.Claims;
 
 namespace GymFlow.Api.Controllers;
 
@@ -61,12 +62,16 @@ public class EnrollmentsController : ControllerBase
     [HttpPatch("{id:guid}/cancel")]
     public async Task<IActionResult> Cancel(Guid id)
     {
-        if (!TryGetGymId(out var gymId))
+        if (!TryGetGymId(out var gymId) ||
+            !TryGetUserId(out var userId))
+        {
             return Unauthorized();
+        }
 
         var cancelled =
             await _enrollmentService.CancelAsync(
                 gymId,
+                userId,
                 id);
 
         if (!cancelled)
@@ -115,5 +120,16 @@ public class EnrollmentsController : ControllerBase
         return Guid.TryParse(
             gymIdClaim,
             out gymId);
+    }
+
+    private bool TryGetUserId(out Guid userId)
+    {
+        var userIdClaim = User
+            .FindFirst(ClaimTypes.NameIdentifier)
+            ?.Value;
+
+        return Guid.TryParse(
+            userIdClaim,
+            out userId);
     }
 }

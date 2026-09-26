@@ -31,6 +31,7 @@ public class AppDbContext : DbContext
     public DbSet<Plan> Plans { get; set; }
     public DbSet<Enrollment> Enrollments { get; set; }
     public DbSet<Charge> Charges { get; set; }
+    public DbSet<FinancialAuditLog> FinancialAuditLogs { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
