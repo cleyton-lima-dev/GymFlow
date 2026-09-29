@@ -85,6 +85,37 @@ public class WorkoutRepository : IWorkoutRepository
             .ToListAsync();
     }
 
+    public void AddDay(
+    WorkoutDay day)
+    {
+        _context.WorkoutDays.Add(day);
+    }
+
+    public void AddExercise(
+        WorkoutExercise exercise)
+    {
+        _context.WorkoutExercises.Add(exercise);
+    }
+
+    public async Task ExecuteInTransactionAsync(
+    Func<Task> action)
+    {
+        await using var transaction =
+            await _context.Database.BeginTransactionAsync();
+
+        try
+        {
+            await action();
+
+            await transaction.CommitAsync();
+        }
+        catch
+        {
+            await transaction.RollbackAsync();
+            throw;
+        }
+    }
+
     public async Task SaveChangesAsync()
     {
         await _context.SaveChangesAsync();

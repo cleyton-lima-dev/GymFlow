@@ -991,6 +991,18 @@ public class WorkoutService
             };
         }
 
+        ValidateExistingUpdateReferences(
+             workout,
+            request.Days);
+
+        await _workoutRepository.ExecuteInTransactionAsync(
+    async () =>
+    {
+        MoveOrdersToTemporaryRange(workout);
+
+        await _workoutRepository
+            .SaveChangesAsync();
+
         var existingDaysById = workout.Days
             .ToDictionary(x => x.Id);
 
@@ -1040,6 +1052,8 @@ public class WorkoutService
                 };
 
                 workout.Days.Add(day);
+
+                _workoutRepository.AddDay(day);
             }
 
             UpdateExercises(
@@ -1052,7 +1066,9 @@ public class WorkoutService
             request.Description?.Trim();
         workout.UpdatedAt = DateTime.UtcNow;
 
-        await _workoutRepository.SaveChangesAsync();
+        await _workoutRepository
+            .SaveChangesAsync();
+    });
 
         return new WorkoutResponse
         {
@@ -1242,7 +1258,82 @@ public class WorkoutService
             localDateTime);
     }
 
-    private static void UpdateExercises(
+    private static void ValidateExistingUpdateReferences(
+    Workout workout,
+    List<UpdateWorkoutDayRequest> requests)
+    {
+        var existingDaysById =
+            workout.Days.ToDictionary(x => x.Id);
+
+        foreach (var dayRequest in requests)
+        {
+            if (!dayRequest.Id.HasValue)
+            {
+                if (dayRequest.Exercises.Any(x => x.Id.HasValue))
+                {
+                    var invalidExerciseId = dayRequest.Exercises
+                        .First(x => x.Id.HasValue)
+                        .Id;
+
+                    throw new ArgumentException(
+                        $"Exercício de treino '{invalidExerciseId}' não pertence ao dia '{dayRequest.Name}'.");
+                }
+
+                continue;
+            }
+
+            if (!existingDaysById.TryGetValue(
+                    dayRequest.Id.Value,
+                    out var existingDay))
+            {
+                throw new ArgumentException(
+                    $"Dia '{dayRequest.Id}' não pertence a este treino.");
+            }
+
+            var existingExerciseIds =
+                existingDay.Exercises
+                    .Select(x => x.Id)
+                    .ToHashSet();
+
+            var invalidExercise = dayRequest.Exercises
+                .FirstOrDefault(x =>
+                    x.Id.HasValue &&
+                    !existingExerciseIds.Contains(
+                        x.Id.Value));
+
+            if (invalidExercise is not null)
+            {
+                throw new ArgumentException(
+                    $"Exercício de treino '{invalidExercise.Id}' não pertence ao dia '{existingDay.Name}'.");
+            }
+        }
+    }
+
+    private static void MoveOrdersToTemporaryRange(
+    Workout workout)
+    {
+        var dayIndex = 0;
+
+        foreach (var day in workout.Days)
+        {
+            day.Order =
+                int.MinValue + dayIndex;
+
+            var exerciseIndex = 0;
+
+            foreach (var exercise in day.Exercises)
+            {
+                exercise.Order =
+                    int.MinValue + exerciseIndex;
+
+                exerciseIndex++;
+            }
+
+            dayIndex++;
+        }
+    }
+
+    private void UpdateExercises(
     WorkoutDay day,
     List<UpdateWorkoutExerciseRequest> requests)
     {
@@ -1292,22 +1383,27 @@ public class WorkoutService
             }
             else
             {
-                day.Exercises.Add(
+                workoutExercise =
                     new WorkoutExercise
-                    {
-                        Id = Guid.NewGuid(),
-                        WorkoutDayId = day.Id,
-                        ExerciseId = request.ExerciseId,
-                        Sets = request.Sets,
-                        Repetitions =
-                            request.Repetitions.Trim(),
-                        RestSeconds =
-                            request.RestSeconds,
-                        Notes =
-                            request.Notes?.Trim(),
-                        Order =
-                            request.Order
-                    });
+    {
+                    Id = Guid.NewGuid(),
+                    WorkoutDayId = day.Id,
+                    ExerciseId = request.ExerciseId,
+                    Sets = request.Sets,
+                    Repetitions =
+                        request.Repetitions.Trim(),
+                    RestSeconds =
+                        request.RestSeconds,
+                    Notes =
+                        request.Notes?.Trim(),
+                    Order =
+                        request.Order
+                                        };
+
+                day.Exercises.Add(workoutExercise);
+
+                _workoutRepository.AddExercise(
+                    workoutExercise);
             }
         }
     }
