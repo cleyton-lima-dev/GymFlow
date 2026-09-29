@@ -1,5 +1,6 @@
 import 'package:avelri_gestao/core/network/api_client.dart';
 import 'package:avelri_gestao/features/enrollments/models/enrollment_summary.dart';
+import 'package:avelri_gestao/features/charges/models/payment_details.dart';
 
 class EnrollmentsService {
   const EnrollmentsService(this._apiClient);
@@ -44,6 +45,7 @@ class EnrollmentsService {
     required String studentId,
     required String planId,
     required DateTime startDate,
+    required PaymentDetails payment,
   }) async {
     final response = await _apiClient.post(
       'api/enrollments',
@@ -51,6 +53,7 @@ class EnrollmentsService {
         'studentId': studentId,
         'planId': planId,
         'startDate': _formatDate(startDate),
+        'payment': payment.toJson(),
       },
     );
 

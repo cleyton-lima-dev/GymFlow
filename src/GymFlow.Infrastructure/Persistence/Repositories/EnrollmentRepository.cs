@@ -94,7 +94,8 @@ public class EnrollmentRepository : IEnrollmentRepository
                 enrollment.StudentId == studentId &&
                 enrollment.Student.User.GymId == gymId &&
                 enrollment.Plan.GymId == gymId &&
-                enrollment.Status == EnrollmentStatus.Active &&
+                (enrollment.Status == EnrollmentStatus.Active ||
+                enrollment.Status == EnrollmentStatus.PendingPayment) &&
                 startDate < enrollment.EndDate &&
                 endDate > enrollment.StartDate);
     }

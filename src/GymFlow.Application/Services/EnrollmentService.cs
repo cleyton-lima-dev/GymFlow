@@ -34,8 +34,9 @@ public class EnrollmentService
     }
 
     public async Task<EnrollmentResponse?> CreateAsync(
-        Guid gymId,
-        CreateEnrollmentRequest request)
+    Guid gymId,
+    Guid actorUserId,
+    CreateEnrollmentRequest request)
     {
         if (request.StudentId == Guid.Empty ||
             request.PlanId == Guid.Empty ||
@@ -58,6 +59,20 @@ public class EnrollmentService
 
         if (plan is null || !plan.IsActive)
             return null;
+
+        var payment = request.Payment;
+
+        if (payment is null ||
+            payment.PaidAmount <= 0m ||
+            payment.DiscountAmount < 0m ||
+            payment.PaidAmount + payment.DiscountAmount != plan.Price ||
+            !Enum.IsDefined(payment.PaymentMethod) ||
+            payment.PaidAt == default)
+        {
+            return null;
+        }
+
+        var paidAtUtc = payment.PaidAt.UtcDateTime;
 
         var today = GetToday(gymId);
 
@@ -97,16 +112,61 @@ public class EnrollmentService
             Plan = plan
         };
 
-        enrollment.Charge = new Charge
+        var now = DateTime.UtcNow;
+
+        var charge = new Charge
         {
             Id = Guid.NewGuid(),
             EnrollmentId = enrollment.Id,
             Amount = enrollment.PlanPrice,
             DueDate = enrollment.StartDate,
-            Status = ChargeStatus.Paid,
-            PaidAt = DateTime.UtcNow,
-            CreatedAt = DateTime.UtcNow
+            Status = ChargeStatus.Pending,
+            CreatedAt = now
         };
+
+        var previousValues = JsonSerializer.Serialize(new
+        {
+            Status = charge.Status.ToString(),
+            charge.Amount,
+            charge.DiscountAmount,
+            charge.PaidAmount,
+            PaymentMethod = charge.PaymentMethod?.ToString(),
+            charge.PaidAt
+        });
+
+        charge.Status = ChargeStatus.Paid;
+        charge.DiscountAmount = payment.DiscountAmount;
+        charge.PaidAmount = payment.PaidAmount;
+        charge.PaymentMethod = payment.PaymentMethod;
+        charge.PaidAt = paidAtUtc;
+        charge.UpdatedAt = now;
+
+        var newValues = JsonSerializer.Serialize(new
+        {
+            Status = charge.Status.ToString(),
+            charge.Amount,
+            charge.DiscountAmount,
+            charge.PaidAmount,
+            PaymentMethod = charge.PaymentMethod?.ToString(),
+            charge.PaidAt
+        });
+
+        var auditLog = new FinancialAuditLog
+        {
+            Id = Guid.NewGuid(),
+            GymId = gymId,
+            ActorUserId = actorUserId,
+            EntityType = nameof(Charge),
+            EntityId = charge.Id,
+            Action = FinancialAuditAction.PaymentConfirmed,
+            PreviousValues = previousValues,
+            NewValues = newValues,
+            OccurredAt = now
+        };
+
+        enrollment.Charge = charge;
+
+        await _financialAuditRepository.StageAsync(auditLog);
 
         await _enrollmentRepository.AddAsync(enrollment);
 
@@ -128,7 +188,6 @@ public class EnrollmentService
             if (student.InactivationReason ==
                 StudentInactivationReason.NoValidEnrollment)
             {
-                var now = DateTime.UtcNow;
 
                 student.User.IsActive = true;
                 student.InactivationReason = null;

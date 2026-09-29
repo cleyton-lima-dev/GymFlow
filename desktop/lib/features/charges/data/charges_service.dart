@@ -1,5 +1,6 @@
 import 'package:avelri_gestao/core/network/api_client.dart';
 import 'package:avelri_gestao/features/charges/models/charge_summary.dart';
+import 'package:avelri_gestao/features/charges/models/payment_details.dart';
 
 class ChargesService {
   const ChargesService(this._apiClient);
@@ -30,10 +31,11 @@ class ChargesService {
 
   Future<void> confirmPayment({
     required String chargeId,
+    required PaymentDetails payment,
   }) async {
     await _apiClient.patch(
       'api/charges/$chargeId/confirm-payment',
-      body: {},
+      body: payment.toJson(),
     );
   }
 }

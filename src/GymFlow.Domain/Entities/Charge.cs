@@ -10,6 +10,12 @@ public class Charge
 
     public decimal Amount { get; set; }
 
+    public decimal DiscountAmount { get; set; } = 0m;
+
+    public decimal? PaidAmount { get; set; }
+
+    public PaymentMethod? PaymentMethod { get; set; }
+
     public DateOnly DueDate { get; set; }
 
     public ChargeStatus Status { get; set; }

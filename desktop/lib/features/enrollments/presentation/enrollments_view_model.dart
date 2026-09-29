@@ -115,8 +115,14 @@ class EnrollmentsViewModel extends ChangeNotifier {
 
       return true;
     } on ApiException catch (exception) {
-      _errorMessage =
-          _messageFromApiException(exception);
+      if (exception.statusCode == 409) {
+        _errorMessage =
+        'Não foi possível renovar porque o período entra em conflito com outra matrícula ativa ou aguardando pagamento.';
+      } else {
+        _errorMessage =
+            _messageFromApiException(exception);
+      }
+
       _notifySafely();
 
       return false;

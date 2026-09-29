@@ -1,3 +1,5 @@
+import 'package:avelri_gestao/features/charges/models/payment_details.dart';
+
 enum ChargeStatus {
   pending(1),
   paid(2),
@@ -23,6 +25,9 @@ class ChargeSummary {
     required this.studentName,
     required this.planName,
     required this.amount,
+    required this.discountAmount,
+    required this.paidAmount,
+    required this.paymentMethod,
     required this.dueDate,
     required this.status,
     required this.paidAt,
@@ -36,6 +41,9 @@ class ChargeSummary {
   final String studentName;
   final String planName;
   final double amount;
+  final double discountAmount;
+  final double? paidAmount;
+  final PaymentMethod? paymentMethod;
   final DateTime dueDate;
   final ChargeStatus status;
   final DateTime? paidAt;
@@ -55,6 +63,14 @@ class ChargeSummary {
       studentName: json['studentName'] as String,
       planName: json['planName'] as String,
       amount: (json['amount'] as num).toDouble(),
+      discountAmount:
+      (json['discountAmount'] as num).toDouble(),
+      paidAmount: json['paidAmount'] == null
+          ? null
+          : (json['paidAmount'] as num).toDouble(),
+      paymentMethod: PaymentMethod.fromValue(
+        json['paymentMethod'] as int?,
+      ),
       dueDate: DateTime.parse(json['dueDate'] as String),
       status: ChargeStatus.fromValue(
         json['status'] as int,

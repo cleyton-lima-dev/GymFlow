@@ -16,6 +16,12 @@ public class ChargeResponse
 
     public decimal Amount { get; set; }
 
+    public decimal DiscountAmount { get; set; }
+
+    public decimal? PaidAmount { get; set; }
+
+    public PaymentMethod? PaymentMethod { get; set; }
+
     public DateOnly DueDate { get; set; }
 
     public ChargeStatus Status { get; set; }
