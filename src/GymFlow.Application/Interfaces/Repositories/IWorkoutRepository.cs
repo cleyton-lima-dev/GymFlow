@@ -26,5 +26,14 @@ public interface IWorkoutRepository
         Guid studentId,
         Guid gymId);
 
+    void AddDay(
+    WorkoutDay day);
+
+    void AddExercise(
+        WorkoutExercise exercise);
+
+    Task ExecuteInTransactionAsync(
+    Func<Task> action);
+
     Task SaveChangesAsync();
 }
