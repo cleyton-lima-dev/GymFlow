@@ -228,6 +228,17 @@ class _EnrollmentsTable extends StatelessWidget {
           DataColumn(label: Text('Ações')),
         ],
         rows: enrollments.map((enrollment) {
+          final hasPendingRenewal = enrollments.any(
+                (other) =>
+            other.id != enrollment.id &&
+                other.studentId == enrollment.studentId &&
+                other.status == EnrollmentStatus.pendingPayment,
+          );
+
+          final canRenew =
+              (enrollment.status == EnrollmentStatus.active ||
+                  enrollment.status == EnrollmentStatus.expired) &&
+                  !hasPendingRenewal;
           return DataRow(
             cells: [
               DataCell(
@@ -293,16 +304,17 @@ class _EnrollmentsTable extends StatelessWidget {
                     }
                   },
                   itemBuilder: (context) => [
-                    const PopupMenuItem(
-                      value: 'renew',
-                      child: ListTile(
-                        leading: Icon(
-                          Icons.autorenew_rounded,
+                    if (canRenew)
+                      const PopupMenuItem(
+                        value: 'renew',
+                        child: ListTile(
+                          leading: Icon(
+                            Icons.autorenew_rounded,
+                          ),
+                          title: Text('Renovar'),
+                          contentPadding: EdgeInsets.zero,
                         ),
-                        title: Text('Renovar'),
-                        contentPadding: EdgeInsets.zero,
                       ),
-                    ),
                     if (enrollment.status ==
                         EnrollmentStatus.active ||
                         enrollment.status ==

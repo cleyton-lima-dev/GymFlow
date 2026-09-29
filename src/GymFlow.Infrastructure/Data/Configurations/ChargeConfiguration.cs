@@ -19,6 +19,15 @@ public class ChargeConfiguration : IEntityTypeConfiguration<Charge>
             .IsRequired()
             .HasPrecision(10, 2);
 
+        builder.Property(charge => charge.DiscountAmount)
+            .IsRequired()
+            .HasPrecision(10, 2);
+
+        builder.Property(charge => charge.PaidAmount)
+            .HasPrecision(10, 2);
+
+        builder.Property(charge => charge.PaymentMethod);
+
         builder.Property(charge => charge.DueDate)
             .IsRequired();
 

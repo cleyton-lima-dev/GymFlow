@@ -24,12 +24,16 @@ public class EnrollmentsController : ControllerBase
     public async Task<IActionResult> Create(
         CreateEnrollmentRequest request)
     {
-        if (!TryGetGymId(out var gymId))
+        if (!TryGetGymId(out var gymId) ||
+            !TryGetUserId(out var userId))
+        {
             return Unauthorized();
+        }
 
         var enrollment =
             await _enrollmentService.CreateAsync(
                 gymId,
+                userId,
                 request);
 
         if (enrollment is null)

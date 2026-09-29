@@ -4,6 +4,7 @@ using GymFlow.Application.Services;
 using NSubstitute;
 using GymFlow.Domain.Entities;
 using GymFlow.Domain.Enums;
+using GymFlow.Application.DTOs.Charges;
 
 namespace GymFlow.Application.Tests.Services;
 
@@ -29,6 +30,18 @@ public class ChargeServiceTests
             _chargeRepository,
             _gymTimeZoneProvider,
             _financialAuditRepository);
+    }
+
+    private static PaymentDetailsRequest CreateValidPaymentRequest(
+    decimal amount)
+    {
+        return new PaymentDetailsRequest
+        {
+            PaidAmount = amount,
+            DiscountAmount = 0m,
+            PaymentMethod = PaymentMethod.Pix,
+            PaidAt = DateTimeOffset.UtcNow
+        };
     }
 
     [Fact]
@@ -85,14 +98,32 @@ public class ChargeServiceTests
             .GetTimeZone(gymId)
             .Returns(TimeZoneInfo.Utc);
 
+        var paidAt =
+    new DateTimeOffset(
+        2026, 9, 28, 18, 30, 0,
+        TimeSpan.FromHours(-3));
+
+        var paymentRequest =
+            CreateValidPaymentRequest(150m);
+
+        paymentRequest.PaidAt = paidAt;
+
         var result =
-            await _service.ConfirmPaymentAsync(
-    gymId,
-    actorUserId,
-    chargeId);
+     await _service.ConfirmPaymentAsync(
+         gymId,
+         actorUserId,
+         chargeId,
+         paymentRequest);
+
         Assert.True(result);
         Assert.Equal(ChargeStatus.Paid, charge.Status);
         Assert.NotNull(charge.PaidAt);
+        Assert.Equal(150m, charge.PaidAmount);
+        Assert.Equal(0m, charge.DiscountAmount);
+        Assert.Equal(PaymentMethod.Pix, charge.PaymentMethod);
+        Assert.Equal(
+        paidAt.UtcDateTime,
+        charge.PaidAt);
 
         Assert.Equal(
             EnrollmentStatus.Active,
@@ -176,10 +207,11 @@ public class ChargeServiceTests
             .Returns(TimeZoneInfo.Utc);
 
         var result =
-            await _service.ConfirmPaymentAsync(
-             gymId,
-            actorUserId,
-            chargeId);
+    await _service.ConfirmPaymentAsync(
+        gymId,
+        actorUserId,
+        chargeId,
+        CreateValidPaymentRequest(150m));
 
         Assert.True(result);
         Assert.Equal(ChargeStatus.Paid, charge.Status);
@@ -214,10 +246,11 @@ public class ChargeServiceTests
             .Returns(charge);
 
         var result =
-            await _service.ConfirmPaymentAsync(
-    gymId,
-    actorUserId,
-    chargeId);
+    await _service.ConfirmPaymentAsync(
+        gymId,
+        actorUserId,
+        chargeId,
+        CreateValidPaymentRequest(150m));
 
         Assert.False(result);
 
@@ -244,10 +277,11 @@ public class ChargeServiceTests
             .Returns(charge);
 
         var result =
-            await _service.ConfirmPaymentAsync(
-    gymId,
-    actorUserId,
-    chargeId);
+    await _service.ConfirmPaymentAsync(
+        gymId,
+        actorUserId,
+        chargeId,
+        CreateValidPaymentRequest(150m));
 
         Assert.False(result);
 
@@ -363,5 +397,121 @@ public class ChargeServiceTests
         Assert.Equal(
             ChargeStatus.Overdue,
             result[0].Status);
+    }
+
+    [Fact]
+    public async Task ConfirmPaymentAsync_WithDiscount_ShouldPersistPaidAndDiscountAmounts()
+    {
+        var gymId = Guid.NewGuid();
+        var actorUserId = Guid.NewGuid();
+        var chargeId = Guid.NewGuid();
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+
+        var student = new Student
+        {
+            Id = Guid.NewGuid(),
+            User = new User
+            {
+                Id = Guid.NewGuid(),
+                GymId = gymId,
+                Name = "Aluno Teste",
+                IsActive = true,
+                Role = UserRole.Student
+            }
+        };
+
+        var enrollment = new Enrollment
+        {
+            Id = Guid.NewGuid(),
+            StudentId = student.Id,
+            StartDate = today,
+            EndDate = today.AddMonths(1),
+            Status = EnrollmentStatus.PendingPayment,
+            Student = student
+        };
+
+        var charge = new Charge
+        {
+            Id = chargeId,
+            EnrollmentId = enrollment.Id,
+            Amount = 150m,
+            DueDate = today,
+            Status = ChargeStatus.Pending,
+            Enrollment = enrollment
+        };
+
+        _chargeRepository
+            .GetByIdAsync(chargeId, gymId)
+            .Returns(charge);
+
+        _gymTimeZoneProvider
+            .GetTimeZone(gymId)
+            .Returns(TimeZoneInfo.Utc);
+
+        var request = new PaymentDetailsRequest
+        {
+            PaidAmount = 140m,
+            DiscountAmount = 10m,
+            PaymentMethod = PaymentMethod.Cash,
+            PaidAt = DateTimeOffset.UtcNow
+        };
+
+        var result =
+            await _service.ConfirmPaymentAsync(
+                gymId,
+                actorUserId,
+                chargeId,
+                request);
+
+        Assert.True(result);
+        Assert.Equal(ChargeStatus.Paid, charge.Status);
+        Assert.Equal(140m, charge.PaidAmount);
+        Assert.Equal(10m, charge.DiscountAmount);
+        Assert.Equal(PaymentMethod.Cash, charge.PaymentMethod);
+    }
+
+    [Fact]
+    public async Task ConfirmPaymentAsync_WhenPaidAmountAndDiscountDoNotMatchCharge_ShouldReturnFalse()
+    {
+        var gymId = Guid.NewGuid();
+        var actorUserId = Guid.NewGuid();
+        var chargeId = Guid.NewGuid();
+
+        var charge = new Charge
+        {
+            Id = chargeId,
+            Amount = 150m,
+            Status = ChargeStatus.Pending
+        };
+
+        _chargeRepository
+            .GetByIdAsync(chargeId, gymId)
+            .Returns(charge);
+
+        var request = new PaymentDetailsRequest
+        {
+            PaidAmount = 100m,
+            DiscountAmount = 10m,
+            PaymentMethod = PaymentMethod.Pix,
+            PaidAt = DateTimeOffset.UtcNow
+        };
+
+        var result =
+            await _service.ConfirmPaymentAsync(
+                gymId,
+                actorUserId,
+                chargeId,
+                request);
+
+        Assert.False(result);
+        Assert.Equal(ChargeStatus.Pending, charge.Status);
+
+        await _chargeRepository
+            .DidNotReceive()
+            .UpdateAsync(Arg.Any<Charge>());
+
+        await _financialAuditRepository
+            .DidNotReceive()
+            .StageAsync(Arg.Any<FinancialAuditLog>());
     }
 }

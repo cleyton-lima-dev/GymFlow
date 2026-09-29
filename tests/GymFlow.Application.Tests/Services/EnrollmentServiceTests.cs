@@ -6,6 +6,7 @@ using GymFlow.Application.DTOs.Enrollments;
 using GymFlow.Domain.Entities;
 using GymFlow.Domain.Enums;
 using GymFlow.Application.DTOs.Students;
+using GymFlow.Application.DTOs.Charges;
 
 namespace GymFlow.Application.Tests.Services;
 
@@ -49,6 +50,18 @@ public class EnrollmentServiceTests
 
     }
 
+    private static PaymentDetailsRequest CreateValidPayment(
+    decimal amount)
+    {
+        return new PaymentDetailsRequest
+        {
+            PaidAmount = amount,
+            DiscountAmount = 0m,
+            PaymentMethod = PaymentMethod.Pix,
+            PaidAt = DateTimeOffset.UtcNow
+        };
+    }
+
     [Fact]
     public async Task CreateAsync_WithValidData_ShouldCreateEnrollmentWithPlanSnapshot()
     {
@@ -82,8 +95,11 @@ public class EnrollmentServiceTests
         {
             StudentId = student.Id,
             PlanId = plan.Id,
-            StartDate = new DateOnly(2026, 9, 16)
+            StartDate = new DateOnly(2026, 9, 16),
+            Payment = CreateValidPayment(150m)
         };
+
+        var actorUserId = Guid.NewGuid();
 
         _studentRepository
             .GetByIdAndGymIdAsync(student.Id, gymId)
@@ -107,6 +123,7 @@ public class EnrollmentServiceTests
         var result =
             await _service.CreateAsync(
                 gymId,
+                actorUserId,
                 request);
 
         Assert.NotNull(result);
@@ -145,8 +162,27 @@ public class EnrollmentServiceTests
                     enrollment.Charge.DueDate ==
                         new DateOnly(2026, 9, 16) &&
                     enrollment.Charge.Status == ChargeStatus.Paid &&
-                    enrollment.Charge.PaidAt != null));
+                    enrollment.Charge.PaidAt != null&&
+                    enrollment.Charge.PaidAmount == 150m &&
+                    enrollment.Charge.DiscountAmount == 0m &&
+                    enrollment.Charge.PaymentMethod == PaymentMethod.Pix));
+
+
+        await _financialAuditRepository
+            .Received(1)
+            .StageAsync(
+                Arg.Is<FinancialAuditLog>(audit =>
+                    audit.GymId == gymId &&
+                    audit.ActorUserId == actorUserId &&
+                    audit.EntityType == nameof(Charge) &&
+                    audit.Action ==
+                        FinancialAuditAction.PaymentConfirmed &&
+                    audit.PreviousValues.Contains("Pending") &&
+                    audit.NewValues.Contains("Paid") &&
+                    audit.NewValues.Contains("Pix")));
     }
+
+
 
     [Fact]
     public async Task CreateAsync_WhenStudentAlreadyHasActiveEnrollment_ShouldReturnNull()
@@ -181,8 +217,11 @@ public class EnrollmentServiceTests
         {
             StudentId = student.Id,
             PlanId = plan.Id,
-            StartDate = new DateOnly(2026, 9, 16)
+            StartDate = new DateOnly(2026, 9, 16),
+            Payment = CreateValidPayment(150m)
         };
+
+        var actorUserId = Guid.NewGuid();
 
         _studentRepository
             .GetByIdAndGymIdAsync(student.Id, gymId)
@@ -207,6 +246,7 @@ public class EnrollmentServiceTests
         var result =
             await _service.CreateAsync(
                 gymId,
+                actorUserId,
                 request);
 
         Assert.Null(result);
@@ -511,8 +551,11 @@ public class EnrollmentServiceTests
         {
             StudentId = student.Id,
             PlanId = plan.Id,
-            StartDate = today
+            StartDate = today,
+            Payment = CreateValidPayment(150m)
         };
+
+        var actorUserId = Guid.NewGuid();
 
         _studentRepository
             .GetByIdAndGymIdAsync(student.Id, gymId)
@@ -537,6 +580,7 @@ public class EnrollmentServiceTests
         var result =
             await _service.CreateAsync(
                 gymId,
+                actorUserId,
                 request);
 
         Assert.NotNull(result);
@@ -584,8 +628,11 @@ public class EnrollmentServiceTests
         {
             StudentId = student.Id,
             PlanId = plan.Id,
-            StartDate = today
+            StartDate = today,
+            Payment = CreateValidPayment(150m)
         };
+
+        var actorUserId = Guid.NewGuid();
 
         _studentRepository
             .GetByIdAndGymIdAsync(student.Id, gymId)
@@ -609,8 +656,10 @@ public class EnrollmentServiceTests
 
         var result =
             await _service.CreateAsync(
-                gymId,
-                request);
+                 gymId,
+                 actorUserId,
+                 request);
+
 
         Assert.NotNull(result);
         Assert.False(student.User.IsActive);
@@ -662,8 +711,11 @@ public class EnrollmentServiceTests
         {
             StudentId = student.Id,
             PlanId = plan.Id,
-            StartDate = futureStartDate
+            StartDate = futureStartDate,
+            Payment = CreateValidPayment(150m)
         };
+
+        var actorUserId = Guid.NewGuid();
 
         _studentRepository
             .GetByIdAndGymIdAsync(student.Id, gymId)
@@ -688,6 +740,7 @@ public class EnrollmentServiceTests
         var result =
             await _service.CreateAsync(
                 gymId,
+                actorUserId,
                 request);
 
         Assert.NotNull(result);
@@ -1050,8 +1103,11 @@ public class EnrollmentServiceTests
         {
             StudentId = student.Id,
             PlanId = Guid.NewGuid(),
-            StartDate = DateOnly.FromDateTime(DateTime.UtcNow)
+            StartDate = DateOnly.FromDateTime(DateTime.UtcNow),
+            Payment = CreateValidPayment(150m)
         };
+
+        var actorUserId = Guid.NewGuid();
 
         _studentRepository
             .GetByIdAndGymIdAsync(student.Id, gymId)
@@ -1060,6 +1116,7 @@ public class EnrollmentServiceTests
         var result =
             await _service.CreateAsync(
                 gymId,
+                actorUserId,
                 request);
 
         Assert.Null(result);
@@ -1067,5 +1124,67 @@ public class EnrollmentServiceTests
         await _enrollmentRepository
             .DidNotReceive()
             .AddAsync(Arg.Any<Enrollment>());
+    }
+
+    [Fact]
+    public async Task CreateAsync_WhenPaymentIsMissing_ShouldReturnNull()
+    {
+        var gymId = Guid.NewGuid();
+        var actorUserId = Guid.NewGuid();
+
+        var student = new Student
+        {
+            Id = Guid.NewGuid(),
+            User = new User
+            {
+                Id = Guid.NewGuid(),
+                GymId = gymId,
+                Name = "Aluno Teste",
+                IsActive = true,
+                Role = UserRole.Student
+            }
+        };
+
+        var plan = new Plan
+        {
+            Id = Guid.NewGuid(),
+            GymId = gymId,
+            Name = "Plano Mensal",
+            Price = 150m,
+            DurationMonths = 1,
+            BillingCycle = PlanBillingCycle.Monthly,
+            IsActive = true
+        };
+
+        var request = new CreateEnrollmentRequest
+        {
+            StudentId = student.Id,
+            PlanId = plan.Id,
+            StartDate = DateOnly.FromDateTime(DateTime.UtcNow)
+        };
+
+        _studentRepository
+            .GetByIdAndGymIdAsync(student.Id, gymId)
+            .Returns(student);
+
+        _planRepository
+            .GetByIdAsync(plan.Id, gymId)
+            .Returns(plan);
+
+        var result =
+            await _service.CreateAsync(
+                gymId,
+                actorUserId,
+                request);
+
+        Assert.Null(result);
+
+        await _enrollmentRepository
+            .DidNotReceive()
+            .AddAsync(Arg.Any<Enrollment>());
+
+        await _financialAuditRepository
+            .DidNotReceive()
+            .StageAsync(Arg.Any<FinancialAuditLog>());
     }
 }

@@ -8,6 +8,7 @@ import 'package:avelri_gestao/features/students/data/students_service.dart';
 import 'package:avelri_gestao/features/students/models/student_summary.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import 'package:avelri_gestao/features/charges/models/payment_details.dart';
 
 class CreateEnrollmentViewModel extends ChangeNotifier {
   CreateEnrollmentViewModel({
@@ -140,6 +141,7 @@ class CreateEnrollmentViewModel extends ChangeNotifier {
     required String studentId,
     required String planId,
     required DateTime startDate,
+    required PaymentDetails payment,
   }) async {
     if (_isSubmitting) {
       return false;
@@ -154,6 +156,7 @@ class CreateEnrollmentViewModel extends ChangeNotifier {
         studentId: studentId,
         planId: planId,
         startDate: startDate,
+        payment: payment,
       );
 
       return true;

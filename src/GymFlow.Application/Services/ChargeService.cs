@@ -45,6 +45,9 @@ public class ChargeService
                 StudentName = charge.Enrollment.Student.User.Name,
                 PlanName = charge.Enrollment.PlanName,
                 Amount = charge.Amount,
+                DiscountAmount = charge.DiscountAmount,
+                PaidAmount = charge.PaidAmount,
+                PaymentMethod = charge.PaymentMethod,
                 DueDate = charge.DueDate,
                 Status = GetEffectiveStatus(
                         charge.Status,
@@ -60,7 +63,8 @@ public class ChargeService
     public async Task<bool> ConfirmPaymentAsync(
     Guid gymId,
     Guid actorUserId,
-    Guid chargeId)
+    Guid chargeId,
+    PaymentDetailsRequest request)
     {
         var charge = await _chargeRepository
             .GetByIdAsync(chargeId, gymId);
@@ -72,17 +76,34 @@ public class ChargeService
             return false;
         }
 
+        if (request.PaidAmount <= 0m ||
+            request.DiscountAmount < 0m ||
+            request.PaidAmount + request.DiscountAmount != charge.Amount ||
+            !Enum.IsDefined(request.PaymentMethod) ||
+            request.PaidAt == default)
+        {
+            return false;
+        }
+
+        var paidAtUtc = request.PaidAt.UtcDateTime;
+
         var previousValues = JsonSerializer.Serialize(new
         {
             Status = charge.Status.ToString(),
             charge.Amount,
+            charge.DiscountAmount,
+            charge.PaidAmount,
+            PaymentMethod = charge.PaymentMethod?.ToString(),
             charge.PaidAt
         });
 
         var now = DateTime.UtcNow;
 
         charge.Status = ChargeStatus.Paid;
-        charge.PaidAt = now;
+        charge.DiscountAmount = request.DiscountAmount;
+        charge.PaidAmount = request.PaidAmount;
+        charge.PaymentMethod = request.PaymentMethod;
+        charge.PaidAt = paidAtUtc;
         charge.UpdatedAt = now;
 
         charge.Enrollment.Status = EnrollmentStatus.Active;
@@ -115,6 +136,9 @@ public class ChargeService
         {
             Status = charge.Status.ToString(),
             charge.Amount,
+            charge.DiscountAmount,
+            charge.PaidAmount,
+            PaymentMethod = charge.PaymentMethod?.ToString(),
             charge.PaidAt
         });
 

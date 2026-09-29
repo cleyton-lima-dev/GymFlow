@@ -2,6 +2,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
+using GymFlow.Application.DTOs.Charges;
 
 namespace GymFlow.Api.Controllers;
 
@@ -30,7 +31,9 @@ public class ChargesController : ControllerBase
     }
 
     [HttpPatch("{id:guid}/confirm-payment")]
-    public async Task<IActionResult> ConfirmPayment(Guid id)
+    public async Task<IActionResult> ConfirmPayment(
+    Guid id,
+    PaymentDetailsRequest request)
     {
         if (!TryGetGymId(out var gymId) ||
             !TryGetUserId(out var userId))
@@ -40,9 +43,10 @@ public class ChargesController : ControllerBase
 
         var confirmed = await _chargeService
             .ConfirmPaymentAsync(
-                gymId,
-                userId,
-                id);
+        gymId,
+        userId,
+        id,
+        request);
 
         if (!confirmed)
         {

@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:avelri_gestao/features/charges/models/charge_summary.dart';
 import 'package:intl/intl.dart';
+import 'package:avelri_gestao/features/charges/models/payment_details.dart';
 
 class ChargesPage extends StatelessWidget {
   const ChargesPage({super.key});
@@ -98,35 +99,109 @@ class _ChargesView extends StatelessWidget {
                   color: theme.dividerColor,
                 ),
               ),
-              child: viewModel.isLoading &&
-                  !viewModel.hasCharges
-                  ? const Padding(
-                padding: EdgeInsets.symmetric(
-                  vertical: 70,
-                ),
-                child: Center(
-                  child: CircularProgressIndicator(),
-                ),
-              )
-                  : viewModel.errorMessage != null
-                  ? Center(
-                child: Text(
-                  viewModel.errorMessage!,
-                ),
-              )
-                  : !viewModel.hasCharges
-                  ? const Padding(
-                padding: EdgeInsets.symmetric(
-                  vertical: 70,
-                ),
-                child: Center(
-                  child: Text(
-                    'Nenhuma cobrança encontrada.',
+              child: Column(
+                children: [
+                  Row(
+                    children: [
+                      _ChargeFilterButton(
+                        label: 'Todas',
+                        selected:
+                        viewModel.statusFilter ==
+                            ChargesStatusFilter.all,
+                        color: primaryColor,
+                        onTap: () {
+                          viewModel.updateStatusFilter(
+                            ChargesStatusFilter.all,
+                          );
+                        },
+                      ),
+                      const SizedBox(width: 8),
+                      _ChargeFilterButton(
+                        label: 'Pendentes',
+                        selected:
+                        viewModel.statusFilter ==
+                            ChargesStatusFilter.pending,
+                        color: primaryColor,
+                        onTap: () {
+                          viewModel.updateStatusFilter(
+                            ChargesStatusFilter.pending,
+                          );
+                        },
+                      ),
+                      const SizedBox(width: 8),
+                      _ChargeFilterButton(
+                        label: 'Pagas',
+                        selected:
+                        viewModel.statusFilter ==
+                            ChargesStatusFilter.paid,
+                        color: primaryColor,
+                        onTap: () {
+                          viewModel.updateStatusFilter(
+                            ChargesStatusFilter.paid,
+                          );
+                        },
+                      ),
+                      const SizedBox(width: 8),
+                      _ChargeFilterButton(
+                        label: 'Em atraso',
+                        selected:
+                        viewModel.statusFilter ==
+                            ChargesStatusFilter.overdue,
+                        color: primaryColor,
+                        onTap: () {
+                          viewModel.updateStatusFilter(
+                            ChargesStatusFilter.overdue,
+                          );
+                        },
+                      ),
+                      const SizedBox(width: 8),
+                      _ChargeFilterButton(
+                        label: 'Canceladas',
+                        selected:
+                        viewModel.statusFilter ==
+                            ChargesStatusFilter.cancelled,
+                        color: primaryColor,
+                        onTap: () {
+                          viewModel.updateStatusFilter(
+                            ChargesStatusFilter.cancelled,
+                          );
+                        },
+                      ),
+                    ],
                   ),
-                ),
-              )
-                  : _ChargesTable(
-                charges: viewModel.charges,
+                  const SizedBox(height: 20),
+                  if (viewModel.isLoading &&
+                      !viewModel.hasCharges)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(
+                        vertical: 70,
+                      ),
+                      child: Center(
+                        child: CircularProgressIndicator(),
+                      ),
+                    )
+                  else if (viewModel.errorMessage != null)
+                    Center(
+                      child: Text(
+                        viewModel.errorMessage!,
+                      ),
+                    )
+                  else if (viewModel.filteredCharges.isEmpty)
+                      const Padding(
+                        padding: EdgeInsets.symmetric(
+                          vertical: 70,
+                        ),
+                        child: Center(
+                          child: Text(
+                            'Nenhuma cobrança encontrada para este filtro.',
+                          ),
+                        ),
+                      )
+                    else
+                      _ChargesTable(
+                        charges: viewModel.filteredCharges,
+                      ),
+                ],
               ),
             ),
           ],
@@ -146,42 +221,240 @@ class _ChargesTable extends StatelessWidget {
       BuildContext context,
       ChargeSummary charge,
       ) async {
-    final confirmed = await showDialog<bool>(
+    final formKey = GlobalKey<FormState>();
+
+    String paidAmountText =
+    charge.amount.toStringAsFixed(2);
+
+    String discountText = '0.00';
+
+    PaymentMethod? selectedMethod;
+    DateTime paidAt = DateTime.now();
+
+    final dateFormat = DateFormat('dd/MM/yyyy');
+
+    final payment = await showDialog<PaymentDetails>(
       context: context,
       builder: (dialogContext) {
-        return AlertDialog(
-          title: const Text(
-            'Confirmar pagamento',
-          ),
-          content: Text(
-            'Confirmar o pagamento de '
-                '${charge.studentName}?',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () =>
-                  Navigator.of(dialogContext).pop(false),
-              child: const Text('Voltar'),
-            ),
-            FilledButton(
-              onPressed: () =>
-                  Navigator.of(dialogContext).pop(true),
-              child: const Text(
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: const Text(
                 'Confirmar pagamento',
               ),
-            ),
-          ],
+              content: SizedBox(
+                width: 430,
+                child: Form(
+                  key: formKey,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      TextFormField(
+                        initialValue: paidAmountText,
+                        keyboardType:
+                        const TextInputType.numberWithOptions(
+                          decimal: true,
+                        ),
+                        decoration: const InputDecoration(
+                          labelText: 'Valor pago',
+                          prefixText: 'R\$ ',
+                        ),
+                        validator: (value) {
+                          final amount = double.tryParse(
+                            (value ?? '')
+                                .replaceAll(',', '.'),
+                          );
+
+                          if (amount == null ||
+                              amount <= 0) {
+                            return 'Informe um valor válido.';
+                          }
+
+                          return null;
+                        },
+                        onChanged: (value) {
+                          paidAmountText = value;
+                        },
+                      ),
+                      const SizedBox(height: 18),
+                      TextFormField(
+                        initialValue: discountText,
+                        keyboardType:
+                        const TextInputType.numberWithOptions(
+                          decimal: true,
+                        ),
+                        decoration: const InputDecoration(
+                          labelText: 'Desconto',
+                          prefixText: 'R\$ ',
+                        ),
+                        validator: (value) {
+                          final discount = double.tryParse(
+                            (value ?? '')
+                                .replaceAll(',', '.'),
+                          );
+
+                          if (discount == null ||
+                              discount < 0) {
+                            return 'Informe um desconto válido.';
+                          }
+
+                          return null;
+                        },
+                        onChanged: (value) {
+                          discountText = value;
+                        },
+                      ),
+                      const SizedBox(height: 18),
+                      DropdownButtonFormField<PaymentMethod>(
+                        initialValue: selectedMethod,
+                        decoration: const InputDecoration(
+                          labelText: 'Forma de pagamento',
+                        ),
+                        items: PaymentMethod.values
+                            .map(
+                              (method) =>
+                              DropdownMenuItem(
+                                value: method,
+                                child: Text(
+                                  method.label,
+                                ),
+                              ),
+                        )
+                            .toList(),
+                        validator: (value) {
+                          if (value == null) {
+                            return 'Selecione a forma de pagamento.';
+                          }
+
+                          return null;
+                        },
+                        onChanged: (value) {
+                          setDialogState(() {
+                            selectedMethod = value;
+                          });
+                        },
+                      ),
+                      const SizedBox(height: 18),
+                      InkWell(
+                        onTap: () async {
+                          final selectedDate =
+                          await showDatePicker(
+                            context: dialogContext,
+                            initialDate: paidAt,
+                            firstDate: DateTime(2020),
+                            lastDate: DateTime.now(),
+                          );
+
+                          if (selectedDate == null) {
+                            return;
+                          }
+
+                          setDialogState(() {
+                            paidAt = DateTime(
+                              selectedDate.year,
+                              selectedDate.month,
+                              selectedDate.day,
+                              paidAt.hour,
+                              paidAt.minute,
+                              paidAt.second,
+                            );
+                          });
+                        },
+                        child: InputDecorator(
+                          decoration:
+                          const InputDecoration(
+                            labelText:
+                            'Data do pagamento',
+                            prefixIcon: Icon(
+                              Icons
+                                  .calendar_today_outlined,
+                            ),
+                          ),
+                          child: Text(
+                            dateFormat.format(paidAt),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () =>
+                      Navigator.of(dialogContext)
+                          .pop(),
+                  child: const Text('Voltar'),
+                ),
+                FilledButton(
+                  onPressed: () {
+                    if (!(formKey.currentState
+                        ?.validate() ??
+                        false)) {
+                      return;
+                    }
+
+                    final paidAmount =
+                    double.parse(
+                      paidAmountText
+                          .replaceAll(',', '.'),
+                    );
+
+                    final discount =
+                    double.parse(
+                      discountText
+                          .replaceAll(',', '.'),
+                    );
+
+                    if ((paidAmount +
+                        discount -
+                        charge.amount)
+                        .abs() >
+                        0.009) {
+                      ScaffoldMessenger.of(
+                        dialogContext,
+                      ).showSnackBar(
+                        const SnackBar(
+                          content: Text(
+                            'O valor pago mais o desconto deve ser igual ao valor da cobrança.',
+                          ),
+                        ),
+                      );
+
+                      return;
+                    }
+
+                    Navigator.of(dialogContext).pop(
+                      PaymentDetails(
+                        paidAmount: paidAmount,
+                        discountAmount: discount,
+                        paymentMethod:
+                        selectedMethod!,
+                        paidAt: paidAt,
+                      ),
+                    );
+                  },
+                  child: const Text(
+                    'Confirmar pagamento',
+                  ),
+                ),
+              ],
+            );
+          },
         );
       },
     );
 
-    if (confirmed != true || !context.mounted) {
+    if (payment == null || !context.mounted) {
       return;
     }
 
     await context
         .read<ChargesViewModel>()
-        .confirmPayment(charge);
+        .confirmPayment(
+      charge,
+      payment,
+    );
   }
 
   Future<void> _showDetails(
@@ -217,6 +490,18 @@ class _ChargesTable extends StatelessWidget {
                 const SizedBox(height: 10),
                 Text(
                   'Valor: ${currency.format(charge.amount)}',
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  'Valor pago: ${charge.paidAmount == null ? 'Não registrado' : currency.format(charge.paidAmount)}',
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  'Desconto: ${currency.format(charge.discountAmount)}',
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  'Forma de pagamento: ${charge.paymentMethod?.label ?? 'Não registrada'}',
                 ),
                 const SizedBox(height: 10),
                 Text(
@@ -366,5 +651,40 @@ class _ChargesTable extends StatelessWidget {
       ChargeStatus.overdue => 'Em atraso',
       ChargeStatus.cancelled => 'Cancelado',
     };
+  }
+}
+class _ChargeFilterButton extends StatelessWidget {
+  const _ChargeFilterButton({
+    required this.label,
+    required this.selected,
+    required this.color,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final Color color;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
+    return OutlinedButton(
+      onPressed: onTap,
+      style: OutlinedButton.styleFrom(
+        foregroundColor: selected
+            ? colorScheme.onPrimary
+            : colorScheme.onSurfaceVariant,
+        backgroundColor:
+        selected ? color : colorScheme.surface,
+        side: BorderSide(
+          color:
+          selected ? color : theme.dividerColor,
+        ),
+      ),
+      child: Text(label),
+    );
   }
 }

@@ -1,10 +1,18 @@
 import 'dart:async';
-
 import 'package:avelri_gestao/core/network/api_exception.dart';
 import 'package:avelri_gestao/features/charges/data/charges_service.dart';
 import 'package:avelri_gestao/features/charges/models/charge_summary.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import 'package:avelri_gestao/features/charges/models/payment_details.dart';
+
+enum ChargesStatusFilter {
+  all,
+  pending,
+  paid,
+  overdue,
+  cancelled,
+}
 
 class ChargesViewModel extends ChangeNotifier {
   ChargesViewModel(this._chargesService);
@@ -16,6 +24,9 @@ class ChargesViewModel extends ChangeNotifier {
   bool _isLoading = false;
   bool _isDisposed = false;
   String? _errorMessage;
+  bool get hasCharges => _charges.isNotEmpty;
+  ChargesStatusFilter _statusFilter =
+      ChargesStatusFilter.all;
 
   List<ChargeSummary> get charges =>
       List.unmodifiable(_charges);
@@ -24,7 +35,47 @@ class ChargesViewModel extends ChangeNotifier {
 
   String? get errorMessage => _errorMessage;
 
-  bool get hasCharges => _charges.isNotEmpty;
+
+  ChargesStatusFilter get statusFilter =>
+      _statusFilter;
+
+  List<ChargeSummary> get filteredCharges {
+    if (_statusFilter ==
+        ChargesStatusFilter.all) {
+      return charges;
+    }
+
+    final status = switch (_statusFilter) {
+      ChargesStatusFilter.pending =>
+      ChargeStatus.pending,
+      ChargesStatusFilter.paid =>
+      ChargeStatus.paid,
+      ChargesStatusFilter.overdue =>
+      ChargeStatus.overdue,
+      ChargesStatusFilter.cancelled =>
+      ChargeStatus.cancelled,
+      ChargesStatusFilter.all =>
+      throw StateError('Filtro inválido.'),
+    };
+
+    return _charges
+        .where(
+          (charge) =>
+      charge.status == status,
+    )
+        .toList();
+  }
+
+  void updateStatusFilter(
+      ChargesStatusFilter filter,
+      ) {
+    if (_statusFilter == filter) {
+      return;
+    }
+
+    _statusFilter = filter;
+    _notifySafely();
+  }
 
   Future<void> loadInitial() {
     return _load(showLoading: true);
@@ -40,10 +91,12 @@ class ChargesViewModel extends ChangeNotifier {
 
   Future<bool> confirmPayment(
       ChargeSummary charge,
+      PaymentDetails payment,
       ) async {
     try {
       await _chargesService.confirmPayment(
         chargeId: charge.id,
+        payment: payment,
       );
 
       await refresh();

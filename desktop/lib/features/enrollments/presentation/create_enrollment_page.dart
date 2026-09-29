@@ -9,6 +9,7 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:avelri_gestao/features/students/models/student_summary.dart';
+import 'package:avelri_gestao/features/charges/models/payment_details.dart';
 
 
 class CreateEnrollmentPage extends StatelessWidget {
@@ -44,8 +45,23 @@ class _CreateEnrollmentViewState
   String? _studentId;
   String? _planId;
 
+  final _paidAmountController = TextEditingController();
+  final _discountController = TextEditingController(
+    text: '0.00',
+  );
+
+  PaymentMethod? _paymentMethod;
+  DateTime _paidAt = DateTime.now();
+
   DateTime _startDate =
   DateUtils.dateOnly(DateTime.now());
+
+  @override
+  void dispose() {
+    _paidAmountController.dispose();
+    _discountController.dispose();
+    super.dispose();
+  }
 
   Future<void> _selectStartDate() async {
     final selectedDate = await showDatePicker(
@@ -68,6 +84,34 @@ class _CreateEnrollmentViewState
         .clearError();
   }
 
+  Future<void> _selectPaymentDate() async {
+    final selectedDate = await showDatePicker(
+      context: context,
+      initialDate: _paidAt,
+      firstDate: DateTime(2020),
+      lastDate: DateTime.now(),
+    );
+
+    if (selectedDate == null || !mounted) {
+      return;
+    }
+
+    setState(() {
+      _paidAt = DateTime(
+        selectedDate.year,
+        selectedDate.month,
+        selectedDate.day,
+        _paidAt.hour,
+        _paidAt.minute,
+        _paidAt.second,
+      );
+    });
+
+    context
+        .read<CreateEnrollmentViewModel>()
+        .clearError();
+  }
+
   Future<void> _submit() async {
     if (!(_formKey.currentState?.validate() ?? false)) {
       return;
@@ -75,10 +119,51 @@ class _CreateEnrollmentViewState
 
     final studentId = _studentId;
     final planId = _planId;
+    final paymentMethod = _paymentMethod;
 
-    if (studentId == null || planId == null) {
+    if (studentId == null ||
+        planId == null ||
+        paymentMethod == null) {
       return;
     }
+
+    final selectedPlan = context
+        .read<CreateEnrollmentViewModel>()
+        .plans
+        .firstWhere(
+          (plan) => plan.id == planId,
+    );
+
+    final paidAmount = double.parse(
+      _paidAmountController.text.replaceAll(',', '.'),
+    );
+
+    final discountAmount = double.parse(
+      _discountController.text.replaceAll(',', '.'),
+    );
+
+    if ((paidAmount +
+        discountAmount -
+        selectedPlan.price)
+        .abs() >
+        0.009) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'O valor pago mais o desconto deve ser igual ao valor do plano.',
+          ),
+        ),
+      );
+
+      return;
+    }
+
+    final payment = PaymentDetails(
+      paidAmount: paidAmount,
+      discountAmount: discountAmount,
+      paymentMethod: paymentMethod,
+      paidAt: _paidAt,
+    );
 
     final created = await context
         .read<CreateEnrollmentViewModel>()
@@ -86,6 +171,7 @@ class _CreateEnrollmentViewState
       studentId: studentId,
       planId: planId,
       startDate: _startDate,
+      payment: payment,
     );
 
     if (!mounted || !created) {
@@ -275,10 +361,20 @@ class _CreateEnrollmentViewState
                           : (value) {
                         setState(() {
                           _planId = value;
+
+                          if (value != null) {
+                            final selectedPlan = viewModel.plans.firstWhere(
+                                  (plan) => plan.id == value,
+                            );
+
+                            _paidAmountController.text =
+                                selectedPlan.price.toStringAsFixed(2);
+
+                            _discountController.text = '0.00';
+                          }
                         });
 
-                        viewModel
-                            .clearError();
+                        viewModel.clearError();
                       },
                     ),
                     const SizedBox(height: 20),
@@ -301,6 +397,114 @@ class _CreateEnrollmentViewState
                           dateFormat.format(
                             _startDate,
                           ),
+                        ),
+                      ),
+                    ),
+
+                    const SizedBox(height: 20),
+                    TextFormField(
+                      controller: _paidAmountController,
+                      enabled: !viewModel.isSubmitting,
+                      keyboardType:
+                      const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
+                      decoration: const InputDecoration(
+                        labelText: 'Valor pago',
+                        prefixText: 'R\$ ',
+                        prefixIcon: Icon(
+                          Icons.payments_outlined,
+                        ),
+                      ),
+                      validator: (value) {
+                        final amount = double.tryParse(
+                          (value ?? '').replaceAll(',', '.'),
+                        );
+
+                        if (amount == null || amount <= 0) {
+                          return 'Informe um valor pago válido.';
+                        }
+
+                        return null;
+                      },
+                      onChanged: (_) => viewModel.clearError(),
+                    ),
+                    const SizedBox(height: 20),
+                    TextFormField(
+                      controller: _discountController,
+                      enabled: !viewModel.isSubmitting,
+                      keyboardType:
+                      const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
+                      decoration: const InputDecoration(
+                        labelText: 'Desconto',
+                        prefixText: 'R\$ ',
+                        prefixIcon: Icon(
+                          Icons.discount_outlined,
+                        ),
+                      ),
+                      validator: (value) {
+                        final discount = double.tryParse(
+                          (value ?? '').replaceAll(',', '.'),
+                        );
+
+                        if (discount == null || discount < 0) {
+                          return 'Informe um desconto válido.';
+                        }
+
+                        return null;
+                      },
+                      onChanged: (_) => viewModel.clearError(),
+                    ),
+                    const SizedBox(height: 20),
+                    DropdownButtonFormField<PaymentMethod>(
+                      initialValue: _paymentMethod,
+                      decoration: const InputDecoration(
+                        labelText: 'Forma de pagamento',
+                        prefixIcon: Icon(
+                          Icons.credit_card_outlined,
+                        ),
+                      ),
+                      items: PaymentMethod.values
+                          .map(
+                            (method) => DropdownMenuItem(
+                          value: method,
+                          child: Text(method.label),
+                        ),
+                      )
+                          .toList(),
+                      validator: (value) {
+                        if (value == null) {
+                          return 'Selecione a forma de pagamento.';
+                        }
+
+                        return null;
+                      },
+                      onChanged: viewModel.isSubmitting
+                          ? null
+                          : (value) {
+                        setState(() {
+                          _paymentMethod = value;
+                        });
+
+                        viewModel.clearError();
+                      },
+                    ),
+                    const SizedBox(height: 20),
+                    InkWell(
+                      onTap: viewModel.isSubmitting
+                          ? null
+                          : _selectPaymentDate,
+                      child: InputDecorator(
+                        decoration: const InputDecoration(
+                          labelText: 'Data do pagamento',
+                          prefixIcon: Icon(
+                            Icons.calendar_month_outlined,
+                          ),
+                        ),
+                        child: Text(
+                          dateFormat.format(_paidAt),
                         ),
                       ),
                     ),
