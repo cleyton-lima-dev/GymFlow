@@ -25,6 +25,12 @@ public class WorkoutServiceTests
         _workoutRepository =
             Substitute.For<IWorkoutRepository>();
 
+        _workoutRepository
+    .       ExecuteInTransactionAsync(
+            Arg.Any<Func<Task>>())
+            .Returns(call =>
+             call.Arg<Func<Task>>()());
+
         _studentRepository =
             Substitute.For<IStudentRepository>();
 
@@ -2536,8 +2542,8 @@ public class WorkoutServiceTests
             .AddAsync(Arg.Any<Workout>());
 
         await _workoutRepository
-            .Received(1)
-            .SaveChangesAsync();
+    .Received(2)
+    .SaveChangesAsync();
     }
 
     [Fact]
@@ -3366,7 +3372,7 @@ public class WorkoutServiceTests
             newDay.Exercises);
 
         await _workoutRepository
-            .Received(1)
+            .Received(2)
             .SaveChangesAsync();
     }
 
@@ -3475,7 +3481,7 @@ public class WorkoutServiceTests
                 oldWorkoutExercise.Id);
 
         await _workoutRepository
-            .Received(1)
+            .Received(2)
             .SaveChangesAsync();
     }
 
