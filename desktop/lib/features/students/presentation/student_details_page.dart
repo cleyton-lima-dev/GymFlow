@@ -7,6 +7,7 @@ import 'package:avelri_gestao/app/theme/branding_controller.dart';
 import 'package:avelri_gestao/core/network/api_client.dart';
 import 'package:avelri_gestao/features/students/data/students_service.dart';
 import 'package:avelri_gestao/features/students/presentation/student_details_view_model.dart';
+import 'package:avelri_gestao/features/students/presentation/student_financial_history_section.dart';
 
 class StudentDetailsPage extends StatelessWidget {
   const StudentDetailsPage({required this.studentId, super.key});
@@ -369,6 +370,15 @@ class _StudentDetailsView extends StatelessWidget {
                   ),
                 ],
               ),
+            ),
+            const SizedBox(height: 22),
+            StudentFinancialHistorySection(
+              history: viewModel.financialHistory,
+              isLoading: viewModel.isFinancialHistoryLoading,
+              errorMessage:
+              viewModel.financialHistoryErrorMessage,
+              onRetry: viewModel.loadFinancialHistory,
+              primaryColor: primaryColor,
             ),
           ],
         ),

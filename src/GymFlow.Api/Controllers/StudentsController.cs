@@ -213,6 +213,31 @@ public class StudentsController : ControllerBase
         return Ok(enrollment);
     }
 
+    [Authorize(Roles = "Admin")]
+    [HttpGet("{id:guid}/financial-history")]
+    public async Task<IActionResult> GetFinancialHistory(Guid id)
+    {
+        if (!TryGetGymId(out var gymId))
+        {
+            return Unauthorized();
+        }
+
+        var history = await _enrollmentService
+            .GetStudentFinancialHistoryAsync(
+                gymId,
+                id);
+
+        if (history is null)
+        {
+            return NotFound(new
+            {
+                message = "Aluno não encontrado."
+            });
+        }
+
+        return Ok(history);
+    }
+
     [Authorize(Roles = "Student")]
     [HttpGet("me")]
     public async Task<IActionResult> GetMe()

@@ -1187,4 +1187,131 @@ public class EnrollmentServiceTests
             .DidNotReceive()
             .StageAsync(Arg.Any<FinancialAuditLog>());
     }
+
+    [Fact]
+    public async Task GetStudentFinancialHistoryAsync_WhenStudentExists_ShouldReturnFinancialHistory()
+    {
+        var gymId = Guid.NewGuid();
+        var studentId = Guid.NewGuid();
+        var today = DateOnly.FromDateTime(
+            DateTime.UtcNow);
+
+        var student = new Student
+        {
+            Id = studentId,
+            User = new User
+            {
+                Id = Guid.NewGuid(),
+                GymId = gymId,
+                Name = "Aluno Teste",
+                Role = UserRole.Student
+            }
+        };
+
+        var enrollment = new Enrollment
+        {
+            Id = Guid.NewGuid(),
+            StudentId = studentId,
+            PlanId = Guid.NewGuid(),
+            PlanName = "Plano Mensal",
+            PlanPrice = 150m,
+            StartDate = today.AddMonths(-2),
+            EndDate = today.AddDays(-1),
+            Status = EnrollmentStatus.Active,
+            CreatedAt = DateTime.UtcNow.AddMonths(-2)
+        };
+
+        enrollment.Charge = new Charge
+        {
+            Id = Guid.NewGuid(),
+            EnrollmentId = enrollment.Id,
+            Amount = 150m,
+            DiscountAmount = 0m,
+            DueDate = today.AddDays(-10),
+            Status = ChargeStatus.Pending,
+            CreatedAt = enrollment.CreatedAt,
+            Enrollment = enrollment
+        };
+
+        _studentRepository
+            .GetByIdAndGymIdAsync(
+                studentId,
+                gymId)
+            .Returns(student);
+
+        _enrollmentRepository
+            .GetFinancialHistoryByStudentAsync(
+                studentId,
+                gymId)
+            .Returns(new List<Enrollment>
+            {
+            enrollment
+            });
+
+        _gymTimeZoneProvider
+            .GetTimeZone(gymId)
+            .Returns(TimeZoneInfo.Utc);
+
+        var result =
+            await _service
+                .GetStudentFinancialHistoryAsync(
+                    gymId,
+                    studentId);
+
+        Assert.NotNull(result);
+        Assert.Single(result);
+
+        var item = result[0];
+
+        Assert.Equal(
+            enrollment.Id,
+            item.EnrollmentId);
+
+        Assert.Equal(
+            "Plano Mensal",
+            item.PlanName);
+
+        Assert.Equal(
+            150m,
+            item.PlanPrice);
+
+        Assert.Equal(
+            EnrollmentStatus.Expired,
+            item.EnrollmentStatus);
+
+        Assert.Equal(
+            enrollment.Charge.Id,
+            item.ChargeId);
+
+        Assert.Equal(
+            ChargeStatus.Overdue,
+            item.ChargeStatus);
+    }
+
+    [Fact]
+    public async Task GetStudentFinancialHistoryAsync_WhenStudentDoesNotExist_ShouldReturnNull()
+    {
+        var gymId = Guid.NewGuid();
+        var studentId = Guid.NewGuid();
+
+        _studentRepository
+            .GetByIdAndGymIdAsync(
+                studentId,
+                gymId)
+            .Returns((Student?)null);
+
+        var result =
+            await _service
+                .GetStudentFinancialHistoryAsync(
+                    gymId,
+                    studentId);
+
+        Assert.Null(result);
+
+        await _enrollmentRepository
+            .DidNotReceive()
+            .GetFinancialHistoryByStudentAsync(
+                Arg.Any<Guid>(),
+                Arg.Any<Guid>());
+    }
 }

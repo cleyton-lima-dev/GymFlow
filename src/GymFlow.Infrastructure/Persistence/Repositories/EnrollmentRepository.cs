@@ -121,4 +121,23 @@ public class EnrollmentRepository : IEnrollmentRepository
             .ThenByDescending(enrollment => enrollment.CreatedAt)
             .ToListAsync();
     }
+
+    public async Task<List<Enrollment>> GetFinancialHistoryByStudentAsync(
+    Guid studentId,
+    Guid gymId)
+    {
+        return await _context.Enrollments
+            .AsNoTracking()
+            .Include(enrollment => enrollment.Student)
+                .ThenInclude(student => student.User)
+            .Include(enrollment => enrollment.Plan)
+            .Include(enrollment => enrollment.Charge)
+            .Where(enrollment =>
+                enrollment.StudentId == studentId &&
+                enrollment.Student.User.GymId == gymId &&
+                enrollment.Plan.GymId == gymId)
+            .OrderByDescending(enrollment => enrollment.StartDate)
+            .ThenByDescending(enrollment => enrollment.CreatedAt)
+            .ToListAsync();
+    }
 }

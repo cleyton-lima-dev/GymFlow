@@ -1,28 +1,40 @@
 import 'dart:async';
-
 import 'package:flutter/foundation.dart';
 import 'package:avelri_gestao/core/network/api_exception.dart';
 import 'package:avelri_gestao/features/students/data/students_service.dart';
 import 'package:avelri_gestao/features/students/models/student_summary.dart';
 import 'package:http/http.dart' as http;
+import 'package:avelri_gestao/features/students/models/student_financial_history_item.dart';
 
 class StudentDetailsViewModel extends ChangeNotifier {
   StudentDetailsViewModel(this._studentsService, this._studentId);
 
   final StudentsService _studentsService;
   final String _studentId;
+  final List<StudentFinancialHistoryItem> _financialHistory = [];
 
   StudentSummary? _student;
   bool _isLoading = false;
   bool _isUpdatingStatus = false;
   bool _isReactivating = false;
+  bool _isFinancialHistoryLoading = false;
   String? _errorMessage;
+  String? _financialHistoryErrorMessage;
 
   StudentSummary? get student => _student;
   bool get isLoading => _isLoading;
   bool get isUpdatingStatus => _isUpdatingStatus;
   String? get errorMessage => _errorMessage;
   bool get isReactivating => _isReactivating;
+
+  List<StudentFinancialHistoryItem> get financialHistory =>
+      List.unmodifiable(_financialHistory);
+
+  bool get isFinancialHistoryLoading =>
+      _isFinancialHistoryLoading;
+
+  String? get financialHistoryErrorMessage =>
+      _financialHistoryErrorMessage;
 
   Future<void> load() async {
     if (_isLoading) {
@@ -35,6 +47,7 @@ class StudentDetailsViewModel extends ChangeNotifier {
 
     try {
       _student = await _studentsService.getStudentById(_studentId);
+      await loadFinancialHistory();
     } on ApiException catch (exception) {
       _errorMessage = _messageFromApiException(exception);
     } on TimeoutException {
@@ -129,6 +142,54 @@ class StudentDetailsViewModel extends ChangeNotifier {
       return false;
     } finally {
       _isReactivating = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> loadFinancialHistory() async {
+    if (_isFinancialHistoryLoading) {
+      return;
+    }
+
+    _isFinancialHistoryLoading = true;
+    _financialHistoryErrorMessage = null;
+    notifyListeners();
+
+    try {
+      final history =
+      await _studentsService
+          .getStudentFinancialHistory(
+        _studentId,
+      );
+
+      _financialHistory
+        ..clear()
+        ..addAll(history);
+    } on ApiException catch (exception) {
+      if (exception.statusCode == 403) {
+        _financialHistoryErrorMessage =
+        'Você não possui permissão para acessar o histórico financeiro.';
+      } else if (exception.statusCode >= 500) {
+        _financialHistoryErrorMessage =
+        'O histórico financeiro está temporariamente indisponível.';
+      } else {
+        _financialHistoryErrorMessage =
+        'Não foi possível carregar o histórico financeiro.';
+      }
+    } on TimeoutException {
+      _financialHistoryErrorMessage =
+      'A consulta do histórico financeiro demorou mais que o esperado.';
+    } on http.ClientException {
+      _financialHistoryErrorMessage =
+      'Não foi possível conectar ao servidor.';
+    } on FormatException {
+      _financialHistoryErrorMessage =
+      'Não foi possível interpretar o histórico financeiro.';
+    } catch (_) {
+      _financialHistoryErrorMessage =
+      'Não foi possível carregar o histórico financeiro.';
+    } finally {
+      _isFinancialHistoryLoading = false;
       notifyListeners();
     }
   }
