@@ -1,6 +1,7 @@
 import 'package:avelri_gestao/core/network/api_client.dart';
 import 'package:avelri_gestao/features/students/models/paged_students_response.dart';
 import 'package:avelri_gestao/features/students/models/student_summary.dart';
+import 'package:avelri_gestao/features/students/models/student_financial_history_item.dart';
 
 class StudentsService {
   const StudentsService(this._apiClient);
@@ -61,6 +62,32 @@ class StudentsService {
         'birthDate': birthDate == null ? null : _formatDateOnly(birthDate),
       },
     );
+  }
+
+  Future<List<StudentFinancialHistoryItem>>
+  getStudentFinancialHistory(
+      String studentId,
+      ) async {
+    final response = await _apiClient.get(
+      'api/students/$studentId/financial-history',
+    );
+
+    if (response is! List) {
+      throw const FormatException(
+        'Invalid student financial history response.',
+      );
+    }
+
+    return response
+        .map(
+          (item) =>
+          StudentFinancialHistoryItem.fromJson(
+            Map<String, dynamic>.from(
+              item as Map,
+            ),
+          ),
+    )
+        .toList();
   }
 
   Future<void> reactivateArchivedStudent({

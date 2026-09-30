@@ -547,6 +547,69 @@ public class EnrollmentService
             .ToList();
     }
 
+    public async Task<List<StudentFinancialHistoryItemResponse>?>
+    GetStudentFinancialHistoryAsync(
+        Guid gymId,
+        Guid studentId)
+    {
+        var student = await _studentRepository
+            .GetByIdAndGymIdAsync(
+                studentId,
+                gymId);
+
+        if (student is null)
+        {
+            return null;
+        }
+
+        var enrollments = await _enrollmentRepository
+            .GetFinancialHistoryByStudentAsync(
+                studentId,
+                gymId);
+
+        var today = GetToday(gymId);
+
+        return enrollments
+            .Select(enrollment =>
+            {
+                var charge = enrollment.Charge;
+
+                return new StudentFinancialHistoryItemResponse
+                {
+                    EnrollmentId = enrollment.Id,
+                    PlanName = enrollment.PlanName,
+                    PlanPrice = enrollment.PlanPrice,
+                    StartDate = enrollment.StartDate,
+                    EndDate = enrollment.EndDate,
+                    EnrollmentStatus =
+                        GetEffectiveStatus(
+                            enrollment,
+                            today),
+                    CancellationDate =
+                        enrollment.CancellationDate,
+
+                    ChargeId = charge?.Id,
+                    ChargeAmount = charge?.Amount,
+                    DiscountAmount =
+                        charge?.DiscountAmount,
+                    PaidAmount = charge?.PaidAmount,
+                    PaymentMethod =
+                        charge?.PaymentMethod,
+                    DueDate = charge?.DueDate,
+                    ChargeStatus = charge is null
+                        ? null
+                        : GetEffectiveChargeStatus(
+                            charge.Status,
+                            charge.DueDate,
+                            today),
+                    PaidAt = charge?.PaidAt,
+
+                    CreatedAt = enrollment.CreatedAt
+                };
+            })
+            .ToList();
+    }
+
     private DateOnly GetToday(Guid gymId)
     {
         var timeZone =
@@ -571,6 +634,20 @@ public class EnrollmentService
         }
 
         return enrollment.Status;
+    }
+
+    private static ChargeStatus GetEffectiveChargeStatus(
+    ChargeStatus status,
+    DateOnly dueDate,
+    DateOnly today)
+    {
+        if (status == ChargeStatus.Pending &&
+            dueDate < today)
+        {
+            return ChargeStatus.Overdue;
+        }
+
+        return status;
     }
 
     private static EnrollmentResponse ToResponse(

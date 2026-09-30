@@ -31,4 +31,8 @@ public interface IEnrollmentRepository
     Task<List<Enrollment>> GetByStudentIdsAsync(
     IReadOnlyCollection<Guid> studentIds,
     Guid gymId);
+
+    Task<List<Enrollment>> GetFinancialHistoryByStudentAsync(
+    Guid studentId,
+    Guid gymId);
 }
