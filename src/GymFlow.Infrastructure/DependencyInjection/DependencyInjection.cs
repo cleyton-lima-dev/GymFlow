@@ -39,6 +39,9 @@ public static class DependencyInjection
         services.AddScoped<IEnrollmentRepository, EnrollmentRepository>();
         services.AddScoped<IChargeRepository, ChargeRepository>();
         services.AddScoped<IFinancialAuditRepository, FinancialAuditRepository>();
+        services.AddScoped<IPhysicalAccessCredentialRepository,PhysicalAccessCredentialRepository>();
+        services.AddScoped<IPhysicalAccessOverrideRepository,PhysicalAccessOverrideRepository>();
+        services.AddScoped<IPhysicalAccessEventRepository,PhysicalAccessEventRepository>();
         services.AddScoped<IWorkoutTemplateRepository, WorkoutTemplateRepository>();
         services.AddScoped<IWorkoutRepository, WorkoutRepository>();
         services.AddScoped<IPhysicalAssessmentRepository, PhysicalAssessmentRepository>();
