@@ -15,6 +15,9 @@ public static class DependencyInjection
         services.AddScoped<EnrollmentService>();
         services.AddScoped<ChargeService>();
         services.AddScoped<StudentAccessService>();
+        services.AddScoped<PhysicalAccessService>();
+        services.AddScoped<PhysicalAccessCredentialService>();
+        services.AddScoped<PhysicalAccessOverrideService>();
         services.AddScoped<StudentLifecycleService>();
         services.AddScoped<WorkoutTemplateService>();
         services.AddScoped<WorkoutService>();

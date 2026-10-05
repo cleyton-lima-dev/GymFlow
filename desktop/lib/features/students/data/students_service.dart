@@ -2,6 +2,9 @@ import 'package:avelri_gestao/core/network/api_client.dart';
 import 'package:avelri_gestao/features/students/models/paged_students_response.dart';
 import 'package:avelri_gestao/features/students/models/student_summary.dart';
 import 'package:avelri_gestao/features/students/models/student_financial_history_item.dart';
+import 'package:avelri_gestao/features/students/models/physical_access_credential.dart';
+import 'package:avelri_gestao/core/network/api_exception.dart';
+import 'package:avelri_gestao/features/students/models/physical_access_override.dart';
 
 class StudentsService {
   const StudentsService(this._apiClient);
@@ -90,6 +93,33 @@ class StudentsService {
         .toList();
   }
 
+  Future<PhysicalAccessOverride?>
+  getPhysicalAccessOverride(
+      String studentId,
+      ) async {
+    try {
+      final response = await _apiClient.get(
+        'api/physical-access/overrides/student/$studentId',
+      );
+
+      if (response is! Map) {
+        throw const FormatException(
+          'Invalid physical access override response.',
+        );
+      }
+
+      return PhysicalAccessOverride.fromJson(
+        Map<String, dynamic>.from(response),
+      );
+    } on ApiException catch (exception) {
+      if (exception.statusCode == 404) {
+        return null;
+      }
+
+      rethrow;
+    }
+  }
+
   Future<void> reactivateArchivedStudent({
     required String studentId,
     required String planId,
@@ -112,6 +142,61 @@ class StudentsService {
     return '$year-$month-$day';
   }
 
+  Future<List<PhysicalAccessCredential>>
+  getPhysicalAccessCredentials(
+      String studentId,
+      ) async {
+    final response = await _apiClient.get(
+      'api/physical-access/credentials/student/$studentId',
+    );
+
+    if (response is! List) {
+      throw const FormatException(
+        'Invalid physical access credentials response.',
+      );
+    }
+
+    return response
+        .map(
+          (item) =>
+          PhysicalAccessCredential.fromJson(
+            Map<String, dynamic>.from(
+              item as Map,
+            ),
+          ),
+    )
+        .toList();
+  }
+
+  Future<PhysicalAccessCredential>
+  createPhysicalAccessCredential({
+    required String studentId,
+    required int type,
+    required String providerKey,
+    required String externalIdentifier,
+  }) async {
+    final response = await _apiClient.post(
+      'api/physical-access/credentials',
+      body: {
+        'studentId': studentId,
+        'type': type,
+        'providerKey': providerKey.trim(),
+        'externalIdentifier':
+        externalIdentifier.trim(),
+      },
+    );
+
+    if (response is! Map) {
+      throw const FormatException(
+        'Invalid physical access credential response.',
+      );
+    }
+
+    return PhysicalAccessCredential.fromJson(
+      Map<String, dynamic>.from(response),
+    );
+  }
+
   Future<StudentSummary> getStudentById(String studentId) async {
     final response = await _apiClient.get('api/students/$studentId');
 
@@ -130,6 +215,26 @@ class StudentsService {
     }
 
     return StudentSummary.fromJson(Map<String, dynamic>.from(response));
+  }
+
+  Future<void> updatePhysicalAccessCredentialStatus({
+    required String credentialId,
+    required bool isActive,
+  }) async {
+    await _apiClient.patch(
+      'api/physical-access/credentials/$credentialId/status',
+      body: {
+        'isActive': isActive,
+      },
+    );
+  }
+
+  Future<void> removePhysicalAccessOverride({
+    required String studentId,
+  }) async {
+    await _apiClient.delete(
+      'api/physical-access/overrides/student/$studentId',
+    );
   }
 
   Future<void> updateStudent({
@@ -161,6 +266,36 @@ class StudentsService {
     await _apiClient.patch(
       'api/students/$studentId/status',
       body: {'isActive': isActive},
+    );
+  }
+
+  Future<PhysicalAccessOverride>
+  setPhysicalAccessOverride({
+    required String studentId,
+    required int type,
+    String? reason,
+  }) async {
+    final normalizedReason = reason?.trim();
+
+    final response = await _apiClient.put(
+      'api/physical-access/overrides/student/$studentId',
+      body: {
+        'type': type,
+        'reason': normalizedReason == null ||
+            normalizedReason.isEmpty
+            ? null
+            : normalizedReason,
+      },
+    );
+
+    if (response is! Map) {
+      throw const FormatException(
+        'Invalid physical access override response.',
+      );
+    }
+
+    return PhysicalAccessOverride.fromJson(
+      Map<String, dynamic>.from(response),
     );
   }
 }

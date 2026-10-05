@@ -32,6 +32,9 @@ public class AppDbContext : DbContext
     public DbSet<Enrollment> Enrollments { get; set; }
     public DbSet<Charge> Charges { get; set; }
     public DbSet<FinancialAuditLog> FinancialAuditLogs { get; set; }
+    public DbSet<PhysicalAccessCredential> PhysicalAccessCredentials { get; set; }
+    public DbSet<PhysicalAccessOverride> PhysicalAccessOverrides { get; set; }
+    public DbSet<PhysicalAccessEvent> PhysicalAccessEvents { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

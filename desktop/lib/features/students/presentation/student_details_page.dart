@@ -8,6 +8,7 @@ import 'package:avelri_gestao/core/network/api_client.dart';
 import 'package:avelri_gestao/features/students/data/students_service.dart';
 import 'package:avelri_gestao/features/students/presentation/student_details_view_model.dart';
 import 'package:avelri_gestao/features/students/presentation/student_financial_history_section.dart';
+import 'package:avelri_gestao/features/students/presentation/student_physical_access_section.dart';
 
 class StudentDetailsPage extends StatelessWidget {
   const StudentDetailsPage({required this.studentId, super.key});
@@ -372,6 +373,87 @@ class _StudentDetailsView extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 22),
+
+            StudentPhysicalAccessSection(
+              credentials:
+              viewModel.physicalAccessCredentials,
+              accessOverride:
+              viewModel.physicalAccessOverride,
+              isLoading:
+              viewModel.isPhysicalAccessLoading,
+              errorMessage:
+              viewModel.physicalAccessErrorMessage,
+              primaryColor: primaryColor,
+
+              onRefresh:
+              viewModel.loadPhysicalAccess,
+
+              onAddCredential: () {
+                _showAddPhysicalAccessCredentialDialog(
+                  context,
+                  viewModel,
+                );
+              },
+
+              onToggleCredential: (credential) async {
+                final success = await viewModel
+                    .updatePhysicalAccessCredentialStatus(
+                  credentialId: credential.id,
+                  isActive: !credential.isActive,
+                );
+
+                if (!context.mounted || !success) {
+                  return;
+                }
+
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      credential.isActive
+                          ? 'Credencial desativada.'
+                          : 'Credencial ativada.',
+                    ),
+                  ),
+                );
+              },
+
+              onAllowAccess: () {
+                _showPhysicalAccessOverrideDialog(
+                  context,
+                  viewModel,
+                  type: 1,
+                );
+              },
+
+              onBlockAccess: () {
+                _showPhysicalAccessOverrideDialog(
+                  context,
+                  viewModel,
+                  type: 2,
+                );
+              },
+
+              onRemoveOverride: () async {
+                final success =
+                await viewModel
+                    .removePhysicalAccessOverride();
+
+                if (!context.mounted || !success) {
+                  return;
+                }
+
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text(
+                      'Exceção manual removida.',
+                    ),
+                  ),
+                );
+              },
+            ),
+
+            const SizedBox(height: 22),
+
             StudentFinancialHistorySection(
               history: viewModel.financialHistory,
               isLoading: viewModel.isFinancialHistoryLoading,
@@ -381,6 +463,240 @@ class _StudentDetailsView extends StatelessWidget {
               primaryColor: primaryColor,
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showAddPhysicalAccessCredentialDialog(
+      BuildContext context,
+      StudentDetailsViewModel viewModel,
+      ) async {
+    final providerController =
+    TextEditingController(text: 'toletus');
+
+    final identifierController =
+    TextEditingController();
+
+    var credentialType = 3;
+
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return AlertDialog(
+              title: const Text(
+                'Adicionar credencial',
+              ),
+              content: SizedBox(
+                width: 420,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    DropdownButtonFormField<int>(
+                      initialValue: credentialType,
+                      decoration: const InputDecoration(
+                        labelText: 'Tipo de credencial',
+                      ),
+                      items: const [
+                        DropdownMenuItem(
+                          value: 1,
+                          child: Text('Cartão'),
+                        ),
+                        DropdownMenuItem(
+                          value: 2,
+                          child: Text('QR Code'),
+                        ),
+                        DropdownMenuItem(
+                          value: 3,
+                          child: Text('Biometria'),
+                        ),
+                        DropdownMenuItem(
+                          value: 4,
+                          child: Text(
+                            'Reconhecimento facial',
+                          ),
+                        ),
+                        DropdownMenuItem(
+                          value: 5,
+                          child: Text('PIN'),
+                        ),
+                        DropdownMenuItem(
+                          value: 99,
+                          child: Text('Outro'),
+                        ),
+                      ],
+                      onChanged: (value) {
+                        if (value == null) {
+                          return;
+                        }
+
+                        setState(() {
+                          credentialType = value;
+                        });
+                      },
+                    ),
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: providerController,
+                      decoration: const InputDecoration(
+                        labelText: 'Provedor',
+                        hintText: 'Ex.: toletus',
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: identifierController,
+                      decoration: const InputDecoration(
+                        labelText:
+                        'Identificador externo',
+                        hintText:
+                        'ID informado pela catraca',
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () {
+                    Navigator.of(dialogContext)
+                        .pop(false);
+                  },
+                  child: const Text('Cancelar'),
+                ),
+                FilledButton(
+                  onPressed: () {
+                    if (providerController.text
+                        .trim()
+                        .isEmpty ||
+                        identifierController.text
+                            .trim()
+                            .isEmpty) {
+                      return;
+                    }
+
+                    Navigator.of(dialogContext)
+                        .pop(true);
+                  },
+                  child: const Text('Adicionar'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    if (result != true || !context.mounted) {
+      providerController.dispose();
+      identifierController.dispose();
+      return;
+    }
+
+    final success =
+    await viewModel
+        .createPhysicalAccessCredential(
+      type: credentialType,
+      providerKey: providerController.text,
+      externalIdentifier:
+      identifierController.text,
+    );
+
+    providerController.dispose();
+    identifierController.dispose();
+
+    if (!context.mounted || !success) {
+      return;
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(
+          'Credencial adicionada com sucesso.',
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showPhysicalAccessOverrideDialog(
+      BuildContext context,
+      StudentDetailsViewModel viewModel, {
+        required int type,
+      }) async {
+    final reasonController =
+    TextEditingController();
+
+    final isAllow = type == 1;
+
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: Text(
+            isAllow
+                ? 'Liberar entrada manualmente'
+                : 'Bloquear entrada manualmente',
+          ),
+          content: SizedBox(
+            width: 420,
+            child: TextField(
+              controller: reasonController,
+              maxLines: 3,
+              decoration: InputDecoration(
+                labelText: 'Motivo (opcional)',
+                hintText: isAllow
+                    ? 'Ex.: aluno realizará o pagamento após o treino'
+                    : 'Ex.: bloqueio solicitado pela administração',
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(dialogContext)
+                    .pop(false);
+              },
+              child: const Text('Cancelar'),
+            ),
+            FilledButton(
+              onPressed: () {
+                Navigator.of(dialogContext)
+                    .pop(true);
+              },
+              child: Text(
+                isAllow ? 'Liberar' : 'Bloquear',
+              ),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (result != true || !context.mounted) {
+      reasonController.dispose();
+      return;
+    }
+
+    final success =
+    await viewModel.setPhysicalAccessOverride(
+      type: type,
+      reason: reasonController.text,
+    );
+
+    reasonController.dispose();
+
+    if (!context.mounted || !success) {
+      return;
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          isAllow
+              ? 'Entrada liberada manualmente.'
+              : 'Entrada bloqueada manualmente.',
         ),
       ),
     );

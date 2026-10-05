@@ -17,6 +17,10 @@ public static class PersistenceTextPolicy
     public const int DescriptionMaxLength = 500;
     public const int NotesMaxLength = 500;
 
+    public const int PhysicalAccessProviderKeyMaxLength = 100;
+    public const int PhysicalAccessExternalIdentifierMaxLength = 200;
+    public const int PhysicalAccessOverrideReasonMaxLength = 500;
+
     public static void ValidateMaxLength(
         string? value,
         int maxLength,
