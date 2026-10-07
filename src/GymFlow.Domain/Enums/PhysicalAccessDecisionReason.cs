@@ -12,5 +12,7 @@ public enum PhysicalAccessDecisionReason
     NoValidEnrollment = 104,
     FinancialRestriction = 105,
     ManualBlock = 106,
-    PlanRestriction = 107
+    PlanRestriction = 107,
+    OfflineNoCachedPermission = 108
+
 }

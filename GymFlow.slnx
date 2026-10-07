@@ -1,6 +1,9 @@
 <Solution>
-  <Folder Name="/src/" />
+  <Folder Name="/src/">
+    <Project Path="src/GymFlow.AccessAgent/GymFlow.AccessAgent.csproj" />
+  </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/GymFlow.AccessAgent.Tests/GymFlow.AccessAgent.Tests.csproj" />
     <Project Path="tests/GymFlow.Application.Tests/GymFlow.Application.Tests.csproj" />
     <Project Path="tests/GymFlow.IntegrationTests/GymFlow.IntegrationTests.csproj" />
   </Folder>

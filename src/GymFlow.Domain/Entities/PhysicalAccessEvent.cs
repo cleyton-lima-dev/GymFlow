@@ -18,6 +18,9 @@ public class PhysicalAccessEvent
 
     public PhysicalAccessDecisionReason Reason { get; set; }
 
+    public PhysicalAccessDecisionSource Source { get; set; } =
+    PhysicalAccessDecisionSource.Online;
+
     public DateTime OccurredAt { get; set; }
 
     public DateTime ProcessedAt { get; set; } = DateTime.UtcNow;

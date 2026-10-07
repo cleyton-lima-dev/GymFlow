@@ -42,12 +42,15 @@ public static class DependencyInjection
         services.AddScoped<IPhysicalAccessCredentialRepository,PhysicalAccessCredentialRepository>();
         services.AddScoped<IPhysicalAccessOverrideRepository,PhysicalAccessOverrideRepository>();
         services.AddScoped<IPhysicalAccessEventRepository,PhysicalAccessEventRepository>();
+        services.AddScoped<IAccessAgentRepository, AccessAgentRepository>();
         services.AddScoped<IWorkoutTemplateRepository, WorkoutTemplateRepository>();
         services.AddScoped<IWorkoutRepository, WorkoutRepository>();
         services.AddScoped<IPhysicalAssessmentRepository, PhysicalAssessmentRepository>();
         services.AddScoped<IWorkoutExecutionRepository, WorkoutExecutionRepository>();
         services.AddScoped<IWorkoutDayProgressRepository, WorkoutDayProgressRepository>();
         services.AddScoped<ITokenService, JwtTokenService>();
+        services.AddScoped<IAccessAgentTokenService, AccessAgentJwtTokenService>();
+        services.AddScoped<IAccessAgentSecretService, AccessAgentSecretService>();
         services.AddSingleton<IGymTimeZoneProvider, ConfigurationGymTimeZoneProvider>();
 
         return services;

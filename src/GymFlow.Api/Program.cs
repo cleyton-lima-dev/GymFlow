@@ -117,7 +117,7 @@ builder.Services
                         .GetRequiredService<ILoggerFactory>()
                         .CreateLogger("JwtValidation");
 
-                var userIdClaim =
+                var principalIdClaim =
                     context.Principal?
                         .FindFirst(ClaimTypes.NameIdentifier)?
                         .Value;
@@ -128,20 +128,54 @@ builder.Services
                         .Value;
 
                 if (!Guid.TryParse(
-                        userIdClaim,
-                        out var userId) ||
+                        principalIdClaim,
+                        out var principalId) ||
                     !Guid.TryParse(
                         gymIdClaim,
                         out var gymId))
-
-
                 {
                     logger.LogWarning(
-                    "Token rejeitado por claims inválidas. IP: {ClientIp}",
-                    GetClientIp(context.HttpContext));
+                        "Token rejeitado por claims inválidas. IP: {ClientIp}",
+                        GetClientIp(context.HttpContext));
 
                     context.Fail(
                         "Token sem identificação válida.");
+
+                    return;
+                }
+
+                var identityType =
+                    context.Principal?
+                        .FindFirst("identity_type")?
+                        .Value;
+
+                if (string.Equals(
+                        identityType,
+                        "access_agent",
+                        StringComparison.Ordinal))
+                {
+                    var accessAgentRepository =
+                        context.HttpContext
+                            .RequestServices
+                            .GetRequiredService<IAccessAgentRepository>();
+
+                    var agent =
+                        await accessAgentRepository.GetByIdAsync(
+                            principalId,
+                            gymId);
+
+                    if (agent is null || !agent.IsActive)
+                    {
+                        logger.LogWarning(
+                            "Token rejeitado para agente inativo ou inexistente. AgentId: {AgentId}, GymId: {GymId}",
+                            principalId,
+                            gymId);
+
+                        context.Fail(
+                            "Agente inativo ou inexistente.");
+
+                        return;
+                    }
 
                     return;
                 }
@@ -153,14 +187,14 @@ builder.Services
 
                 var isActive =
                     await userRepository.IsActiveAsync(
-                        userId,
+                        principalId,
                         gymId);
 
                 if (!isActive)
                 {
                     logger.LogWarning(
                         "Token rejeitado para usuário inativo ou inexistente. UserId: {UserId}, GymId: {GymId}",
-                        userId,
+                        principalId,
                         gymId);
 
                     context.Fail(
@@ -183,14 +217,14 @@ builder.Services
                     var hasActiveEnrollment =
                         await studentAccessService
                             .HasActiveEnrollmentAsync(
-                                userId,
+                                principalId,
                                 gymId);
 
                     if (!hasActiveEnrollment)
                     {
                         logger.LogWarning(
                             "Token rejeitado por matrícula inválida. UserId: {UserId}, GymId: {GymId}",
-                            userId,
+                            principalId,
                             gymId);
 
                         context.Fail(
@@ -248,7 +282,22 @@ builder.Services.AddCors(options =>
     });
 });
 
-builder.Services.AddAuthorization();
+builder.Services.AddAuthorization(options =>
+{
+    options.AddPolicy(
+        "AccessAgentOnly",
+        policy =>
+        {
+            policy.RequireAuthenticatedUser();
+
+            policy.RequireClaim(
+                "identity_type",
+                "access_agent");
+
+            policy.RequireRole(
+                "AccessAgent");
+        });
+});
 
 builder.Services.AddRateLimiter(options =>
 {

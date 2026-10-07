@@ -1030,4 +1030,239 @@ public class PhysicalAccessServiceTests
             requestId,
             result.RequestId);
     }
+
+    [Fact]
+    public async Task SyncOfflineEventAsync_WhenOfflineCacheEventIsValid_ShouldPersistOriginalDecision()
+    {
+        var gymId = Guid.NewGuid();
+        var requestId = Guid.NewGuid();
+        var studentId = Guid.NewGuid();
+        var credentialId = Guid.NewGuid();
+        var occurredAt = DateTime.UtcNow.AddMinutes(-2);
+        var processedAt = DateTime.UtcNow;
+
+        var credential = new PhysicalAccessCredential
+        {
+            Id = credentialId,
+            GymId = gymId,
+            StudentId = studentId,
+            Type = PhysicalAccessCredentialType.Card,
+            ProviderKey = "toletus-litenet2",
+            ExternalIdentifier = "12345",
+            IsActive = true
+        };
+
+        _eventRepository
+            .GetByRequestIdAsync(
+                gymId,
+                requestId)
+            .Returns((PhysicalAccessEvent?)null);
+
+        _credentialRepository
+            .GetByExternalIdentifierAsync(
+                gymId,
+                "toletus-litenet2",
+                PhysicalAccessCredentialType.Card,
+                "12345")
+            .Returns(credential);
+
+        var request =
+            new SyncOfflinePhysicalAccessEventRequest
+            {
+                RequestId = requestId,
+                ProviderKey = "toletus-litenet2",
+                CredentialType =
+                    PhysicalAccessCredentialType.Card,
+                ExternalIdentifier = "12345",
+                OccurredAt = occurredAt,
+                Decision =
+                    PhysicalAccessDecision.Allowed,
+                Reason =
+                    PhysicalAccessDecisionReason.Eligible,
+                Source =
+                    PhysicalAccessDecisionSource.OfflineCache,
+                ProcessedAt = processedAt
+            };
+
+        await _service.SyncOfflineEventAsync(
+            gymId,
+            request);
+
+        await _eventRepository
+            .Received(1)
+            .AddAsync(
+                Arg.Is<PhysicalAccessEvent>(
+                    accessEvent =>
+                        accessEvent.GymId == gymId &&
+                        accessEvent.RequestId == requestId &&
+                        accessEvent.StudentId == studentId &&
+                        accessEvent.CredentialId == credentialId &&
+                        accessEvent.Decision ==
+                            PhysicalAccessDecision.Allowed &&
+                        accessEvent.Reason ==
+                            PhysicalAccessDecisionReason.Eligible &&
+                        accessEvent.Source ==
+                            PhysicalAccessDecisionSource.OfflineCache &&
+                        accessEvent.OccurredAt == occurredAt &&
+                        accessEvent.ProcessedAt == processedAt));
+    }
+
+    [Fact]
+    public async Task SyncOfflineEventAsync_WhenOfflineFailClosedIsValid_ShouldPersistDeniedDecision()
+    {
+        var gymId = Guid.NewGuid();
+        var requestId = Guid.NewGuid();
+        var occurredAt = DateTime.UtcNow.AddMinutes(-2);
+        var processedAt = DateTime.UtcNow;
+
+        _eventRepository
+            .GetByRequestIdAsync(
+                gymId,
+                requestId)
+            .Returns((PhysicalAccessEvent?)null);
+
+        _credentialRepository
+            .GetByExternalIdentifierAsync(
+                gymId,
+                "toletus-litenet2",
+                PhysicalAccessCredentialType.Card,
+                "99999")
+            .Returns((PhysicalAccessCredential?)null);
+
+        var request =
+            new SyncOfflinePhysicalAccessEventRequest
+            {
+                RequestId = requestId,
+                ProviderKey = "toletus-litenet2",
+                CredentialType =
+                    PhysicalAccessCredentialType.Card,
+                ExternalIdentifier = "99999",
+                OccurredAt = occurredAt,
+                Decision =
+                    PhysicalAccessDecision.Denied,
+                Reason =
+                    PhysicalAccessDecisionReason
+                        .OfflineNoCachedPermission,
+                Source =
+                    PhysicalAccessDecisionSource
+                        .OfflineFailClosed,
+                ProcessedAt = processedAt
+            };
+
+        await _service.SyncOfflineEventAsync(
+            gymId,
+            request);
+
+        await _eventRepository
+            .Received(1)
+            .AddAsync(
+                Arg.Is<PhysicalAccessEvent>(
+                    accessEvent =>
+                        accessEvent.GymId == gymId &&
+                        accessEvent.RequestId == requestId &&
+                        accessEvent.StudentId == null &&
+                        accessEvent.CredentialId == null &&
+                        accessEvent.Decision ==
+                            PhysicalAccessDecision.Denied &&
+                        accessEvent.Reason ==
+                            PhysicalAccessDecisionReason
+                                .OfflineNoCachedPermission &&
+                        accessEvent.Source ==
+                            PhysicalAccessDecisionSource
+                                .OfflineFailClosed &&
+                        accessEvent.OccurredAt == occurredAt &&
+                        accessEvent.ProcessedAt == processedAt));
+    }
+
+    [Fact]
+    public async Task SyncOfflineEventAsync_WhenRequestWasAlreadySynced_ShouldNotCreateDuplicateEvent()
+    {
+        var gymId = Guid.NewGuid();
+        var requestId = Guid.NewGuid();
+
+        var existingEvent = new PhysicalAccessEvent
+        {
+            Id = Guid.NewGuid(),
+            GymId = gymId,
+            RequestId = requestId,
+            Decision = PhysicalAccessDecision.Allowed,
+            Reason = PhysicalAccessDecisionReason.Eligible,
+            Source = PhysicalAccessDecisionSource.OfflineCache,
+            OccurredAt = DateTime.UtcNow.AddMinutes(-5),
+            ProcessedAt = DateTime.UtcNow.AddMinutes(-4)
+        };
+
+        _eventRepository
+            .GetByRequestIdAsync(
+                gymId,
+                requestId)
+            .Returns(existingEvent);
+
+        var request =
+            new SyncOfflinePhysicalAccessEventRequest
+            {
+                RequestId = requestId,
+                ProviderKey = "toletus-litenet2",
+                CredentialType =
+                    PhysicalAccessCredentialType.Card,
+                ExternalIdentifier = "12345",
+                OccurredAt = DateTime.UtcNow.AddMinutes(-5),
+                Decision =
+                    PhysicalAccessDecision.Allowed,
+                Reason =
+                    PhysicalAccessDecisionReason.Eligible,
+                Source =
+                    PhysicalAccessDecisionSource.OfflineCache,
+                ProcessedAt = DateTime.UtcNow.AddMinutes(-4)
+            };
+
+        await _service.SyncOfflineEventAsync(
+            gymId,
+            request);
+
+        await _credentialRepository
+            .DidNotReceiveWithAnyArgs()
+            .GetByExternalIdentifierAsync(
+                default,
+                default!,
+                default,
+                default!);
+
+        await _eventRepository
+            .DidNotReceiveWithAnyArgs()
+            .AddAsync(default!);
+    }
+
+    [Fact]
+    public async Task SyncOfflineEventAsync_WhenSourceIsOnline_ShouldRejectRequest()
+    {
+        var gymId = Guid.NewGuid();
+
+        var request =
+            new SyncOfflinePhysicalAccessEventRequest
+            {
+                RequestId = Guid.NewGuid(),
+                ProviderKey = "toletus-litenet2",
+                CredentialType =
+                    PhysicalAccessCredentialType.Card,
+                ExternalIdentifier = "12345",
+                OccurredAt = DateTime.UtcNow,
+                Decision =
+                    PhysicalAccessDecision.Allowed,
+                Reason =
+                    PhysicalAccessDecisionReason.Eligible,
+                Source =
+                    PhysicalAccessDecisionSource.Online,
+                ProcessedAt = DateTime.UtcNow
+            };
+
+        await Assert.ThrowsAsync<ArgumentException>(
+            () => _service.SyncOfflineEventAsync(
+                gymId,
+                request));
+
+        await _eventRepository
+            .DidNotReceiveWithAnyArgs()
+            .AddAsync(default!);
+    }
 }

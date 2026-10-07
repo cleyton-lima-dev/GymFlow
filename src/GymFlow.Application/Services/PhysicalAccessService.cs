@@ -216,6 +216,115 @@ public class PhysicalAccessService
             PhysicalAccessDecisionReason.Eligible);
     }
 
+    public async Task<PhysicalAccessDecisionResponse> SyncOfflineEventAsync(
+    Guid gymId,
+    SyncOfflinePhysicalAccessEventRequest request)
+    {
+        if (request.RequestId == Guid.Empty)
+        {
+            throw new ArgumentException(
+                "O identificador da requisição é obrigatório.");
+        }
+
+        if (string.IsNullOrWhiteSpace(request.ProviderKey))
+        {
+            throw new ArgumentException(
+                "O identificador do provedor é obrigatório.");
+        }
+
+        if (!Enum.IsDefined(request.CredentialType))
+        {
+            throw new ArgumentException(
+                "O tipo da credencial é inválido.");
+        }
+
+        if (string.IsNullOrWhiteSpace(request.ExternalIdentifier))
+        {
+            throw new ArgumentException(
+                "O identificador externo é obrigatório.");
+        }
+
+        if (!Enum.IsDefined(request.Decision))
+        {
+            throw new ArgumentException(
+                "A decisão de acesso é inválida.");
+        }
+
+        if (!Enum.IsDefined(request.Reason))
+        {
+            throw new ArgumentException(
+                "O motivo da decisão é inválido.");
+        }
+
+        if (!Enum.IsDefined(request.Source) ||
+            request.Source == PhysicalAccessDecisionSource.Online)
+        {
+            throw new ArgumentException(
+                "A origem da decisão offline é inválida.");
+        }
+
+        if (request.OccurredAt == default)
+        {
+            throw new ArgumentException(
+                "A data da tentativa de acesso é obrigatória.");
+        }
+
+        if (request.ProcessedAt == default)
+        {
+            throw new ArgumentException(
+                "A data de processamento da decisão é obrigatória.");
+        }
+
+        if (request.Source ==
+                PhysicalAccessDecisionSource.OfflineFailClosed &&
+            (request.Decision != PhysicalAccessDecision.Denied ||
+             request.Reason !=
+                 PhysicalAccessDecisionReason.OfflineNoCachedPermission))
+        {
+            throw new ArgumentException(
+                "Uma decisão OfflineFailClosed deve ser negada por ausência de permissão em cache.");
+        }
+
+        var existingEvent =
+            await _eventRepository.GetByRequestIdAsync(
+                gymId,
+                request.RequestId);
+
+        if (existingEvent is not null)
+        {
+            return ToResponse(existingEvent);
+        }
+
+        var credential =
+            await _credentialRepository
+                .GetByExternalIdentifierAsync(
+                    gymId,
+                    request.ProviderKey.Trim(),
+                    request.CredentialType,
+                    request.ExternalIdentifier.Trim());
+
+        var accessEvent =
+            new PhysicalAccessEvent
+            {
+                Id = Guid.NewGuid(),
+                GymId = gymId,
+                RequestId = request.RequestId,
+                StudentId = credential?.StudentId,
+                CredentialId = credential?.Id,
+                Decision = request.Decision,
+                Reason = request.Reason,
+                Source = request.Source,
+                OccurredAt = request.OccurredAt,
+                ProcessedAt = request.ProcessedAt
+            };
+
+        var persistedEvent =
+            await _eventRepository.AddAsync(
+                accessEvent);
+
+        return ToResponse(persistedEvent);
+    }
+
     private DateOnly GetToday(Guid gymId)
     {
         var timeZone =
