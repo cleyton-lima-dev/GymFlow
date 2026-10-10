@@ -9,14 +9,15 @@ public class AccessAgentRepository : IAccessAgentRepository
 {
     private readonly AppDbContext _context;
 
-    public AccessAgentRepository(AppDbContext context)
+    public AccessAgentRepository(
+        AppDbContext context)
     {
         _context = context;
     }
 
     public async Task<AccessAgent?> GetByIdAsync(
-    Guid agentId,
-    Guid gymId)
+        Guid agentId,
+        Guid gymId)
     {
         return await _context.AccessAgents
             .FirstOrDefaultAsync(agent =>
@@ -34,15 +35,30 @@ public class AccessAgentRepository : IAccessAgentRepository
                 agent.MachineName == machineName);
     }
 
-    public async Task AddAsync(AccessAgent agent)
+    public async Task<List<AccessAgent>> GetByGymAsync(
+        Guid gymId)
     {
-        await _context.AccessAgents.AddAsync(agent);
+        return await _context.AccessAgents
+            .Where(agent =>
+                agent.GymId == gymId)
+            .OrderBy(agent => agent.Name)
+            .ToListAsync();
+    }
+
+    public async Task AddAsync(
+        AccessAgent agent)
+    {
+        await _context.AccessAgents
+            .AddAsync(agent);
+
         await _context.SaveChangesAsync();
     }
 
-    public async Task UpdateAsync(AccessAgent agent)
+    public async Task UpdateAsync(
+        AccessAgent agent)
     {
         _context.AccessAgents.Update(agent);
+
         await _context.SaveChangesAsync();
     }
 }

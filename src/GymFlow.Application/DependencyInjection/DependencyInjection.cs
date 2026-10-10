@@ -19,6 +19,7 @@ public static class DependencyInjection
         services.AddScoped<PhysicalAccessCredentialService>();
         services.AddScoped<PhysicalAccessOverrideService>();
         services.AddScoped<AccessAgentService>();
+        services.AddScoped<AccessAgentControlService>();
         services.AddScoped<StudentLifecycleService>();
         services.AddScoped<WorkoutTemplateService>();
         services.AddScoped<WorkoutService>();

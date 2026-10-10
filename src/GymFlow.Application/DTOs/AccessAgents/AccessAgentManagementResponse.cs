@@ -1,6 +1,6 @@
-﻿namespace GymFlow.Domain.Entities;
+﻿namespace GymFlow.Application.DTOs.AccessAgents;
 
-public class AccessAgent
+public class AccessAgentManagementResponse
 {
     public Guid Id { get; set; }
 
@@ -10,17 +10,15 @@ public class AccessAgent
 
     public string MachineName { get; set; } = string.Empty;
 
-    public string SecretHash { get; set; } = string.Empty;
-
-    public bool IsActive { get; set; } = true;
+    public bool IsActive { get; set; }
 
     public bool ReleaseEnabled { get; set; }
 
-    public long ConfigurationVersion { get; set; } = 1;
+    public long ConfigurationVersion { get; set; }
 
     public DateTime? LastSeenAt { get; set; }
 
-    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public DateTime CreatedAt { get; set; }
 
     public DateTime? UpdatedAt { get; set; }
 }

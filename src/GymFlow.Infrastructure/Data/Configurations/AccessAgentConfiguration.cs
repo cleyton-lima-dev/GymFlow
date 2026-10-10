@@ -7,7 +7,8 @@ namespace GymFlow.Infrastructure.Data.Configurations;
 public class AccessAgentConfiguration
     : IEntityTypeConfiguration<AccessAgent>
 {
-    public void Configure(EntityTypeBuilder<AccessAgent> builder)
+    public void Configure(
+        EntityTypeBuilder<AccessAgent> builder)
     {
         builder.ToTable("AccessAgents");
 
@@ -28,6 +29,12 @@ public class AccessAgentConfiguration
             .IsRequired();
 
         builder.Property(agent => agent.IsActive)
+            .IsRequired();
+
+        builder.Property(agent => agent.ReleaseEnabled)
+            .IsRequired();
+
+        builder.Property(agent => agent.ConfigurationVersion)
             .IsRequired();
 
         builder.Property(agent => agent.CreatedAt)
