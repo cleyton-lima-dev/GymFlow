@@ -74,6 +74,12 @@ public class AccessAgentControlService
             return ToResponse(agent);
         }
 
+        if (enabled)
+        {
+            ValidatePhysicalReleaseCanBeEnabled(
+                agent);
+        }
+
         var previousValues =
             JsonSerializer.Serialize(
                 new
@@ -245,6 +251,44 @@ public class AccessAgentControlService
                 agent.ConfigurationVersion,
             ServerTimeUtc = now
         };
+    }
+
+    private static void ValidatePhysicalReleaseCanBeEnabled(
+        AccessAgent agent)
+    {
+        if (!agent.IsActive)
+        {
+            throw new InvalidOperationException(
+                "O Access Agent está inativo e não pode habilitar a liberação física.");
+        }
+
+        var isOnline =
+            agent.LastSeenAt.HasValue &&
+            DateTime.UtcNow -
+                agent.LastSeenAt.Value <=
+                    AgentOnlineThreshold;
+
+        if (!isOnline)
+        {
+            throw new InvalidOperationException(
+                "O Access Agent precisa estar online para habilitar a liberação física.");
+        }
+
+        var devices =
+            DeserializeDeviceStatuses(
+                agent.DeviceStatusesJson);
+
+        var hasConnectedDevice =
+            devices.Any(
+                device =>
+                    device.Enabled &&
+                    device.Connected);
+
+        if (!hasConnectedDevice)
+        {
+            throw new InvalidOperationException(
+                "Nenhuma catraca habilitada e conectada foi encontrada.");
+        }
     }
 
     private static void ValidateDevices(

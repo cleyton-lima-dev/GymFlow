@@ -45,18 +45,28 @@ public class AccessAgentManagementController :
             return Unauthorized();
         }
 
-        var result =
-            await _controlService
-                .SetReleaseEnabledAsync(
-                    gymId,
-                    userId,
-                    agentId,
-                    request.Enabled);
+        try
+        {
+            var result =
+                await _controlService
+                    .SetReleaseEnabledAsync(
+                        gymId,
+                        userId,
+                        agentId,
+                        request.Enabled);
 
-        if (result is null)
-            return NotFound();
+            if (result is null)
+                return NotFound();
 
-        return Ok(result);
+            return Ok(result);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Conflict(new
+            {
+                message = ex.Message
+            });
+        }
     }
 
     private bool TryGetGymId(

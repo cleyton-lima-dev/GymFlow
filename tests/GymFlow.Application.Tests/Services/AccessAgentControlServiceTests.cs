@@ -47,7 +47,20 @@ public class AccessAgentControlServiceTests
                 SecretHash = "hash",
                 IsActive = true,
                 ReleaseEnabled = false,
-                ConfigurationVersion = 1
+                ConfigurationVersion = 1,
+                LastSeenAt = DateTime.UtcNow,
+                DeviceStatusesJson =
+                    """
+                    [
+                      {
+                        "DeviceKey": "primary",
+                        "ProviderKey": "toletus-litenet2",
+                        "Enabled": true,
+                        "Connected": true,
+                        "Endpoint": "192.168.0.50:7878"
+                      }
+                    ]
+                    """
             };
 
         _agentRepository
@@ -93,6 +106,116 @@ public class AccessAgentControlServiceTests
             .UpdateAsync(agent);
     }
 
+    [Fact]
+    public async Task SetReleaseEnabledAsync_WhenAgentIsOffline_ShouldRejectEnable()
+    {
+        var gymId =
+            Guid.NewGuid();
+
+        var agent =
+            new AccessAgent
+            {
+                Id = Guid.NewGuid(),
+                GymId = gymId,
+                Name = "Catraca principal",
+                MachineName = "RECEPCAO-01",
+                SecretHash = "hash",
+                IsActive = true,
+                ReleaseEnabled = false,
+                ConfigurationVersion = 1,
+                LastSeenAt =
+                    DateTime.UtcNow.AddMinutes(-10),
+                DeviceStatusesJson =
+                    """
+                    [
+                      {
+                        "DeviceKey": "primary",
+                        "ProviderKey": "toletus-litenet2",
+                        "Enabled": true,
+                        "Connected": true,
+                        "Endpoint": "192.168.0.50:7878"
+                      }
+                    ]
+                    """
+            };
+
+        _agentRepository
+            .GetByIdAsync(
+                agent.Id,
+                gymId)
+            .Returns(agent);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => _service
+                .SetReleaseEnabledAsync(
+                    gymId,
+                    Guid.NewGuid(),
+                    agent.Id,
+                    true));
+
+        await _auditRepository
+            .DidNotReceiveWithAnyArgs()
+            .StageAsync(default!);
+
+        await _agentRepository
+            .DidNotReceiveWithAnyArgs()
+            .UpdateAsync(default!);
+    }
+
+    [Fact]
+    public async Task SetReleaseEnabledAsync_WhenNoDeviceIsConnected_ShouldRejectEnable()
+    {
+        var gymId =
+            Guid.NewGuid();
+
+        var agent =
+            new AccessAgent
+            {
+                Id = Guid.NewGuid(),
+                GymId = gymId,
+                Name = "Catraca principal",
+                MachineName = "RECEPCAO-01",
+                SecretHash = "hash",
+                IsActive = true,
+                ReleaseEnabled = false,
+                ConfigurationVersion = 1,
+                LastSeenAt = DateTime.UtcNow,
+                DeviceStatusesJson =
+                    """
+                    [
+                      {
+                        "DeviceKey": "primary",
+                        "ProviderKey": "toletus-litenet2",
+                        "Enabled": true,
+                        "Connected": false,
+                        "Endpoint": "192.168.0.50:7878"
+                      }
+                    ]
+                    """
+            };
+
+        _agentRepository
+            .GetByIdAsync(
+                agent.Id,
+                gymId)
+            .Returns(agent);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => _service
+                .SetReleaseEnabledAsync(
+                    gymId,
+                    Guid.NewGuid(),
+                    agent.Id,
+                    true));
+
+        await _auditRepository
+            .DidNotReceiveWithAnyArgs()
+            .StageAsync(default!);
+
+        await _agentRepository
+            .DidNotReceiveWithAnyArgs()
+            .UpdateAsync(default!);
+    }
     [Fact]
     public async Task SetReleaseEnabledAsync_WhenValueIsUnchanged_ShouldNotAuditOrUpdate()
     {
