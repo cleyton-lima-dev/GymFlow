@@ -6,10 +6,28 @@ using GymFlow.AccessAgent.ControlPlane;
 using GymFlow.AccessAgent.Offline;
 using GymFlow.AccessAgent.Security;
 using GymFlow.AccessAgent.Services;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting.WindowsServices;
 
+var pairingMode =
+    AgentPairingBootstrap
+        .IsPairingRequested(args);
+
+var hostArgs =
+    pairingMode
+        ? args
+            .Where(
+                argument =>
+                    !string.Equals(
+                        argument,
+                        "--pair",
+                        StringComparison.OrdinalIgnoreCase))
+            .ToArray()
+        : args;
+
 var builder =
-    Host.CreateApplicationBuilder(args);
+    Host.CreateApplicationBuilder(
+        hostArgs);
 
 builder.Services.AddWindowsService(options =>
 {
@@ -84,10 +102,33 @@ builder.Services
         IOfflineEventSyncService,
         OfflineEventSyncService>();
 
-builder.Services.AddHostedService<Worker>();
-builder.Services.AddHostedService<OfflineSyncWorker>();
-builder.Services.AddHostedService<AccessControlPlaneSyncWorker>();
+builder.Services
+    .AddHostedService<Worker>();
 
-var host = builder.Build();
+builder.Services
+    .AddHostedService<OfflineSyncWorker>();
+
+builder.Services
+    .AddHostedService<
+        AccessControlPlaneSyncWorker>();
+
+var host =
+    builder.Build();
+
+if (pairingMode)
+{
+    var credentialStore =
+        host.Services
+            .GetRequiredService<
+                IAgentCredentialStore>();
+
+    Environment.ExitCode =
+        await AgentPairingBootstrap
+            .RunAsync(
+                credentialStore,
+                CancellationToken.None);
+
+    return;
+}
 
 host.Run();
