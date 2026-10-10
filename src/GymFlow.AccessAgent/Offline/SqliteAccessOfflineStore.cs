@@ -480,6 +480,34 @@ public sealed class SqliteAccessOfflineStore :
         return events;
     }
 
+    public async Task<int> CountPendingEventsAsync(
+        CancellationToken cancellationToken)
+    {
+        await InitializeAsync(
+            cancellationToken);
+
+        await using var connection =
+            await OpenConnectionAsync(
+                cancellationToken);
+
+        await using var command =
+            connection.CreateCommand();
+
+        command.CommandText =
+            """
+            SELECT COUNT(*)
+            FROM PendingAccessEvents
+            WHERE SyncedAt IS NULL;
+            """;
+
+        var result =
+            await command.ExecuteScalarAsync(
+                cancellationToken);
+
+        return Convert.ToInt32(
+            result,
+            CultureInfo.InvariantCulture);
+    }
     public async Task MarkEventSyncedAsync(
         Guid requestId,
         DateTime syncedAt,

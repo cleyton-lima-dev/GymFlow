@@ -28,6 +28,8 @@ public interface IAvelriAccessApiClient
             AgentCredentials credentials,
             string token,
             long? appliedConfigurationVersion,
+            int pendingOfflineEvents,
+            IReadOnlyCollection<AccessDeviceRuntimeStatus> devices,
             CancellationToken cancellationToken);
 }
 

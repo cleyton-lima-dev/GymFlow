@@ -1,6 +1,8 @@
 ﻿using System.Net;
+using GymFlow.AccessAgent.Abstractions;
 using GymFlow.AccessAgent.Api;
 using GymFlow.AccessAgent.ControlPlane;
+using GymFlow.AccessAgent.Offline;
 using GymFlow.AccessAgent.Security;
 using GymFlow.AccessAgent.Services;
 using NSubstitute;
@@ -24,31 +26,30 @@ public class AccessControlPlaneSyncServiceTests
         var releaseControl =
             Substitute.For<IAccessReleaseControl>();
 
+        var offlineStore =
+            Substitute.For<IAccessOfflineStore>();
+
         credentialStore
             .LoadAsync(
                 Arg.Any<CancellationToken>())
-            .Returns((AgentCredentials?)null);
+            .Returns(
+                (AgentCredentials?)null);
 
         var service =
             CreateService(
                 credentialStore,
                 apiClient,
                 sessionService,
-                releaseControl);
+                releaseControl,
+                offlineStore,
+                []);
 
         var result =
             await service.SyncAsync(
                 CancellationToken.None);
 
-        Assert.False(result);
-
-        await apiClient
-            .DidNotReceiveWithAnyArgs()
-            .HeartbeatAsync(
-                default!,
-                default!,
-                default,
-                default);
+        Assert.False(
+            result);
     }
 
     [Fact]
@@ -70,6 +71,10 @@ public class AccessControlPlaneSyncServiceTests
                 dependencies.Credentials,
                 "token",
                 1,
+                0,
+                Arg.Any<
+                    IReadOnlyCollection<
+                        AccessDeviceRuntimeStatus>>(),
                 Arg.Any<CancellationToken>())
             .Returns(
                 new AgentControlPlaneHeartbeatResult(
@@ -82,21 +87,14 @@ public class AccessControlPlaneSyncServiceTests
                 .SyncAsync(
                     CancellationToken.None);
 
-        Assert.True(result);
+        Assert.True(
+            result);
 
         await dependencies.ReleaseControl
-            .DidNotReceiveWithAnyArgs()
+            .DidNotReceive()
             .ApplyConfigurationAsync(
-                default,
-                default,
-                default);
-
-        await dependencies.ApiClient
-            .Received(1)
-            .HeartbeatAsync(
-                dependencies.Credentials,
-                "token",
-                1,
+                Arg.Any<bool>(),
+                Arg.Any<long>(),
                 Arg.Any<CancellationToken>());
     }
 
@@ -119,6 +117,10 @@ public class AccessControlPlaneSyncServiceTests
                 dependencies.Credentials,
                 "token",
                 1,
+                0,
+                Arg.Any<
+                    IReadOnlyCollection<
+                        AccessDeviceRuntimeStatus>>(),
                 Arg.Any<CancellationToken>())
             .Returns(
                 new AgentControlPlaneHeartbeatResult(
@@ -131,6 +133,10 @@ public class AccessControlPlaneSyncServiceTests
                 dependencies.Credentials,
                 "token",
                 2,
+                0,
+                Arg.Any<
+                    IReadOnlyCollection<
+                        AccessDeviceRuntimeStatus>>(),
                 Arg.Any<CancellationToken>())
             .Returns(
                 new AgentControlPlaneHeartbeatResult(
@@ -143,20 +149,13 @@ public class AccessControlPlaneSyncServiceTests
                 .SyncAsync(
                     CancellationToken.None);
 
-        Assert.True(result);
+        Assert.True(
+            result);
 
         await dependencies.ReleaseControl
             .Received(1)
             .ApplyConfigurationAsync(
                 true,
-                2,
-                Arg.Any<CancellationToken>());
-
-        await dependencies.ApiClient
-            .Received(1)
-            .HeartbeatAsync(
-                dependencies.Credentials,
-                "token",
                 2,
                 Arg.Any<CancellationToken>());
     }
@@ -180,6 +179,10 @@ public class AccessControlPlaneSyncServiceTests
                 dependencies.Credentials,
                 "token",
                 1,
+                0,
+                Arg.Any<
+                    IReadOnlyCollection<
+                        AccessDeviceRuntimeStatus>>(),
                 Arg.Any<CancellationToken>())
             .Returns(
                 new AgentControlPlaneHeartbeatResult(
@@ -192,6 +195,10 @@ public class AccessControlPlaneSyncServiceTests
                 dependencies.Credentials,
                 "token",
                 2,
+                0,
+                Arg.Any<
+                    IReadOnlyCollection<
+                        AccessDeviceRuntimeStatus>>(),
                 Arg.Any<CancellationToken>())
             .Returns(
                 new AgentControlPlaneHeartbeatResult(
@@ -204,7 +211,8 @@ public class AccessControlPlaneSyncServiceTests
                 .SyncAsync(
                     CancellationToken.None);
 
-        Assert.True(result);
+        Assert.True(
+            result);
 
         await dependencies.ReleaseControl
             .Received(1)
@@ -236,6 +244,9 @@ public class AccessControlPlaneSyncServiceTests
         var releaseControl =
             Substitute.For<IAccessReleaseControl>();
 
+        var offlineStore =
+            Substitute.For<IAccessOfflineStore>();
+
         var credentials =
             new AgentCredentials(
                 Guid.NewGuid(),
@@ -246,7 +257,8 @@ public class AccessControlPlaneSyncServiceTests
         credentialStore
             .LoadAsync(
                 Arg.Any<CancellationToken>())
-            .Returns(credentials);
+            .Returns(
+                credentials);
 
         releaseControl
             .GetConfigurationAsync(
@@ -255,6 +267,12 @@ public class AccessControlPlaneSyncServiceTests
                 new AccessReleaseConfiguration(
                     false,
                     1));
+
+        offlineStore
+            .CountPendingEventsAsync(
+                Arg.Any<CancellationToken>())
+            .Returns(
+                0);
 
         sessionService
             .GetTokenAsync(
@@ -269,8 +287,14 @@ public class AccessControlPlaneSyncServiceTests
                 credentials,
                 "expired-token",
                 1,
+                0,
+                Arg.Any<
+                    IReadOnlyCollection<
+                        AccessDeviceRuntimeStatus>>(),
                 Arg.Any<CancellationToken>())
-            .Returns<Task<AgentControlPlaneHeartbeatResult>>(
+            .Returns<
+                Task<
+                    AgentControlPlaneHeartbeatResult>>(
                 _ => throw new HttpRequestException(
                     "Unauthorized",
                     null,
@@ -281,6 +305,10 @@ public class AccessControlPlaneSyncServiceTests
                 credentials,
                 "fresh-token",
                 1,
+                0,
+                Arg.Any<
+                    IReadOnlyCollection<
+                        AccessDeviceRuntimeStatus>>(),
                 Arg.Any<CancellationToken>())
             .Returns(
                 new AgentControlPlaneHeartbeatResult(
@@ -293,24 +321,96 @@ public class AccessControlPlaneSyncServiceTests
                 credentialStore,
                 apiClient,
                 sessionService,
-                releaseControl);
+                releaseControl,
+                offlineStore,
+                []);
 
         var result =
             await service.SyncAsync(
                 CancellationToken.None);
 
-        Assert.True(result);
+        Assert.True(
+            result);
 
         sessionService
             .Received(1)
             .InvalidateToken();
+    }
 
-        await apiClient
+    [Fact]
+    public async Task SyncAsync_ShouldSendPendingCountAndDeviceStatus()
+    {
+        var dependencies =
+            CreateDependencies();
+
+        dependencies.ReleaseControl
+            .GetConfigurationAsync(
+                Arg.Any<CancellationToken>())
+            .Returns(
+                new AccessReleaseConfiguration(
+                    false,
+                    1));
+
+        dependencies.OfflineStore
+            .CountPendingEventsAsync(
+                Arg.Any<CancellationToken>())
+            .Returns(
+                4);
+
+        dependencies.Adapter
+            .GetRuntimeStatus()
+            .Returns(
+                new AccessDeviceRuntimeStatus(
+                    "front-door",
+                    "toletus-litenet2",
+                    true,
+                    true,
+                    "192.168.0.50:7878"));
+
+        dependencies.ApiClient
+            .HeartbeatAsync(
+                dependencies.Credentials,
+                "token",
+                1,
+                4,
+                Arg.Any<
+                    IReadOnlyCollection<
+                        AccessDeviceRuntimeStatus>>(),
+                Arg.Any<CancellationToken>())
+            .Returns(
+                new AgentControlPlaneHeartbeatResult(
+                    false,
+                    1,
+                    DateTime.UtcNow));
+
+        var result =
+            await dependencies.Service
+                .SyncAsync(
+                    CancellationToken.None);
+
+        Assert.True(
+            result);
+
+        await dependencies.ApiClient
             .Received(1)
             .HeartbeatAsync(
-                credentials,
-                "fresh-token",
+                dependencies.Credentials,
+                "token",
                 1,
+                4,
+                Arg.Is<
+                    IReadOnlyCollection<
+                        AccessDeviceRuntimeStatus>>(
+                    devices =>
+                        devices.Count == 1 &&
+                        devices.Single().DeviceKey ==
+                            "front-door" &&
+                        devices.Single().ProviderKey ==
+                            "toletus-litenet2" &&
+                        devices.Single().Enabled &&
+                        devices.Single().Connected &&
+                        devices.Single().Endpoint ==
+                            "192.168.0.50:7878"),
                 Arg.Any<CancellationToken>());
     }
 
@@ -329,6 +429,12 @@ public class AccessControlPlaneSyncServiceTests
         var releaseControl =
             Substitute.For<IAccessReleaseControl>();
 
+        var offlineStore =
+            Substitute.For<IAccessOfflineStore>();
+
+        var adapter =
+            Substitute.For<IAccessDeviceAdapter>();
+
         var credentials =
             new AgentCredentials(
                 Guid.NewGuid(),
@@ -339,25 +445,47 @@ public class AccessControlPlaneSyncServiceTests
         credentialStore
             .LoadAsync(
                 Arg.Any<CancellationToken>())
-            .Returns(credentials);
+            .Returns(
+                credentials);
 
         sessionService
             .GetTokenAsync(
                 credentials,
                 Arg.Any<CancellationToken>())
-            .Returns("token");
+            .Returns(
+                "token");
+
+        offlineStore
+            .CountPendingEventsAsync(
+                Arg.Any<CancellationToken>())
+            .Returns(
+                0);
+
+        adapter
+            .GetRuntimeStatus()
+            .Returns(
+                new AccessDeviceRuntimeStatus(
+                    "primary",
+                    "toletus-litenet2",
+                    true,
+                    false,
+                    "192.168.0.50:7878"));
 
         var service =
             CreateService(
                 credentialStore,
                 apiClient,
                 sessionService,
-                releaseControl);
+                releaseControl,
+                offlineStore,
+                [adapter]);
 
         return new Dependencies(
             credentials,
             apiClient,
             releaseControl,
+            offlineStore,
+            adapter,
             service);
     }
 
@@ -366,18 +494,24 @@ public class AccessControlPlaneSyncServiceTests
             IAgentCredentialStore credentialStore,
             IAvelriAccessApiClient apiClient,
             IAgentSessionService sessionService,
-            IAccessReleaseControl releaseControl)
+            IAccessReleaseControl releaseControl,
+            IAccessOfflineStore offlineStore,
+            IEnumerable<IAccessDeviceAdapter> adapters)
     {
         return new AccessControlPlaneSyncService(
             credentialStore,
             apiClient,
             sessionService,
-            releaseControl);
+            releaseControl,
+            offlineStore,
+            adapters);
     }
 
     private sealed record Dependencies(
         AgentCredentials Credentials,
         IAvelriAccessApiClient ApiClient,
         IAccessReleaseControl ReleaseControl,
+        IAccessOfflineStore OfflineStore,
+        IAccessDeviceAdapter Adapter,
         AccessControlPlaneSyncService Service);
 }

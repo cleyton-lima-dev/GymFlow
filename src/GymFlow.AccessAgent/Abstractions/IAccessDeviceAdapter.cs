@@ -4,8 +4,13 @@ public interface IAccessDeviceAdapter
 {
     string ProviderKey { get; }
 
+    AccessDeviceRuntimeStatus GetRuntimeStatus();
+
     Task StartAsync(
-        Func<DeviceAccessAttempt, CancellationToken, Task<AccessDeviceDecision>>
+        Func<
+            DeviceAccessAttempt,
+            CancellationToken,
+            Task<AccessDeviceDecision>>
             handleAttemptAsync,
         CancellationToken cancellationToken);
 
@@ -14,6 +19,13 @@ public interface IAccessDeviceAdapter
         AccessDeviceDecision decision,
         CancellationToken cancellationToken);
 }
+
+public sealed record AccessDeviceRuntimeStatus(
+    string DeviceKey,
+    string ProviderKey,
+    bool Enabled,
+    bool Connected,
+    string? Endpoint);
 
 public sealed record DeviceAccessAttempt(
     Guid RequestId,

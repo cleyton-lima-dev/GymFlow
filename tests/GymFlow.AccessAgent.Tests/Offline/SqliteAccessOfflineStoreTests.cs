@@ -1,9 +1,9 @@
 ﻿using GymFlow.AccessAgent.Abstractions;
 using GymFlow.AccessAgent.Offline;
 using GymFlow.AccessAgent.Security;
+using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Options;
 using NSubstitute;
-using Microsoft.Data.Sqlite;
 
 namespace GymFlow.AccessAgent.Tests.Offline;
 
@@ -13,54 +13,16 @@ public class SqliteAccessOfflineStoreTests
     public async Task UpsertAndGetPermissionAsync_ReturnsCachedPermission()
     {
         var databasePath =
-            Path.Combine(
-                Path.GetTempPath(),
-                $"avelri-access-agent-{Guid.NewGuid():N}.db");
+            CreateDatabasePath();
 
         try
         {
-            var protector =
-                Substitute.For<ILocalSensitiveDataProtector>();
-
-            protector
-                .ComputeLookupHash(
-                    Arg.Any<string>(),
-                    Arg.Any<int>(),
-                    Arg.Any<string>())
-                .Returns(
-                    call =>
-                        $"{call.ArgAt<string>(0)}|" +
-                        $"{call.ArgAt<int>(1)}|" +
-                        $"{call.ArgAt<string>(2)}");
-
-            protector
-                .Protect(Arg.Any<string>())
-                .Returns(
-                    call =>
-                        $"protected:{call.Arg<string>()}");
-
-            protector
-                .Unprotect(Arg.Any<string>())
-                .Returns(
-                    call =>
-                        call.Arg<string>()
-                            .Replace(
-                                "protected:",
-                                string.Empty));
-
-            var options =
-                Options.Create(
-                    new AccessOfflineStoreOptions
-                    {
-                        DatabasePath = databasePath
-                    });
-
             var store =
-                new SqliteAccessOfflineStore(
-                    options,
-                    protector);
+                CreateStore(
+                    databasePath);
 
-            var now = DateTime.UtcNow;
+            var now =
+                DateTime.UtcNow;
 
             var permission =
                 new CachedAccessPermission(
@@ -85,84 +47,51 @@ public class SqliteAccessOfflineStoreTests
                     CancellationToken.None);
 
             Assert.NotNull(result);
+
             Assert.Equal(
                 permission.ProviderKey,
                 result.ProviderKey);
+
             Assert.Equal(
                 permission.CredentialType,
                 result.CredentialType);
+
             Assert.Equal(
                 permission.ExternalIdentifier,
                 result.ExternalIdentifier);
-            Assert.True(result.Allowed);
+
+            Assert.True(
+                result.Allowed);
+
             Assert.Equal(
                 "Eligible",
                 result.Reason);
+
             Assert.Equal(
                 permission.ValidUntil,
                 result.ValidUntil);
         }
         finally
         {
-            SqliteConnection.ClearAllPools();
-            DeleteIfExists(databasePath);
-            DeleteIfExists($"{databasePath}-wal");
-            DeleteIfExists($"{databasePath}-shm");
+            Cleanup(
+                databasePath);
         }
     }
 
     [Fact]
-    public async Task EnqueueAndMarkSyncedAsync_HandlesPendingEvent()
+    public async Task EnqueueAndMarkSyncedAsync_HandlesPendingEventAndCount()
     {
         var databasePath =
-            Path.Combine(
-                Path.GetTempPath(),
-                $"avelri-access-agent-{Guid.NewGuid():N}.db");
+            CreateDatabasePath();
 
         try
         {
-            var protector =
-                Substitute.For<ILocalSensitiveDataProtector>();
-
-            protector
-                .ComputeLookupHash(
-                    Arg.Any<string>(),
-                    Arg.Any<int>(),
-                    Arg.Any<string>())
-                .Returns(
-                    call =>
-                        $"{call.ArgAt<string>(0)}|" +
-                        $"{call.ArgAt<int>(1)}|" +
-                        $"{call.ArgAt<string>(2)}");
-
-            protector
-                .Protect(Arg.Any<string>())
-                .Returns(
-                    call =>
-                        $"protected:{call.Arg<string>()}");
-
-            protector
-                .Unprotect(Arg.Any<string>())
-                .Returns(
-                    call =>
-                        call.Arg<string>()
-                            .Replace(
-                                "protected:",
-                                string.Empty));
-
-            var options =
-                Options.Create(
-                    new AccessOfflineStoreOptions
-                    {
-                        DatabasePath = databasePath
-                    });
-
             var store =
-                new SqliteAccessOfflineStore(
-                    options,
-                    protector);
+                CreateStore(
+                    databasePath);
 
-            var now = DateTime.UtcNow;
+            var now =
+                DateTime.UtcNow;
 
             var accessEvent =
                 new PendingAccessEvent(
@@ -172,7 +101,7 @@ public class SqliteAccessOfflineStoreTests
                     "12345",
                     now,
                     true,
-                    "OfflineCached:Eligible",
+                    "Eligible",
                     AccessDecisionSource.OfflineCache,
                     now,
                     null);
@@ -181,12 +110,19 @@ public class SqliteAccessOfflineStoreTests
                 accessEvent,
                 CancellationToken.None);
 
+            Assert.Equal(
+                1,
+                await store.CountPendingEventsAsync(
+                    CancellationToken.None));
+
             var pending =
                 await store.GetPendingEventsAsync(
                     100,
                     CancellationToken.None);
 
-            var result = Assert.Single(pending);
+            var result =
+                Assert.Single(
+                    pending);
 
             Assert.Equal(
                 accessEvent.RequestId,
@@ -196,7 +132,8 @@ public class SqliteAccessOfflineStoreTests
                 accessEvent.ExternalIdentifier,
                 result.ExternalIdentifier);
 
-            Assert.Null(result.SyncedAt);
+            Assert.Null(
+                result.SyncedAt);
 
             var syncedAt =
                 now.AddMinutes(1);
@@ -206,20 +143,23 @@ public class SqliteAccessOfflineStoreTests
                 syncedAt,
                 CancellationToken.None);
 
+            Assert.Equal(
+                0,
+                await store.CountPendingEventsAsync(
+                    CancellationToken.None));
+
             var remaining =
                 await store.GetPendingEventsAsync(
                     100,
                     CancellationToken.None);
 
-            Assert.Empty(remaining);
+            Assert.Empty(
+                remaining);
         }
         finally
         {
-            SqliteConnection.ClearAllPools();
-
-            DeleteIfExists(databasePath);
-            DeleteIfExists($"{databasePath}-wal");
-            DeleteIfExists($"{databasePath}-shm");
+            Cleanup(
+                databasePath);
         }
     }
 
@@ -227,54 +167,16 @@ public class SqliteAccessOfflineStoreTests
     public async Task GetPermissionAsync_WhenPermissionIsExpired_ReturnsNull()
     {
         var databasePath =
-            Path.Combine(
-                Path.GetTempPath(),
-                $"avelri-access-agent-{Guid.NewGuid():N}.db");
+            CreateDatabasePath();
 
         try
         {
-            var protector =
-                Substitute.For<ILocalSensitiveDataProtector>();
-
-            protector
-                .ComputeLookupHash(
-                    Arg.Any<string>(),
-                    Arg.Any<int>(),
-                    Arg.Any<string>())
-                .Returns(
-                    call =>
-                        $"{call.ArgAt<string>(0)}|" +
-                        $"{call.ArgAt<int>(1)}|" +
-                        $"{call.ArgAt<string>(2)}");
-
-            protector
-                .Protect(Arg.Any<string>())
-                .Returns(
-                    call =>
-                        $"protected:{call.Arg<string>()}");
-
-            protector
-                .Unprotect(Arg.Any<string>())
-                .Returns(
-                    call =>
-                        call.Arg<string>()
-                            .Replace(
-                                "protected:",
-                                string.Empty));
-
-            var options =
-                Options.Create(
-                    new AccessOfflineStoreOptions
-                    {
-                        DatabasePath = databasePath
-                    });
-
             var store =
-                new SqliteAccessOfflineStore(
-                    options,
-                    protector);
+                CreateStore(
+                    databasePath);
 
-            var now = DateTime.UtcNow;
+            var now =
+                DateTime.UtcNow;
 
             var permission =
                 new CachedAccessPermission(
@@ -298,16 +200,85 @@ public class SqliteAccessOfflineStoreTests
                     now,
                     CancellationToken.None);
 
-            Assert.Null(result);
+            Assert.Null(
+                result);
         }
         finally
         {
-            SqliteConnection.ClearAllPools();
-
-            DeleteIfExists(databasePath);
-            DeleteIfExists($"{databasePath}-wal");
-            DeleteIfExists($"{databasePath}-shm");
+            Cleanup(
+                databasePath);
         }
+    }
+
+    private static SqliteAccessOfflineStore
+        CreateStore(
+            string databasePath)
+    {
+        var protector =
+            Substitute.For<
+                ILocalSensitiveDataProtector>();
+
+        protector
+            .ComputeLookupHash(
+                Arg.Any<string>(),
+                Arg.Any<int>(),
+                Arg.Any<string>())
+            .Returns(
+                call =>
+                    $"{call.ArgAt<string>(0)}|" +
+                    $"{call.ArgAt<int>(1)}|" +
+                    $"{call.ArgAt<string>(2)}");
+
+        protector
+            .Protect(
+                Arg.Any<string>())
+            .Returns(
+                call =>
+                    $"protected:{call.Arg<string>()}");
+
+        protector
+            .Unprotect(
+                Arg.Any<string>())
+            .Returns(
+                call =>
+                    call.Arg<string>()
+                        .Replace(
+                            "protected:",
+                            string.Empty));
+
+        var options =
+            Options.Create(
+                new AccessOfflineStoreOptions
+                {
+                    DatabasePath =
+                        databasePath
+                });
+
+        return new SqliteAccessOfflineStore(
+            options,
+            protector);
+    }
+
+    private static string CreateDatabasePath()
+    {
+        return Path.Combine(
+            Path.GetTempPath(),
+            $"avelri-access-agent-{Guid.NewGuid():N}.db");
+    }
+
+    private static void Cleanup(
+        string databasePath)
+    {
+        SqliteConnection.ClearAllPools();
+
+        DeleteIfExists(
+            databasePath);
+
+        DeleteIfExists(
+            $"{databasePath}-wal");
+
+        DeleteIfExists(
+            $"{databasePath}-shm");
     }
 
     private static void DeleteIfExists(

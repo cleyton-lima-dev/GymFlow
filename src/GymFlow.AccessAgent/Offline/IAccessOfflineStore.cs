@@ -22,8 +22,12 @@ public interface IAccessOfflineStore
         PendingAccessEvent accessEvent,
         CancellationToken cancellationToken);
 
-    Task<IReadOnlyList<PendingAccessEvent>> GetPendingEventsAsync(
-        int limit,
+    Task<IReadOnlyList<PendingAccessEvent>>
+        GetPendingEventsAsync(
+            int limit,
+            CancellationToken cancellationToken);
+
+    Task<int> CountPendingEventsAsync(
         CancellationToken cancellationToken);
 
     Task MarkEventSyncedAsync(
