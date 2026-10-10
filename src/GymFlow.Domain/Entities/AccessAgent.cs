@@ -18,6 +18,8 @@ public class AccessAgent
 
     public long ConfigurationVersion { get; set; } = 1;
 
+    public long? AppliedConfigurationVersion { get; set; }
+
     public DateTime? LastSeenAt { get; set; }
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;

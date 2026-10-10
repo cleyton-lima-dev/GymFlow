@@ -112,6 +112,70 @@ public class AccessAgentControlService
         return ToResponse(agent);
     }
 
+    public async Task<AccessAgentHeartbeatResponse?>
+        HeartbeatAsync(
+            Guid gymId,
+            Guid agentId,
+            long? appliedConfigurationVersion)
+    {
+        if (gymId == Guid.Empty ||
+            agentId == Guid.Empty)
+        {
+            return null;
+        }
+
+        if (appliedConfigurationVersion.HasValue &&
+            appliedConfigurationVersion.Value < 1)
+        {
+            throw new ArgumentException(
+                "A versão aplicada da configuração deve ser maior que zero.");
+        }
+
+        var agent =
+            await _accessAgentRepository
+                .GetByIdAsync(
+                    agentId,
+                    gymId);
+
+        if (agent is null ||
+            !agent.IsActive)
+        {
+            return null;
+        }
+
+        if (appliedConfigurationVersion.HasValue &&
+            appliedConfigurationVersion.Value >
+                agent.ConfigurationVersion)
+        {
+            throw new ArgumentException(
+                "O agente informou uma versão de configuração posterior à versão atual do servidor.");
+        }
+
+        var now = DateTime.UtcNow;
+
+        agent.LastSeenAt = now;
+
+        if (appliedConfigurationVersion.HasValue &&
+            (!agent.AppliedConfigurationVersion.HasValue ||
+             appliedConfigurationVersion.Value >
+                agent.AppliedConfigurationVersion.Value))
+        {
+            agent.AppliedConfigurationVersion =
+                appliedConfigurationVersion.Value;
+        }
+
+        await _accessAgentRepository
+            .UpdateAsync(agent);
+
+        return new AccessAgentHeartbeatResponse
+        {
+            ReleaseEnabled = agent.ReleaseEnabled,
+            ConfigurationVersion =
+                agent.ConfigurationVersion,
+            ServerTimeUtc = now
+        };
+    }
+
     private static AccessAgentManagementResponse
         ToResponse(AccessAgent agent)
     {
@@ -125,6 +189,12 @@ public class AccessAgentControlService
             ReleaseEnabled = agent.ReleaseEnabled,
             ConfigurationVersion =
                 agent.ConfigurationVersion,
+            AppliedConfigurationVersion =
+                agent.AppliedConfigurationVersion,
+            ConfigurationApplied =
+                agent.AppliedConfigurationVersion.HasValue &&
+                agent.AppliedConfigurationVersion.Value ==
+                    agent.ConfigurationVersion,
             LastSeenAt = agent.LastSeenAt,
             CreatedAt = agent.CreatedAt,
             UpdatedAt = agent.UpdatedAt

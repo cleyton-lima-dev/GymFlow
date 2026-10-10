@@ -37,6 +37,10 @@ public class AccessAgentConfiguration
         builder.Property(agent => agent.ConfigurationVersion)
             .IsRequired();
 
+        builder.Property(agent =>
+                agent.AppliedConfigurationVersion)
+            .IsRequired(false);
+
         builder.Property(agent => agent.CreatedAt)
             .IsRequired();
 

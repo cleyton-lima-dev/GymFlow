@@ -16,6 +16,10 @@ public class AccessAgentManagementResponse
 
     public long ConfigurationVersion { get; set; }
 
+    public long? AppliedConfigurationVersion { get; set; }
+
+    public bool ConfigurationApplied { get; set; }
+
     public DateTime? LastSeenAt { get; set; }
 
     public DateTime CreatedAt { get; set; }
