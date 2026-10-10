@@ -28,13 +28,17 @@ public sealed class AccessControlPlaneSyncService :
     private readonly IReadOnlyList<IAccessDeviceAdapter>
         _adapters;
 
+    private readonly IAccessOperationalHealthStore
+        _operationalHealthStore;
+
     public AccessControlPlaneSyncService(
         IAgentCredentialStore credentialStore,
         IAvelriAccessApiClient apiClient,
         IAgentSessionService sessionService,
         IAccessReleaseControl releaseControl,
         IAccessOfflineStore offlineStore,
-        IEnumerable<IAccessDeviceAdapter> adapters)
+        IEnumerable<IAccessDeviceAdapter> adapters,
+        IAccessOperationalHealthStore operationalHealthStore)
     {
         _credentialStore =
             credentialStore;
@@ -53,6 +57,9 @@ public sealed class AccessControlPlaneSyncService :
 
         _adapters =
             adapters.ToArray();
+
+        _operationalHealthStore =
+            operationalHealthStore;
     }
 
     public async Task<bool> SyncAsync(
@@ -82,21 +89,24 @@ public sealed class AccessControlPlaneSyncService :
                         adapter.GetRuntimeStatus())
                 .ToArray();
 
+        var operationalHealth =
+            _operationalHealthStore
+                .GetSnapshot();
+
         var desiredConfiguration =
             await SendHeartbeatAsync(
                 credentials,
-                localConfiguration
-                    .ConfigurationVersion,
+                localConfiguration.ConfigurationVersion,
                 pendingOfflineEvents,
                 devices,
+                operationalHealth,
                 cancellationToken);
 
         if (desiredConfiguration is null)
             return false;
 
         ValidateConfigurationVersion(
-            desiredConfiguration
-                .ConfigurationVersion);
+            desiredConfiguration.ConfigurationVersion);
 
         if (Matches(
                 localConfiguration,
@@ -114,10 +124,10 @@ public sealed class AccessControlPlaneSyncService :
         var confirmation =
             await SendHeartbeatAsync(
                 credentials,
-                desiredConfiguration
-                    .ConfigurationVersion,
+                desiredConfiguration.ConfigurationVersion,
                 pendingOfflineEvents,
                 devices,
+                operationalHealth,
                 cancellationToken);
 
         if (confirmation is null)
@@ -127,11 +137,9 @@ public sealed class AccessControlPlaneSyncService :
             confirmation.ConfigurationVersion);
 
         if (confirmation.ConfigurationVersion !=
-                desiredConfiguration
-                    .ConfigurationVersion ||
+                desiredConfiguration.ConfigurationVersion ||
             confirmation.ReleaseEnabled !=
-                desiredConfiguration
-                    .ReleaseEnabled)
+                desiredConfiguration.ReleaseEnabled)
         {
             await _releaseControl
                 .ApplyConfigurationAsync(
@@ -143,14 +151,14 @@ public sealed class AccessControlPlaneSyncService :
         return true;
     }
 
-    private async Task<
-        AgentControlPlaneHeartbeatResult?>
+    private async Task<AgentControlPlaneHeartbeatResult?>
         SendHeartbeatAsync(
             AgentCredentials credentials,
             long? appliedConfigurationVersion,
             int pendingOfflineEvents,
             IReadOnlyCollection<
                 AccessDeviceRuntimeStatus> devices,
+            AccessOperationalHealthSnapshot operationalHealth,
             CancellationToken cancellationToken)
     {
         var token =
@@ -171,6 +179,9 @@ public sealed class AccessControlPlaneSyncService :
                     appliedConfigurationVersion,
                     pendingOfflineEvents,
                     devices,
+                    operationalHealth.LastOfflineSyncAt,
+                    operationalHealth.LastFailureAt,
+                    operationalHealth.LastFailureCode,
                     cancellationToken);
         }
         catch (HttpRequestException ex)
@@ -198,6 +209,9 @@ public sealed class AccessControlPlaneSyncService :
                         appliedConfigurationVersion,
                         pendingOfflineEvents,
                         devices,
+                        operationalHealth.LastOfflineSyncAt,
+                        operationalHealth.LastFailureAt,
+                        operationalHealth.LastFailureCode,
                         cancellationToken);
             }
             catch (HttpRequestException retryException)

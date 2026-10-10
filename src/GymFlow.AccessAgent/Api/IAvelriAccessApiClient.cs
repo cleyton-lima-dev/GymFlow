@@ -30,6 +30,9 @@ public interface IAvelriAccessApiClient
             long? appliedConfigurationVersion,
             int pendingOfflineEvents,
             IReadOnlyCollection<AccessDeviceRuntimeStatus> devices,
+            DateTime? lastOfflineSyncAt,
+            DateTime? lastFailureAt,
+            string? lastFailureCode,
             CancellationToken cancellationToken);
 }
 

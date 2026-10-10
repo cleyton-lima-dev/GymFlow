@@ -159,6 +159,9 @@ public class AvelriAccessApiClient :
             long? appliedConfigurationVersion,
             int pendingOfflineEvents,
             IReadOnlyCollection<AccessDeviceRuntimeStatus> devices,
+            DateTime? lastOfflineSyncAt,
+            DateTime? lastFailureAt,
+            string? lastFailureCode,
             CancellationToken cancellationToken)
     {
         var baseUrl =
@@ -168,7 +171,10 @@ public class AvelriAccessApiClient :
             new HeartbeatRequest(
                 appliedConfigurationVersion,
                 pendingOfflineEvents,
-                devices);
+                devices,
+                lastOfflineSyncAt,
+                lastFailureAt,
+                lastFailureCode);
 
         using var request =
             new HttpRequestMessage(
@@ -280,5 +286,8 @@ public class AvelriAccessApiClient :
     private sealed record HeartbeatRequest(
         long? AppliedConfigurationVersion,
         int PendingOfflineEvents,
-        IReadOnlyCollection<AccessDeviceRuntimeStatus> Devices);
+        IReadOnlyCollection<AccessDeviceRuntimeStatus> Devices,
+        DateTime? LastOfflineSyncAt,
+        DateTime? LastFailureAt,
+        string? LastFailureCode);
 }

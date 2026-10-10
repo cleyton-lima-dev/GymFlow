@@ -75,6 +75,9 @@ public class AccessControlPlaneSyncServiceTests
                 Arg.Any<
                     IReadOnlyCollection<
                         AccessDeviceRuntimeStatus>>(),
+                Arg.Any<DateTime?>(),
+                Arg.Any<DateTime?>(),
+                Arg.Any<string?>(),
                 Arg.Any<CancellationToken>())
             .Returns(
                 new AgentControlPlaneHeartbeatResult(
@@ -121,6 +124,9 @@ public class AccessControlPlaneSyncServiceTests
                 Arg.Any<
                     IReadOnlyCollection<
                         AccessDeviceRuntimeStatus>>(),
+                Arg.Any<DateTime?>(),
+                Arg.Any<DateTime?>(),
+                Arg.Any<string?>(),
                 Arg.Any<CancellationToken>())
             .Returns(
                 new AgentControlPlaneHeartbeatResult(
@@ -137,6 +143,9 @@ public class AccessControlPlaneSyncServiceTests
                 Arg.Any<
                     IReadOnlyCollection<
                         AccessDeviceRuntimeStatus>>(),
+                Arg.Any<DateTime?>(),
+                Arg.Any<DateTime?>(),
+                Arg.Any<string?>(),
                 Arg.Any<CancellationToken>())
             .Returns(
                 new AgentControlPlaneHeartbeatResult(
@@ -183,6 +192,9 @@ public class AccessControlPlaneSyncServiceTests
                 Arg.Any<
                     IReadOnlyCollection<
                         AccessDeviceRuntimeStatus>>(),
+                Arg.Any<DateTime?>(),
+                Arg.Any<DateTime?>(),
+                Arg.Any<string?>(),
                 Arg.Any<CancellationToken>())
             .Returns(
                 new AgentControlPlaneHeartbeatResult(
@@ -199,6 +211,9 @@ public class AccessControlPlaneSyncServiceTests
                 Arg.Any<
                     IReadOnlyCollection<
                         AccessDeviceRuntimeStatus>>(),
+                Arg.Any<DateTime?>(),
+                Arg.Any<DateTime?>(),
+                Arg.Any<string?>(),
                 Arg.Any<CancellationToken>())
             .Returns(
                 new AgentControlPlaneHeartbeatResult(
@@ -291,6 +306,9 @@ public class AccessControlPlaneSyncServiceTests
                 Arg.Any<
                     IReadOnlyCollection<
                         AccessDeviceRuntimeStatus>>(),
+                Arg.Any<DateTime?>(),
+                Arg.Any<DateTime?>(),
+                Arg.Any<string?>(),
                 Arg.Any<CancellationToken>())
             .Returns<
                 Task<
@@ -309,6 +327,9 @@ public class AccessControlPlaneSyncServiceTests
                 Arg.Any<
                     IReadOnlyCollection<
                         AccessDeviceRuntimeStatus>>(),
+                Arg.Any<DateTime?>(),
+                Arg.Any<DateTime?>(),
+                Arg.Any<string?>(),
                 Arg.Any<CancellationToken>())
             .Returns(
                 new AgentControlPlaneHeartbeatResult(
@@ -376,6 +397,9 @@ public class AccessControlPlaneSyncServiceTests
                 Arg.Any<
                     IReadOnlyCollection<
                         AccessDeviceRuntimeStatus>>(),
+                Arg.Any<DateTime?>(),
+                Arg.Any<DateTime?>(),
+                Arg.Any<string?>(),
                 Arg.Any<CancellationToken>())
             .Returns(
                 new AgentControlPlaneHeartbeatResult(
@@ -411,6 +435,9 @@ public class AccessControlPlaneSyncServiceTests
                         devices.Single().Connected &&
                         devices.Single().Endpoint ==
                             "192.168.0.50:7878"),
+                Arg.Any<DateTime?>(),
+                Arg.Any<DateTime?>(),
+                Arg.Any<string?>(),
                 Arg.Any<CancellationToken>());
     }
 
@@ -496,15 +523,29 @@ public class AccessControlPlaneSyncServiceTests
             IAgentSessionService sessionService,
             IAccessReleaseControl releaseControl,
             IAccessOfflineStore offlineStore,
-            IEnumerable<IAccessDeviceAdapter> adapters)
+            IEnumerable<IAccessDeviceAdapter> adapters,
+            IAccessOperationalHealthStore? operationalHealthStore = null)
     {
+        operationalHealthStore ??=
+            Substitute.For<
+                IAccessOperationalHealthStore>();
+
+        operationalHealthStore
+            .GetSnapshot()
+            .Returns(
+                new AccessOperationalHealthSnapshot(
+                    null,
+                    null,
+                    null));
+
         return new AccessControlPlaneSyncService(
             credentialStore,
             apiClient,
             sessionService,
             releaseControl,
             offlineStore,
-            adapters);
+            adapters,
+            operationalHealthStore);
     }
 
     private sealed record Dependencies(

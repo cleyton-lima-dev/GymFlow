@@ -42,6 +42,11 @@ builder.Services
         IAgentSessionService,
         AgentSessionService>();
 
+builder.Services
+    .AddSingleton<
+        IAccessOperationalHealthStore,
+        InMemoryAccessOperationalHealthStore>();
+
 builder.Services.Configure<ToletusLiteNet2Options>(
     builder.Configuration.GetSection(
         ToletusLiteNet2Options.SectionName));
