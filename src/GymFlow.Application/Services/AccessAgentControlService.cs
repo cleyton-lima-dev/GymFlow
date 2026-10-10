@@ -155,14 +155,8 @@ public class AccessAgentControlService
 
         agent.LastSeenAt = now;
 
-        if (appliedConfigurationVersion.HasValue &&
-            (!agent.AppliedConfigurationVersion.HasValue ||
-             appliedConfigurationVersion.Value >
-                agent.AppliedConfigurationVersion.Value))
-        {
-            agent.AppliedConfigurationVersion =
-                appliedConfigurationVersion.Value;
-        }
+        agent.AppliedConfigurationVersion =
+            appliedConfigurationVersion;
 
         await _accessAgentRepository
             .UpdateAsync(agent);

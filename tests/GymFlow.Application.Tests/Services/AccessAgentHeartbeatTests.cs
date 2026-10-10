@@ -93,7 +93,7 @@ public class AccessAgentHeartbeatTests
     }
 
     [Fact]
-    public async Task HeartbeatAsync_WithOlderReportedVersion_ShouldNotRegressAppliedVersion()
+    public async Task HeartbeatAsync_WithOlderReportedVersion_ShouldReflectCurrentAgentState()
     {
         var agent =
             CreateAgent();
@@ -117,7 +117,7 @@ public class AccessAgentHeartbeatTests
         Assert.NotNull(result);
 
         Assert.Equal(
-            3,
+            2,
             agent.AppliedConfigurationVersion);
 
         Assert.NotNull(
@@ -128,6 +128,36 @@ public class AccessAgentHeartbeatTests
             .UpdateAsync(agent);
     }
 
+    [Fact]
+    public async Task HeartbeatAsync_WhenAgentReportsNoAppliedVersion_ShouldClearPreviousConfirmation()
+    {
+        var agent =
+            CreateAgent();
+
+        agent.ConfigurationVersion = 4;
+        agent.AppliedConfigurationVersion = 4;
+
+        _agentRepository
+            .GetByIdAsync(
+                agent.Id,
+                agent.GymId)
+            .Returns(agent);
+
+        var result =
+            await _service
+                .HeartbeatAsync(
+                    agent.GymId,
+                    agent.Id,
+                    null);
+
+        Assert.NotNull(result);
+        Assert.Null(
+            agent.AppliedConfigurationVersion);
+
+        await _agentRepository
+            .Received(1)
+            .UpdateAsync(agent);
+    }
     private static AccessAgent CreateAgent()
     {
         return new AccessAgent
