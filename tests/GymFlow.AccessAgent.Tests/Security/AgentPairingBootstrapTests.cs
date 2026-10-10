@@ -1,4 +1,5 @@
-﻿using GymFlow.AccessAgent.Security;
+﻿using GymFlow.AccessAgent.Api;
+using GymFlow.AccessAgent.Security;
 
 namespace GymFlow.AccessAgent.Tests.Security;
 
@@ -16,7 +17,43 @@ public class AgentPairingBootstrapTests
     }
 
     [Fact]
-    public void TryCreateCredentials_WhenValuesAreValid_ShouldCreateCredentials()
+    public void TryValidateApiBaseUrl_WhenLocalHttp_ShouldAccept()
+    {
+        var result =
+            AgentPairingBootstrap
+                .TryValidateApiBaseUrl(
+                    "http://localhost:5137/",
+                    out var baseUrl,
+                    out var error);
+
+        Assert.True(result);
+        Assert.Null(error);
+
+        Assert.Equal(
+            "http://localhost:5137",
+            baseUrl);
+    }
+
+    [Fact]
+    public void TryValidateApiBaseUrl_WhenRemoteHttp_ShouldReject()
+    {
+        var result =
+            AgentPairingBootstrap
+                .TryValidateApiBaseUrl(
+                    "http://example.com",
+                    out var baseUrl,
+                    out var error);
+
+        Assert.False(result);
+        Assert.Null(baseUrl);
+
+        Assert.Equal(
+            "HTTPS é obrigatório fora do ambiente local.",
+            error);
+    }
+
+    [Fact]
+    public void TryCreateCredentials_WhenPairingResultIsValid_ShouldCreateCredentials()
     {
         var agentId =
             Guid.NewGuid();
@@ -24,12 +61,18 @@ public class AgentPairingBootstrapTests
         var gymId =
             Guid.NewGuid();
 
+        var pairingResult =
+            new PairAccessAgentResult(
+                agentId,
+                gymId,
+                "Avelri Access Agent",
+                "RECEPCAO-01",
+                "secret-value");
+
         var result =
             AgentPairingBootstrap
                 .TryCreateCredentials(
-                    agentId.ToString(),
-                    gymId.ToString(),
-                    "secret-value",
+                    pairingResult,
                     "http://localhost:5137/",
                     out var credentials,
                     out var error);
@@ -56,14 +99,20 @@ public class AgentPairingBootstrapTests
     }
 
     [Fact]
-    public void TryCreateCredentials_WhenAgentIdIsInvalid_ShouldReject()
+    public void TryCreateCredentials_WhenResultIsInvalid_ShouldReject()
     {
+        var pairingResult =
+            new PairAccessAgentResult(
+                Guid.Empty,
+                Guid.NewGuid(),
+                "Agent",
+                "RECEPCAO-01",
+                "secret-value");
+
         var result =
             AgentPairingBootstrap
                 .TryCreateCredentials(
-                    "invalid",
-                    Guid.NewGuid().ToString(),
-                    "secret-value",
+                    pairingResult,
                     "http://localhost:5137",
                     out var credentials,
                     out var error);
@@ -71,43 +120,5 @@ public class AgentPairingBootstrapTests
         Assert.False(result);
         Assert.Null(credentials);
         Assert.NotNull(error);
-    }
-
-    [Fact]
-    public void TryCreateCredentials_WhenRemoteHttpIsUsed_ShouldReject()
-    {
-        var result =
-            AgentPairingBootstrap
-                .TryCreateCredentials(
-                    Guid.NewGuid().ToString(),
-                    Guid.NewGuid().ToString(),
-                    "secret-value",
-                    "http://example.com",
-                    out var credentials,
-                    out var error);
-
-        Assert.False(result);
-        Assert.Null(credentials);
-        Assert.Equal(
-            "HTTPS é obrigatório fora do ambiente local.",
-            error);
-    }
-
-    [Fact]
-    public void TryCreateCredentials_WhenHttpsIsUsed_ShouldAccept()
-    {
-        var result =
-            AgentPairingBootstrap
-                .TryCreateCredentials(
-                    Guid.NewGuid().ToString(),
-                    Guid.NewGuid().ToString(),
-                    "secret-value",
-                    "https://api.avelri.com",
-                    out var credentials,
-                    out var error);
-
-        Assert.True(result);
-        Assert.NotNull(credentials);
-        Assert.Null(error);
     }
 }

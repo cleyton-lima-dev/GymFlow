@@ -28,6 +28,10 @@ public class AccessAgentConfiguration
         builder.Property(agent => agent.SecretHash)
             .IsRequired();
 
+        builder.Property(agent => agent.CredentialVersion)
+            .IsRequired()
+            .HasDefaultValue(1L);
+
         builder.Property(agent => agent.IsActive)
             .IsRequired();
 

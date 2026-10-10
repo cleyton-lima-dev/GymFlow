@@ -1,4 +1,4 @@
-using GymFlow.Application.DependencyInjection;
+﻿using GymFlow.Application.DependencyInjection;
 using GymFlow.Infrastructure.DependencyInjection;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
@@ -49,7 +49,7 @@ var jwtKey = builder.Configuration["Jwt:Key"];
 if (string.IsNullOrWhiteSpace(jwtKey))
 {
     throw new InvalidOperationException(
-        "Jwt:Key não configurada.");
+        "Jwt:Key nÃ£o configurada.");
 }
 
 if (Encoding.UTF8.GetByteCount(jwtKey) < 32)
@@ -63,7 +63,7 @@ var jwtIssuer = builder.Configuration["Jwt:Issuer"];
 if (string.IsNullOrWhiteSpace(jwtIssuer))
 {
     throw new InvalidOperationException(
-        "Jwt:Issuer não configurado.");
+        "Jwt:Issuer nÃ£o configurado.");
 }
 
 var jwtAudience = builder.Configuration["Jwt:Audience"];
@@ -71,7 +71,7 @@ var jwtAudience = builder.Configuration["Jwt:Audience"];
 if (string.IsNullOrWhiteSpace(jwtAudience))
 {
     throw new InvalidOperationException(
-        "Jwt:Audience não configurado.");
+        "Jwt:Audience nÃ£o configurado.");
 }
 
 var jwtExpirationRaw =
@@ -135,11 +135,11 @@ builder.Services
                         out var gymId))
                 {
                     logger.LogWarning(
-                        "Token rejeitado por claims inválidas. IP: {ClientIp}",
+                        "Token rejeitado por claims invÃ¡lidas. IP: {ClientIp}",
                         GetClientIp(context.HttpContext));
 
                     context.Fail(
-                        "Token sem identificação válida.");
+                        "Token sem identificaÃ§Ã£o vÃ¡lida.");
 
                     return;
                 }
@@ -177,6 +177,29 @@ builder.Services
                         return;
                     }
 
+                    var credentialVersionClaim =
+                        context.Principal?
+                            .FindFirst(
+                                "agent_credential_version")
+                            ?.Value;
+
+                    if (!long.TryParse(
+                            credentialVersionClaim,
+                            out var tokenCredentialVersion) ||
+                        tokenCredentialVersion !=
+                            agent.CredentialVersion)
+                    {
+                        logger.LogWarning(
+                            "Token rejeitado por versão de credencial inválida. AgentId: {AgentId}, GymId: {GymId}",
+                            principalId,
+                            gymId);
+
+                        context.Fail(
+                            "Credencial do agente foi substituída.");
+
+                        return;
+                    }
+
                     return;
                 }
 
@@ -193,12 +216,12 @@ builder.Services
                 if (!isActive)
                 {
                     logger.LogWarning(
-                        "Token rejeitado para usuário inativo ou inexistente. UserId: {UserId}, GymId: {GymId}",
+                        "Token rejeitado para usuÃ¡rio inativo ou inexistente. UserId: {UserId}, GymId: {GymId}",
                         principalId,
                         gymId);
 
                     context.Fail(
-                        "Usuário inativo ou inexistente.");
+                        "UsuÃ¡rio inativo ou inexistente.");
 
                     return;
                 }
@@ -223,12 +246,12 @@ builder.Services
                     if (!hasActiveEnrollment)
                     {
                         logger.LogWarning(
-                            "Token rejeitado por matrícula inválida. UserId: {UserId}, GymId: {GymId}",
+                            "Token rejeitado por matrÃ­cula invÃ¡lida. UserId: {UserId}, GymId: {GymId}",
                             principalId,
                             gymId);
 
                         context.Fail(
-                            "Matrícula inexistente, vencida ou cancelada.");
+                            "MatrÃ­cula inexistente, vencida ou cancelada.");
 
                         return;
                     }

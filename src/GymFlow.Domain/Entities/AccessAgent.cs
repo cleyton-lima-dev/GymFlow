@@ -12,6 +12,8 @@ public class AccessAgent
 
     public string SecretHash { get; set; } = string.Empty;
 
+    public long CredentialVersion { get; set; } = 1;
+
     public bool IsActive { get; set; } = true;
 
     public bool ReleaseEnabled { get; set; }

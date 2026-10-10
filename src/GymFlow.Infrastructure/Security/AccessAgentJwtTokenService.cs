@@ -8,66 +8,87 @@ using System.Text;
 
 namespace GymFlow.Infrastructure.Security;
 
-public class AccessAgentJwtTokenService : IAccessAgentTokenService
+public class AccessAgentJwtTokenService :
+    IAccessAgentTokenService
 {
-    private readonly IConfiguration _configuration;
+    private readonly IConfiguration
+        _configuration;
 
-    public AccessAgentJwtTokenService(IConfiguration configuration)
+    public AccessAgentJwtTokenService(
+        IConfiguration configuration)
     {
-        _configuration = configuration;
+        _configuration =
+            configuration;
     }
 
-    public string GenerateToken(AccessAgent agent)
+    public string GenerateToken(
+        AccessAgent agent)
     {
-        var key = _configuration["Jwt:Key"]
+        var key =
+            _configuration["Jwt:Key"]
             ?? throw new InvalidOperationException(
                 "JWT Key não configurada.");
 
-        var issuer = _configuration["Jwt:Issuer"];
-        var audience = _configuration["Jwt:Audience"];
+        var issuer =
+            _configuration["Jwt:Issuer"];
+
+        var audience =
+            _configuration["Jwt:Audience"];
 
         var expirationMinutes =
-            _configuration.GetValue<int>("Jwt:ExpirationMinutes");
+            _configuration.GetValue<int>(
+                "Jwt:ExpirationMinutes");
 
-        var claims = new[]
-        {
-            new Claim(
-                ClaimTypes.NameIdentifier,
-                agent.Id.ToString()),
+        var claims =
+            new[]
+            {
+                new Claim(
+                    ClaimTypes.NameIdentifier,
+                    agent.Id.ToString()),
 
-            new Claim(
-                ClaimTypes.Name,
-                agent.Name),
+                new Claim(
+                    ClaimTypes.Name,
+                    agent.Name),
 
-            new Claim(
-                ClaimTypes.Role,
-                "AccessAgent"),
+                new Claim(
+                    ClaimTypes.Role,
+                    "AccessAgent"),
 
-            new Claim(
-                "gym_id",
-                agent.GymId.ToString()),
+                new Claim(
+                    "gym_id",
+                    agent.GymId.ToString()),
 
-            new Claim(
-                "identity_type",
-                "access_agent")
-        };
+                new Claim(
+                    "identity_type",
+                    "access_agent"),
+
+                new Claim(
+                    "agent_credential_version",
+                    agent.CredentialVersion
+                        .ToString())
+            };
 
         var securityKey =
             new SymmetricSecurityKey(
-                Encoding.UTF8.GetBytes(key));
+                Encoding.UTF8.GetBytes(
+                    key));
 
         var credentials =
             new SigningCredentials(
                 securityKey,
                 SecurityAlgorithms.HmacSha256);
 
-        var token = new JwtSecurityToken(
-            issuer: issuer,
-            audience: audience,
-            claims: claims,
-            expires: DateTime.UtcNow.AddMinutes(
-                expirationMinutes),
-            signingCredentials: credentials);
+        var token =
+            new JwtSecurityToken(
+                issuer: issuer,
+                audience: audience,
+                claims: claims,
+                expires:
+                    DateTime.UtcNow
+                        .AddMinutes(
+                            expirationMinutes),
+                signingCredentials:
+                    credentials);
 
         return new JwtSecurityTokenHandler()
             .WriteToken(token);

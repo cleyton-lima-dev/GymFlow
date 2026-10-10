@@ -1,4 +1,5 @@
 import 'package:avelri_gestao/core/network/api_client.dart';
+import 'package:avelri_gestao/features/access_control/models/access_agent_pairing_code.dart';
 import 'package:avelri_gestao/features/access_control/models/access_agent_summary.dart';
 
 class AccessAgentsService {
@@ -20,5 +21,18 @@ class AccessAgentsService {
           ),
         )
         .toList();
+  }
+
+  Future<AccessAgentPairingCode> createPairingCode() async {
+    final response = await _apiClient.post(
+      'api/access-agents/pairing-code',
+      body: const {},
+    );
+
+    if (response is! Map) {
+      throw const FormatException('Invalid pairing code response.');
+    }
+
+    return AccessAgentPairingCode.fromJson(Map<String, dynamic>.from(response));
   }
 }

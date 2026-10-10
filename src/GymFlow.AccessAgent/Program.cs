@@ -41,6 +41,11 @@ builder.Services
         AvelriAccessApiClient>();
 
 builder.Services
+    .AddHttpClient<
+        IAccessAgentPairingClient,
+        AccessAgentPairingClient>();
+
+builder.Services
     .AddSingleton<
         IAgentCredentialStore,
         WindowsAgentCredentialStore>();
@@ -122,10 +127,21 @@ if (pairingMode)
             .GetRequiredService<
                 IAgentCredentialStore>();
 
+    var pairingClient =
+        host.Services
+            .GetRequiredService<
+                IAccessAgentPairingClient>();
+
+    var apiBaseUrl =
+        builder.Configuration[
+            "AvelriApi:BaseUrl"];
+
     Environment.ExitCode =
         await AgentPairingBootstrap
             .RunAsync(
+                pairingClient,
                 credentialStore,
+                apiBaseUrl,
                 CancellationToken.None);
 
     return;

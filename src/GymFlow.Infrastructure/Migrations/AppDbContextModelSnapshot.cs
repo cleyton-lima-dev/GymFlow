@@ -39,6 +39,11 @@ namespace GymFlow.Infrastructure.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<long>("CredentialVersion")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasDefaultValue(1L);
+
                     b.Property<string>("DeviceStatusesJson")
                         .HasColumnType("jsonb");
 
@@ -132,6 +137,48 @@ namespace GymFlow.Infrastructure.Migrations
                     b.HasIndex("GymId", "OccurredAt");
 
                     b.ToTable("AccessAgentAuditLogs", (string)null);
+                });
+
+            modelBuilder.Entity("GymFlow.Domain.Entities.AccessAgentPairingCode", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("CodeHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTime?>("ConsumedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("CreatedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("GymId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CodeHash")
+                        .IsUnique();
+
+                    b.HasIndex("CreatedByUserId");
+
+                    b.HasIndex("GymId")
+                        .IsUnique()
+                        .HasFilter("\"ConsumedAt\" IS NULL");
+
+                    b.HasIndex("GymId", "ExpiresAt");
+
+                    b.ToTable("AccessAgentPairingCodes", (string)null);
                 });
 
             modelBuilder.Entity("GymFlow.Domain.Entities.Charge", b =>
@@ -1001,6 +1048,15 @@ namespace GymFlow.Infrastructure.Migrations
                     b.HasOne("GymFlow.Domain.Entities.User", null)
                         .WithMany()
                         .HasForeignKey("ActorUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("GymFlow.Domain.Entities.AccessAgentPairingCode", b =>
+                {
+                    b.HasOne("GymFlow.Domain.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("CreatedByUserId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });

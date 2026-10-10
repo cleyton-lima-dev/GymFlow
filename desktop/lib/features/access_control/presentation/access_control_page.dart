@@ -3,6 +3,7 @@ import 'package:avelri_gestao/core/network/api_client.dart';
 import 'package:avelri_gestao/features/access_control/data/access_agents_service.dart';
 import 'package:avelri_gestao/features/access_control/models/access_agent_summary.dart';
 import 'package:avelri_gestao/features/access_control/presentation/access_control_view_model.dart';
+import 'package:avelri_gestao/features/access_control/presentation/pair_access_agent_button.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
@@ -66,6 +67,8 @@ class _AccessControlView extends StatelessWidget {
                     ],
                   ),
                 ),
+                PairAccessAgentButton(primaryColor: primaryColor),
+                const SizedBox(width: 8),
                 IconButton(
                   tooltip: 'Atualizar',
                   onPressed: viewModel.isLoading ? null : viewModel.refresh,
