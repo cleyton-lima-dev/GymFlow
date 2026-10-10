@@ -11,6 +11,9 @@ public sealed class SqliteAccessReleaseControl :
     private const string ReleaseEnabledKey =
         "PhysicalAccess.ReleaseEnabled";
 
+    private const string ConfigurationVersionKey =
+        "PhysicalAccess.ConfigurationVersion";
+
     private readonly AccessOfflineStoreOptions _options;
 
     private readonly SemaphoreSlim _initializationLock =
@@ -24,8 +27,9 @@ public sealed class SqliteAccessReleaseControl :
         _options = options.Value;
     }
 
-    public async Task<bool> IsReleaseEnabledAsync(
-        CancellationToken cancellationToken)
+    public async Task<AccessReleaseConfiguration>
+        GetConfigurationAsync(
+            CancellationToken cancellationToken)
     {
         await InitializeAsync(
             cancellationToken);
@@ -39,48 +43,95 @@ public sealed class SqliteAccessReleaseControl :
 
         command.CommandText =
             """
-            SELECT Value
+            SELECT "Key", Value
             FROM AgentSettings
-            WHERE "Key" = $key
-            LIMIT 1;
+            WHERE "Key" IN
+            (
+                $releaseEnabledKey,
+                $configurationVersionKey
+            );
             """;
 
         command.Parameters.AddWithValue(
-            "$key",
+            "$releaseEnabledKey",
             ReleaseEnabledKey);
 
-        var value =
-            await command.ExecuteScalarAsync(
+        command.Parameters.AddWithValue(
+            "$configurationVersionKey",
+            ConfigurationVersionKey);
+
+        var releaseEnabled = false;
+        long? configurationVersion = null;
+
+        await using var reader =
+            await command.ExecuteReaderAsync(
                 cancellationToken);
 
-        return string.Equals(
-            Convert.ToString(
-                value,
-                CultureInfo.InvariantCulture),
-            "1",
-            StringComparison.Ordinal);
+        while (await reader.ReadAsync(
+                   cancellationToken))
+        {
+            var key =
+                reader.GetString(0);
+
+            var value =
+                reader.GetString(1);
+
+            if (string.Equals(
+                    key,
+                    ReleaseEnabledKey,
+                    StringComparison.Ordinal))
+            {
+                releaseEnabled =
+                    string.Equals(
+                        value,
+                        "1",
+                        StringComparison.Ordinal);
+            }
+            else if (string.Equals(
+                         key,
+                         ConfigurationVersionKey,
+                         StringComparison.Ordinal) &&
+                     long.TryParse(
+                         value,
+                         NumberStyles.Integer,
+                         CultureInfo.InvariantCulture,
+                         out var parsedVersion) &&
+                     parsedVersion >= 1)
+            {
+                configurationVersion =
+                    parsedVersion;
+            }
+        }
+
+        return new AccessReleaseConfiguration(
+            releaseEnabled,
+            configurationVersion);
     }
 
-    public Task EnableAsync(
+    public async Task<bool> IsReleaseEnabledAsync(
         CancellationToken cancellationToken)
     {
-        return SetReleaseEnabledAsync(
-            true,
-            cancellationToken);
+        var configuration =
+            await GetConfigurationAsync(
+                cancellationToken);
+
+        return
+            configuration.ReleaseEnabled &&
+            configuration.ConfigurationVersion.HasValue;
     }
 
-    public Task DisableAsync(
+    public async Task ApplyConfigurationAsync(
+        bool releaseEnabled,
+        long configurationVersion,
         CancellationToken cancellationToken)
     {
-        return SetReleaseEnabledAsync(
-            false,
-            cancellationToken);
-    }
+        if (configurationVersion < 1)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(configurationVersion),
+                "A versão da configuração deve ser maior que zero.");
+        }
 
-    private async Task SetReleaseEnabledAsync(
-        bool enabled,
-        CancellationToken cancellationToken)
-    {
         await InitializeAsync(
             cancellationToken);
 
@@ -88,8 +139,49 @@ public sealed class SqliteAccessReleaseControl :
             await OpenConnectionAsync(
                 cancellationToken);
 
+        await using var transaction =
+            (SqliteTransaction)await connection.BeginTransactionAsync(
+                cancellationToken);
+
+        var updatedAt =
+            DateTime.UtcNow.ToString(
+                "O",
+                CultureInfo.InvariantCulture);
+
+        await UpsertSettingAsync(
+            connection,
+            transaction,
+            ReleaseEnabledKey,
+            releaseEnabled ? "1" : "0",
+            updatedAt,
+            cancellationToken);
+
+        await UpsertSettingAsync(
+            connection,
+            transaction,
+            ConfigurationVersionKey,
+            configurationVersion.ToString(
+                CultureInfo.InvariantCulture),
+            updatedAt,
+            cancellationToken);
+
+        await transaction.CommitAsync(
+            cancellationToken);
+    }
+
+    private static async Task UpsertSettingAsync(
+        SqliteConnection connection,
+        SqliteTransaction transaction,
+        string key,
+        string value,
+        string updatedAt,
+        CancellationToken cancellationToken)
+    {
         await using var command =
             connection.CreateCommand();
+
+        command.Transaction =
+            transaction;
 
         command.CommandText =
             """
@@ -113,17 +205,15 @@ public sealed class SqliteAccessReleaseControl :
 
         command.Parameters.AddWithValue(
             "$key",
-            ReleaseEnabledKey);
+            key);
 
         command.Parameters.AddWithValue(
             "$value",
-            enabled ? "1" : "0");
+            value);
 
         command.Parameters.AddWithValue(
             "$updatedAt",
-            DateTime.UtcNow.ToString(
-                "O",
-                CultureInfo.InvariantCulture));
+            updatedAt);
 
         await command.ExecuteNonQueryAsync(
             cancellationToken);

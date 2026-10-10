@@ -2,12 +2,19 @@
 
 public interface IAccessReleaseControl
 {
+    Task<AccessReleaseConfiguration>
+        GetConfigurationAsync(
+            CancellationToken cancellationToken);
+
     Task<bool> IsReleaseEnabledAsync(
         CancellationToken cancellationToken);
 
-    Task EnableAsync(
-        CancellationToken cancellationToken);
-
-    Task DisableAsync(
+    Task ApplyConfigurationAsync(
+        bool releaseEnabled,
+        long configurationVersion,
         CancellationToken cancellationToken);
 }
+
+public sealed record AccessReleaseConfiguration(
+    bool ReleaseEnabled,
+    long? ConfigurationVersion);

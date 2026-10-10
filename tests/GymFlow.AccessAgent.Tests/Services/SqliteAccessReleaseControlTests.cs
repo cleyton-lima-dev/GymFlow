@@ -8,7 +8,7 @@ namespace GymFlow.AccessAgent.Tests.Services;
 public class SqliteAccessReleaseControlTests
 {
     [Fact]
-    public async Task IsReleaseEnabledAsync_WhenSettingDoesNotExist_ShouldBeDisabled()
+    public async Task GetConfigurationAsync_WhenSettingDoesNotExist_ShouldBeDisabledAndUnversioned()
     {
         var databasePath =
             CreateDatabasePath();
@@ -20,10 +20,18 @@ public class SqliteAccessReleaseControlTests
                     databasePath);
 
             var result =
-                await control.IsReleaseEnabledAsync(
+                await control.GetConfigurationAsync(
                     CancellationToken.None);
 
-            Assert.False(result);
+            Assert.False(
+                result.ReleaseEnabled);
+
+            Assert.Null(
+                result.ConfigurationVersion);
+
+            Assert.False(
+                await control.IsReleaseEnabledAsync(
+                    CancellationToken.None));
         }
         finally
         {
@@ -33,7 +41,7 @@ public class SqliteAccessReleaseControlTests
     }
 
     [Fact]
-    public async Task ReleaseState_ShouldPersistAcrossInstances()
+    public async Task ApplyConfigurationAsync_ShouldPersistStateAndVersionAcrossInstances()
     {
         var databasePath =
             CreateDatabasePath();
@@ -44,27 +52,59 @@ public class SqliteAccessReleaseControlTests
                 CreateControl(
                     databasePath);
 
-            await firstControl.EnableAsync(
-                CancellationToken.None);
+            await firstControl
+                .ApplyConfigurationAsync(
+                    true,
+                    3,
+                    CancellationToken.None);
 
             var secondControl =
                 CreateControl(
                     databasePath);
 
-            Assert.True(
-                await secondControl.IsReleaseEnabledAsync(
-                    CancellationToken.None));
+            var state =
+                await secondControl
+                    .GetConfigurationAsync(
+                        CancellationToken.None);
 
-            await secondControl.DisableAsync(
-                CancellationToken.None);
+            Assert.True(
+                state.ReleaseEnabled);
+
+            Assert.Equal(
+                3,
+                state.ConfigurationVersion);
+
+            Assert.True(
+                await secondControl
+                    .IsReleaseEnabledAsync(
+                        CancellationToken.None));
+
+            await secondControl
+                .ApplyConfigurationAsync(
+                    false,
+                    4,
+                    CancellationToken.None);
 
             var thirdControl =
                 CreateControl(
                     databasePath);
 
+            var updatedState =
+                await thirdControl
+                    .GetConfigurationAsync(
+                        CancellationToken.None);
+
             Assert.False(
-                await thirdControl.IsReleaseEnabledAsync(
-                    CancellationToken.None));
+                updatedState.ReleaseEnabled);
+
+            Assert.Equal(
+                4,
+                updatedState.ConfigurationVersion);
+
+            Assert.False(
+                await thirdControl
+                    .IsReleaseEnabledAsync(
+                        CancellationToken.None));
         }
         finally
         {
@@ -73,14 +113,16 @@ public class SqliteAccessReleaseControlTests
         }
     }
 
-    private static SqliteAccessReleaseControl CreateControl(
-        string databasePath)
+    private static SqliteAccessReleaseControl
+        CreateControl(
+            string databasePath)
     {
         var options =
             Options.Create(
                 new AccessOfflineStoreOptions
                 {
-                    DatabasePath = databasePath
+                    DatabasePath =
+                        databasePath
                 });
 
         return new SqliteAccessReleaseControl(

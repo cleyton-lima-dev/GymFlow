@@ -1,17 +1,19 @@
-﻿using GymFlow.AccessAgent.Security;
-using System.Net;
+﻿using System.Net;
+using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using GymFlow.AccessAgent.Abstractions;
-using System.Net.Http.Headers;
 using GymFlow.AccessAgent.Offline;
+using GymFlow.AccessAgent.Security;
 
 namespace GymFlow.AccessAgent.Api;
 
-public class AvelriAccessApiClient : IAvelriAccessApiClient
+public class AvelriAccessApiClient :
+    IAvelriAccessApiClient
 {
     private readonly HttpClient _httpClient;
 
-    public AvelriAccessApiClient(HttpClient httpClient)
+    public AvelriAccessApiClient(
+        HttpClient httpClient)
     {
         _httpClient = httpClient;
     }
@@ -23,10 +25,11 @@ public class AvelriAccessApiClient : IAvelriAccessApiClient
         var baseUrl =
             credentials.ApiBaseUrl.TrimEnd('/');
 
-        var request = new AgentLoginRequest(
-            credentials.AgentId,
-            credentials.GymId,
-            credentials.Secret);
+        var request =
+            new AgentLoginRequest(
+                credentials.AgentId,
+                credentials.GymId,
+                credentials.Secret);
 
         using var response =
             await _httpClient.PostAsJsonAsync(
@@ -47,12 +50,13 @@ public class AvelriAccessApiClient : IAvelriAccessApiClient
                 cancellationToken);
     }
 
-    public async Task<AgentAccessDecisionResult> DecideAsync(
-    AgentCredentials credentials,
-    string token,
-    string providerKey,
-    DeviceAccessAttempt attempt,
-    CancellationToken cancellationToken)
+    public async Task<AgentAccessDecisionResult>
+        DecideAsync(
+            AgentCredentials credentials,
+            string token,
+            string providerKey,
+            DeviceAccessAttempt attempt,
+            CancellationToken cancellationToken)
     {
         var baseUrl =
             credentials.ApiBaseUrl.TrimEnd('/');
@@ -76,7 +80,8 @@ public class AvelriAccessApiClient : IAvelriAccessApiClient
                 token);
 
         request.Content =
-            JsonContent.Create(requestBody);
+            JsonContent.Create(
+                requestBody);
 
         using var response =
             await _httpClient.SendAsync(
@@ -104,10 +109,10 @@ public class AvelriAccessApiClient : IAvelriAccessApiClient
     }
 
     public async Task SyncOfflineEventAsync(
-    AgentCredentials credentials,
-    string token,
-    PendingAccessEvent accessEvent,
-    CancellationToken cancellationToken)
+        AgentCredentials credentials,
+        string token,
+        PendingAccessEvent accessEvent,
+        CancellationToken cancellationToken)
     {
         var baseUrl =
             credentials.ApiBaseUrl.TrimEnd('/');
@@ -120,7 +125,8 @@ public class AvelriAccessApiClient : IAvelriAccessApiClient
                 accessEvent.ExternalIdentifier,
                 accessEvent.OccurredAt,
                 accessEvent.Allowed ? 1 : 2,
-                MapReasonCode(accessEvent.Reason),
+                MapReasonCode(
+                    accessEvent.Reason),
                 (int)accessEvent.Source,
                 accessEvent.CreatedAt);
 
@@ -135,7 +141,8 @@ public class AvelriAccessApiClient : IAvelriAccessApiClient
                 token);
 
         request.Content =
-            JsonContent.Create(requestBody);
+            JsonContent.Create(
+                requestBody);
 
         using var response =
             await _httpClient.SendAsync(
@@ -145,7 +152,57 @@ public class AvelriAccessApiClient : IAvelriAccessApiClient
         response.EnsureSuccessStatusCode();
     }
 
-    private static string MapReason(int reason)
+    public async Task<AgentControlPlaneHeartbeatResult>
+        HeartbeatAsync(
+            AgentCredentials credentials,
+            string token,
+            long? appliedConfigurationVersion,
+            CancellationToken cancellationToken)
+    {
+        var baseUrl =
+            credentials.ApiBaseUrl.TrimEnd('/');
+
+        var requestBody =
+            new HeartbeatRequest(
+                appliedConfigurationVersion);
+
+        using var request =
+            new HttpRequestMessage(
+                HttpMethod.Post,
+                $"{baseUrl}/api/access-agent/control-plane/heartbeat");
+
+        request.Headers.Authorization =
+            new AuthenticationHeaderValue(
+                "Bearer",
+                token);
+
+        request.Content =
+            JsonContent.Create(
+                requestBody);
+
+        using var response =
+            await _httpClient.SendAsync(
+                request,
+                cancellationToken);
+
+        response.EnsureSuccessStatusCode();
+
+        var result =
+            await response.Content
+                .ReadFromJsonAsync<AgentControlPlaneHeartbeatResult>(
+                    cancellationToken);
+
+        if (result is null)
+        {
+            throw new InvalidOperationException(
+                "A API retornou uma resposta de heartbeat inválida.");
+        }
+
+        return result;
+    }
+
+    private static string MapReason(
+        int reason)
     {
         return reason switch
         {
@@ -159,11 +216,13 @@ public class AvelriAccessApiClient : IAvelriAccessApiClient
             105 => "FinancialRestriction",
             106 => "ManualBlock",
             107 => "PlanRestriction",
+            108 => "OfflineNoCachedPermission",
             _ => $"Unknown:{reason}"
         };
     }
 
-    private static int MapReasonCode(string reason)
+    private static int MapReasonCode(
+        string reason)
     {
         return reason switch
         {
@@ -204,13 +263,16 @@ public class AvelriAccessApiClient : IAvelriAccessApiClient
         string Secret);
 
     private sealed record SyncOfflineAccessEventRequest(
-    Guid RequestId,
-    string ProviderKey,
-    int CredentialType,
-    string ExternalIdentifier,
-    DateTime OccurredAt,
-    int Decision,
-    int Reason,
-    int Source,
-    DateTime ProcessedAt);
+        Guid RequestId,
+        string ProviderKey,
+        int CredentialType,
+        string ExternalIdentifier,
+        DateTime OccurredAt,
+        int Decision,
+        int Reason,
+        int Source,
+        DateTime ProcessedAt);
+
+    private sealed record HeartbeatRequest(
+        long? AppliedConfigurationVersion);
 }

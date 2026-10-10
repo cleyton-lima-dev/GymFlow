@@ -1,6 +1,6 @@
-﻿using GymFlow.AccessAgent.Security;
-using GymFlow.AccessAgent.Abstractions;
+﻿using GymFlow.AccessAgent.Abstractions;
 using GymFlow.AccessAgent.Offline;
+using GymFlow.AccessAgent.Security;
 
 namespace GymFlow.AccessAgent.Api;
 
@@ -11,17 +11,24 @@ public interface IAvelriAccessApiClient
         CancellationToken cancellationToken);
 
     Task<AgentAccessDecisionResult> DecideAsync(
-    AgentCredentials credentials,
-    string token,
-    string providerKey,
-    DeviceAccessAttempt attempt,
-    CancellationToken cancellationToken);
+        AgentCredentials credentials,
+        string token,
+        string providerKey,
+        DeviceAccessAttempt attempt,
+        CancellationToken cancellationToken);
 
     Task SyncOfflineEventAsync(
-    AgentCredentials credentials,
-    string token,
-    PendingAccessEvent accessEvent,
-    CancellationToken cancellationToken);
+        AgentCredentials credentials,
+        string token,
+        PendingAccessEvent accessEvent,
+        CancellationToken cancellationToken);
+
+    Task<AgentControlPlaneHeartbeatResult>
+        HeartbeatAsync(
+            AgentCredentials credentials,
+            string token,
+            long? appliedConfigurationVersion,
+            CancellationToken cancellationToken);
 }
 
 public sealed record AgentLoginResult(
@@ -35,3 +42,8 @@ public sealed record AgentAccessDecisionResult(
     bool Allowed,
     string Reason,
     DateTime ProcessedAt);
+
+public sealed record AgentControlPlaneHeartbeatResult(
+    bool ReleaseEnabled,
+    long ConfigurationVersion,
+    DateTime ServerTimeUtc);
