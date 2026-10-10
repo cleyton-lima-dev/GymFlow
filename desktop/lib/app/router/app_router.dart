@@ -20,6 +20,7 @@ import 'package:avelri_gestao/features/plans/models/plan_summary.dart';
 import 'package:avelri_gestao/features/enrollments/presentation/enrollments_page.dart';
 import 'package:avelri_gestao/features/enrollments/presentation/create_enrollment_page.dart';
 import 'package:avelri_gestao/features/charges/presentation/charges_page.dart';
+import 'package:avelri_gestao/features/access_control/presentation/access_control_page.dart';
 
 class AppRouter {
   AppRouter(this._sessionController, this._brandingController);
@@ -79,21 +80,18 @@ class AppRouter {
         routes: [
           GoRoute(
             path: '/dashboard',
-            pageBuilder: (context, state) => const NoTransitionPage(
-              child: DashboardPage(),
-            ),
+            pageBuilder: (context, state) =>
+                const NoTransitionPage(child: DashboardPage()),
           ),
           GoRoute(
             path: '/students',
-            pageBuilder: (context, state) => const NoTransitionPage(
-              child: StudentsPage(),
-            ),
+            pageBuilder: (context, state) =>
+                const NoTransitionPage(child: StudentsPage()),
           ),
           GoRoute(
             path: '/students/new',
-            pageBuilder: (context, state) => const NoTransitionPage(
-              child: CreateStudentPage(),
-            ),
+            pageBuilder: (context, state) =>
+                const NoTransitionPage(child: CreateStudentPage()),
           ),
           GoRoute(
             path: '/students/:studentId',
@@ -113,43 +111,41 @@ class AppRouter {
           ),
           GoRoute(
             path: '/plans',
-            pageBuilder: (context, state) => const NoTransitionPage(
-              child: PlansPage(),
-            ),
+            pageBuilder: (context, state) =>
+                const NoTransitionPage(child: PlansPage()),
           ),
           GoRoute(
             path: '/plans/new',
-            pageBuilder: (context, state) => const NoTransitionPage(
-              child: CreatePlanPage(),
-            ),
+            pageBuilder: (context, state) =>
+                const NoTransitionPage(child: CreatePlanPage()),
           ),
           GoRoute(
             path: '/plans/edit',
             pageBuilder: (context, state) {
               final plan = state.extra as PlanSummary;
 
-              return NoTransitionPage(
-                child: EditPlanPage(plan: plan),
-              );
+              return NoTransitionPage(child: EditPlanPage(plan: plan));
             },
           ),
           GoRoute(
             path: '/enrollments',
-            pageBuilder: (context, state) => const NoTransitionPage(
-              child: EnrollmentsPage(),
-            ),
+            pageBuilder: (context, state) =>
+                const NoTransitionPage(child: EnrollmentsPage()),
           ),
           GoRoute(
             path: '/enrollments/new',
-            pageBuilder: (context, state) => const NoTransitionPage(
-              child: CreateEnrollmentPage(),
-            ),
+            pageBuilder: (context, state) =>
+                const NoTransitionPage(child: CreateEnrollmentPage()),
           ),
           GoRoute(
             path: '/finance',
-            pageBuilder: (context, state) => const NoTransitionPage(
-              child: ChargesPage(),
-            ),
+            pageBuilder: (context, state) =>
+                const NoTransitionPage(child: ChargesPage()),
+          ),
+          GoRoute(
+            path: '/access-control',
+            pageBuilder: (context, state) =>
+                const NoTransitionPage(child: AccessControlPage()),
           ),
           GoRoute(
             path: '/check-in',
