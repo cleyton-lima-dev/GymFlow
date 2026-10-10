@@ -20,10 +20,18 @@ public class AccessAgentManagementResponse
 
     public bool ConfigurationApplied { get; set; }
 
+    public bool IsOnline { get; set; }
+
     public int? PendingOfflineEvents { get; set; }
 
     public IReadOnlyList<AccessAgentDeviceStatusDto> Devices { get; set; } =
         [];
+
+    public DateTime? LastOfflineSyncAt { get; set; }
+
+    public DateTime? LastFailureAt { get; set; }
+
+    public string? LastFailureCode { get; set; }
 
     public DateTime? LastSeenAt { get; set; }
 

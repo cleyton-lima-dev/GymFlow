@@ -12,6 +12,10 @@ public class AccessAgentControlService
     private const int MaxDeviceKeyLength = 100;
     private const int MaxProviderKeyLength = 100;
     private const int MaxEndpointLength = 200;
+    private const int MaxFailureCodeLength = 100;
+
+    private static readonly TimeSpan AgentOnlineThreshold =
+        TimeSpan.FromMinutes(3);
 
     private readonly IAccessAgentRepository
         _accessAgentRepository;
@@ -123,7 +127,10 @@ public class AccessAgentControlService
             Guid agentId,
             long? appliedConfigurationVersion,
             int pendingOfflineEvents,
-            IReadOnlyCollection<AccessAgentDeviceStatusDto>? devices)
+            IReadOnlyCollection<AccessAgentDeviceStatusDto>? devices,
+            DateTime? lastOfflineSyncAt = null,
+            DateTime? lastFailureAt = null,
+            string? lastFailureCode = null)
     {
         if (gymId == Guid.Empty ||
             agentId == Guid.Empty)
@@ -147,6 +154,32 @@ public class AccessAgentControlService
         devices ??= [];
 
         ValidateDevices(devices);
+
+        var normalizedFailureCode =
+            string.IsNullOrWhiteSpace(lastFailureCode)
+                ? null
+                : lastFailureCode.Trim();
+
+        if (lastFailureAt.HasValue !=
+            (normalizedFailureCode is not null))
+        {
+            throw new ArgumentException(
+                "A última falha deve informar data e código em conjunto.");
+        }
+
+        if (normalizedFailureCode is not null &&
+            normalizedFailureCode.Length >
+                MaxFailureCodeLength)
+        {
+            throw new ArgumentException(
+                "O código da última falha excede o tamanho permitido.");
+        }
+
+        var normalizedLastOfflineSyncAt =
+            lastOfflineSyncAt?.ToUniversalTime();
+
+        var normalizedLastFailureAt =
+            lastFailureAt?.ToUniversalTime();
 
         var agent =
             await _accessAgentRepository
@@ -180,6 +213,27 @@ public class AccessAgentControlService
 
         agent.DeviceStatusesJson =
             JsonSerializer.Serialize(devices);
+
+        if (normalizedLastOfflineSyncAt.HasValue &&
+            (!agent.LastOfflineSyncAt.HasValue ||
+             normalizedLastOfflineSyncAt.Value >
+                agent.LastOfflineSyncAt.Value))
+        {
+            agent.LastOfflineSyncAt =
+                normalizedLastOfflineSyncAt.Value;
+        }
+
+        if (normalizedLastFailureAt.HasValue &&
+            (!agent.LastFailureAt.HasValue ||
+             normalizedLastFailureAt.Value >
+                agent.LastFailureAt.Value))
+        {
+            agent.LastFailureAt =
+                normalizedLastFailureAt.Value;
+
+            agent.LastFailureCode =
+                normalizedFailureCode;
+        }
 
         await _accessAgentRepository
             .UpdateAsync(agent);
@@ -284,11 +338,23 @@ public class AccessAgentControlService
                 agent.AppliedConfigurationVersion.HasValue &&
                 agent.AppliedConfigurationVersion.Value ==
                     agent.ConfigurationVersion,
+            IsOnline =
+                agent.IsActive &&
+                agent.LastSeenAt.HasValue &&
+                DateTime.UtcNow -
+                    agent.LastSeenAt.Value <=
+                        AgentOnlineThreshold,
             PendingOfflineEvents =
                 agent.PendingOfflineEvents,
             Devices =
                 DeserializeDeviceStatuses(
                     agent.DeviceStatusesJson),
+            LastOfflineSyncAt =
+                agent.LastOfflineSyncAt,
+            LastFailureAt =
+                agent.LastFailureAt,
+            LastFailureCode =
+                agent.LastFailureCode,
             LastSeenAt = agent.LastSeenAt,
             CreatedAt = agent.CreatedAt,
             UpdatedAt = agent.UpdatedAt

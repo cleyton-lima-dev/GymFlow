@@ -40,7 +40,10 @@ public class AccessAgentControlPlaneController :
                         agentId,
                         request.AppliedConfigurationVersion,
                         request.PendingOfflineEvents,
-                        request.Devices);
+                        request.Devices,
+                        request.LastOfflineSyncAt,
+                        request.LastFailureAt,
+                        request.LastFailureCode);
 
             if (response is null)
                 return Unauthorized();

@@ -57,6 +57,12 @@ public class AccessAgentHeartbeatTests
                 }
             };
 
+        var lastOfflineSyncAt =
+            DateTime.UtcNow.AddMinutes(-2);
+
+        var lastFailureAt =
+            DateTime.UtcNow.AddMinutes(-1);
+
         var result =
             await _service
                 .HeartbeatAsync(
@@ -64,7 +70,10 @@ public class AccessAgentHeartbeatTests
                     agent.Id,
                     3,
                     2,
-                    devices);
+                    devices,
+                    lastOfflineSyncAt,
+                    lastFailureAt,
+                    "OfflineSync.ApiUnavailable");
 
         Assert.NotNull(result);
         Assert.True(result.ReleaseEnabled);
@@ -80,6 +89,18 @@ public class AccessAgentHeartbeatTests
         Assert.Contains(
             "toletus-litenet2",
             agent.DeviceStatusesJson);
+
+        Assert.Equal(
+            lastOfflineSyncAt,
+            agent.LastOfflineSyncAt);
+
+        Assert.Equal(
+            lastFailureAt,
+            agent.LastFailureAt);
+
+        Assert.Equal(
+            "OfflineSync.ApiUnavailable",
+            agent.LastFailureCode);
 
         Assert.NotNull(
             agent.LastSeenAt);

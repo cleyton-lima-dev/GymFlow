@@ -50,6 +50,19 @@ public class AccessAgentConfiguration
             .HasColumnType("jsonb")
             .IsRequired(false);
 
+        builder.Property(agent =>
+                agent.LastOfflineSyncAt)
+            .IsRequired(false);
+
+        builder.Property(agent =>
+                agent.LastFailureAt)
+            .IsRequired(false);
+
+        builder.Property(agent =>
+                agent.LastFailureCode)
+            .HasMaxLength(100)
+            .IsRequired(false);
+
         builder.Property(agent => agent.CreatedAt)
             .IsRequired();
 

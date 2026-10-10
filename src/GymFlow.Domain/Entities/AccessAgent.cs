@@ -24,6 +24,12 @@ public class AccessAgent
 
     public string? DeviceStatusesJson { get; set; }
 
+    public DateTime? LastOfflineSyncAt { get; set; }
+
+    public DateTime? LastFailureAt { get; set; }
+
+    public string? LastFailureCode { get; set; }
+
     public DateTime? LastSeenAt { get; set; }
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
