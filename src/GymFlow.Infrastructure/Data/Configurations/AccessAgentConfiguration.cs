@@ -41,6 +41,15 @@ public class AccessAgentConfiguration
                 agent.AppliedConfigurationVersion)
             .IsRequired(false);
 
+        builder.Property(agent =>
+                agent.PendingOfflineEvents)
+            .IsRequired(false);
+
+        builder.Property(agent =>
+                agent.DeviceStatusesJson)
+            .HasColumnType("jsonb")
+            .IsRequired(false);
+
         builder.Property(agent => agent.CreatedAt)
             .IsRequired();
 

@@ -8,6 +8,11 @@ namespace GymFlow.Application.Services;
 
 public class AccessAgentControlService
 {
+    private const int MaxReportedDevices = 20;
+    private const int MaxDeviceKeyLength = 100;
+    private const int MaxProviderKeyLength = 100;
+    private const int MaxEndpointLength = 200;
+
     private readonly IAccessAgentRepository
         _accessAgentRepository;
 
@@ -116,7 +121,9 @@ public class AccessAgentControlService
         HeartbeatAsync(
             Guid gymId,
             Guid agentId,
-            long? appliedConfigurationVersion)
+            long? appliedConfigurationVersion,
+            int pendingOfflineEvents,
+            IReadOnlyCollection<AccessAgentDeviceStatusDto>? devices)
     {
         if (gymId == Guid.Empty ||
             agentId == Guid.Empty)
@@ -130,6 +137,16 @@ public class AccessAgentControlService
             throw new ArgumentException(
                 "A versão aplicada da configuração deve ser maior que zero.");
         }
+
+        if (pendingOfflineEvents < 0)
+        {
+            throw new ArgumentException(
+                "A quantidade de eventos offline pendentes não pode ser negativa.");
+        }
+
+        devices ??= [];
+
+        ValidateDevices(devices);
 
         var agent =
             await _accessAgentRepository
@@ -158,6 +175,12 @@ public class AccessAgentControlService
         agent.AppliedConfigurationVersion =
             appliedConfigurationVersion;
 
+        agent.PendingOfflineEvents =
+            pendingOfflineEvents;
+
+        agent.DeviceStatusesJson =
+            JsonSerializer.Serialize(devices);
+
         await _accessAgentRepository
             .UpdateAsync(agent);
 
@@ -168,6 +191,78 @@ public class AccessAgentControlService
                 agent.ConfigurationVersion,
             ServerTimeUtc = now
         };
+    }
+
+    private static void ValidateDevices(
+        IReadOnlyCollection<AccessAgentDeviceStatusDto> devices)
+    {
+        if (devices.Count > MaxReportedDevices)
+        {
+            throw new ArgumentException(
+                $"O Agent não pode reportar mais de {MaxReportedDevices} dispositivos.");
+        }
+
+        var deviceKeys =
+            new HashSet<string>(
+                StringComparer.OrdinalIgnoreCase);
+
+        foreach (var device in devices)
+        {
+            var deviceKey =
+                device.DeviceKey?.Trim() ??
+                string.Empty;
+
+            var providerKey =
+                device.ProviderKey?.Trim() ??
+                string.Empty;
+
+            if (string.IsNullOrWhiteSpace(deviceKey) ||
+                deviceKey.Length > MaxDeviceKeyLength)
+            {
+                throw new ArgumentException(
+                    "O identificador local do dispositivo é inválido.");
+            }
+
+            if (string.IsNullOrWhiteSpace(providerKey) ||
+                providerKey.Length > MaxProviderKeyLength)
+            {
+                throw new ArgumentException(
+                    "O provedor do dispositivo é inválido.");
+            }
+
+            if (!deviceKeys.Add(deviceKey))
+            {
+                throw new ArgumentException(
+                    "O Agent reportou dispositivos com identificadores locais duplicados.");
+            }
+
+            if (device.Endpoint is not null &&
+                device.Endpoint.Length >
+                    MaxEndpointLength)
+            {
+                throw new ArgumentException(
+                    "O endpoint do dispositivo excede o tamanho permitido.");
+            }
+
+            if (!device.Enabled &&
+                device.Connected)
+            {
+                throw new ArgumentException(
+                    "Um dispositivo desabilitado não pode ser reportado como conectado.");
+            }
+
+            device.DeviceKey =
+                deviceKey;
+
+            device.ProviderKey =
+                providerKey;
+
+            device.Endpoint =
+                string.IsNullOrWhiteSpace(
+                    device.Endpoint)
+                    ? null
+                    : device.Endpoint.Trim();
+        }
     }
 
     private static AccessAgentManagementResponse
@@ -189,9 +284,34 @@ public class AccessAgentControlService
                 agent.AppliedConfigurationVersion.HasValue &&
                 agent.AppliedConfigurationVersion.Value ==
                     agent.ConfigurationVersion,
+            PendingOfflineEvents =
+                agent.PendingOfflineEvents,
+            Devices =
+                DeserializeDeviceStatuses(
+                    agent.DeviceStatusesJson),
             LastSeenAt = agent.LastSeenAt,
             CreatedAt = agent.CreatedAt,
             UpdatedAt = agent.UpdatedAt
         };
+    }
+
+    private static IReadOnlyList<AccessAgentDeviceStatusDto>
+        DeserializeDeviceStatuses(
+            string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json))
+            return [];
+
+        try
+        {
+            return JsonSerializer.Deserialize<
+                       List<AccessAgentDeviceStatusDto>>(
+                       json) ??
+                   [];
+        }
+        catch (JsonException)
+        {
+            return [];
+        }
     }
 }

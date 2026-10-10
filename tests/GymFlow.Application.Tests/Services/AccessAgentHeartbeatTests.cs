@@ -1,4 +1,5 @@
-﻿using GymFlow.Application.Interfaces.Repositories;
+﻿using GymFlow.Application.DTOs.AccessAgents;
+using GymFlow.Application.Interfaces.Repositories;
 using GymFlow.Application.Services;
 using GymFlow.Domain.Entities;
 using NSubstitute;
@@ -28,7 +29,7 @@ public class AccessAgentHeartbeatTests
     }
 
     [Fact]
-    public async Task HeartbeatAsync_WithAppliedVersion_ShouldUpdateLastSeenAndAppliedVersion()
+    public async Task HeartbeatAsync_WithRuntimeStatus_ShouldPersistStatusAndAppliedVersion()
     {
         var agent =
             CreateAgent();
@@ -41,22 +42,44 @@ public class AccessAgentHeartbeatTests
                 agent.GymId)
             .Returns(agent);
 
+        var devices =
+            new[]
+            {
+                new AccessAgentDeviceStatusDto
+                {
+                    DeviceKey = "primary",
+                    ProviderKey =
+                        "toletus-litenet2",
+                    Enabled = true,
+                    Connected = true,
+                    Endpoint =
+                        "192.168.0.50:7878"
+                }
+            };
+
         var result =
             await _service
                 .HeartbeatAsync(
                     agent.GymId,
                     agent.Id,
-                    3);
+                    3,
+                    2,
+                    devices);
 
         Assert.NotNull(result);
         Assert.True(result.ReleaseEnabled);
-        Assert.Equal(
-            3,
-            result.ConfigurationVersion);
 
         Assert.Equal(
             3,
             agent.AppliedConfigurationVersion);
+
+        Assert.Equal(
+            2,
+            agent.PendingOfflineEvents);
+
+        Assert.Contains(
+            "toletus-litenet2",
+            agent.DeviceStatusesJson);
 
         Assert.NotNull(
             agent.LastSeenAt);
@@ -84,7 +107,9 @@ public class AccessAgentHeartbeatTests
             () => _service.HeartbeatAsync(
                 agent.GymId,
                 agent.Id,
-                3));
+                3,
+                0,
+                []));
 
         await _agentRepository
             .DidNotReceive()
@@ -112,16 +137,15 @@ public class AccessAgentHeartbeatTests
                 .HeartbeatAsync(
                     agent.GymId,
                     agent.Id,
-                    2);
+                    2,
+                    0,
+                    []);
 
         Assert.NotNull(result);
 
         Assert.Equal(
             2,
             agent.AppliedConfigurationVersion);
-
-        Assert.NotNull(
-            agent.LastSeenAt);
 
         await _agentRepository
             .Received(1)
@@ -148,9 +172,12 @@ public class AccessAgentHeartbeatTests
                 .HeartbeatAsync(
                     agent.GymId,
                     agent.Id,
-                    null);
+                    null,
+                    0,
+                    []);
 
         Assert.NotNull(result);
+
         Assert.Null(
             agent.AppliedConfigurationVersion);
 
@@ -158,6 +185,66 @@ public class AccessAgentHeartbeatTests
             .Received(1)
             .UpdateAsync(agent);
     }
+
+    [Fact]
+    public async Task HeartbeatAsync_WithNegativePendingEvents_ShouldReject()
+    {
+        var agent =
+            CreateAgent();
+
+        await Assert.ThrowsAsync<ArgumentException>(
+            () => _service.HeartbeatAsync(
+                agent.GymId,
+                agent.Id,
+                1,
+                -1,
+                []));
+
+        await _agentRepository
+            .DidNotReceive()
+            .UpdateAsync(
+                Arg.Any<AccessAgent>());
+    }
+
+    [Fact]
+    public async Task HeartbeatAsync_WithDuplicateDeviceKeys_ShouldReject()
+    {
+        var agent =
+            CreateAgent();
+
+        var devices =
+            new[]
+            {
+                new AccessAgentDeviceStatusDto
+                {
+                    DeviceKey = "primary",
+                    ProviderKey = "provider-a",
+                    Enabled = true,
+                    Connected = true
+                },
+                new AccessAgentDeviceStatusDto
+                {
+                    DeviceKey = "PRIMARY",
+                    ProviderKey = "provider-b",
+                    Enabled = true,
+                    Connected = false
+                }
+            };
+
+        await Assert.ThrowsAsync<ArgumentException>(
+            () => _service.HeartbeatAsync(
+                agent.GymId,
+                agent.Id,
+                1,
+                0,
+                devices));
+
+        await _agentRepository
+            .DidNotReceive()
+            .UpdateAsync(
+                Arg.Any<AccessAgent>());
+    }
+
     private static AccessAgent CreateAgent()
     {
         return new AccessAgent

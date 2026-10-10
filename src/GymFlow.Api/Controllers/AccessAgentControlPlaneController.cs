@@ -38,7 +38,9 @@ public class AccessAgentControlPlaneController :
                     .HeartbeatAsync(
                         gymId,
                         agentId,
-                        request.AppliedConfigurationVersion);
+                        request.AppliedConfigurationVersion,
+                        request.PendingOfflineEvents,
+                        request.Devices);
 
             if (response is null)
                 return Unauthorized();

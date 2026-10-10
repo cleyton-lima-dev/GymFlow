@@ -20,6 +20,10 @@ public class AccessAgent
 
     public long? AppliedConfigurationVersion { get; set; }
 
+    public int? PendingOfflineEvents { get; set; }
+
+    public string? DeviceStatusesJson { get; set; }
+
     public DateTime? LastSeenAt { get; set; }
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
