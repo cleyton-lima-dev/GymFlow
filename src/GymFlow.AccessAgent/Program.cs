@@ -1,4 +1,4 @@
-using GymFlow.AccessAgent;
+﻿using GymFlow.AccessAgent;
 using Microsoft.Extensions.Hosting.WindowsServices;
 using GymFlow.AccessAgent.Security;
 using GymFlow.AccessAgent.Api;
@@ -25,6 +25,7 @@ builder.Services.AddSingleton<IAccessDeviceAdapter,ToletusLiteNet2Adapter>();
 builder.Services.Configure<AccessOfflineStoreOptions>(
     builder.Configuration.GetSection(AccessOfflineStoreOptions.SectionName));
 builder.Services.AddSingleton<IAccessOfflineStore,SqliteAccessOfflineStore>();
+builder.Services.AddSingleton<IAccessReleaseControl, SqliteAccessReleaseControl>();
 builder.Services.AddHostedService<Worker>();
 builder.Services.AddHostedService<OfflineSyncWorker>();
 builder.Services.AddSingleton<IOfflineEventSyncService, OfflineEventSyncService>();

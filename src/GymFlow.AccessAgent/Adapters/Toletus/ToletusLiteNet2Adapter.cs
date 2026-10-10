@@ -1,4 +1,5 @@
 ﻿using GymFlow.AccessAgent.Abstractions;
+using GymFlow.AccessAgent.Services;
 using Microsoft.Extensions.Options;
 using System.Globalization;
 using System.Net;
@@ -19,6 +20,7 @@ public sealed class ToletusLiteNet2Adapter :
 
     private readonly ToletusLiteNet2Options _options;
     private readonly ILogger<ToletusLiteNet2Adapter> _logger;
+    private readonly IAccessReleaseControl _releaseControl;
     private readonly SemaphoreSlim _processingLock = new(1, 1);
 
     private LiteNet2Board? _board;
@@ -32,10 +34,12 @@ public sealed class ToletusLiteNet2Adapter :
 
     public ToletusLiteNet2Adapter(
         IOptions<ToletusLiteNet2Options> options,
-        ILogger<ToletusLiteNet2Adapter> logger)
+        ILogger<ToletusLiteNet2Adapter> logger,
+        IAccessReleaseControl releaseControl)
     {
         _options = options.Value;
         _logger = logger;
+        _releaseControl = releaseControl;
     }
 
     public string ProviderKey => Provider;
@@ -70,63 +74,103 @@ public sealed class ToletusLiteNet2Adapter :
         _handleAttemptAsync = handleAttemptAsync;
         _stoppingToken = cancellationToken;
 
-        var board =
-            new LiteNet2Board(
-                ipAddress,
-                "AVELRI",
-                0)
-            {
-                ConnectPort = _options.Port
-            };
+        var reconnectDelay =
+            TimeSpan.FromSeconds(
+                Math.Max(
+                    1,
+                    _options.ReconnectDelaySeconds));
 
-        _board = board;
-
-        board.OnIdentification +=
-            BoardOnIdentification;
-
-        try
+        while (!cancellationToken.IsCancellationRequested)
         {
-            _logger.LogInformation(
-                "Conectando à Toletus LiteNet2 em {Host}:{Port}.",
-                _options.Host,
-                _options.Port);
+            LiteNet2Board? board = null;
 
-            board.Connect();
-
-            if (!board.Connected)
+            try
             {
-                throw new InvalidOperationException(
-                    "Não foi possível estabelecer conexão com a LiteNet2.");
+                board =
+                    new LiteNet2Board(
+                        ipAddress,
+                        "AVELRI",
+                        0)
+                    {
+                        ConnectPort = _options.Port
+                    };
+
+                _board = board;
+
+                board.OnIdentification +=
+                    BoardOnIdentification;
+
+                _logger.LogInformation(
+                    "Conectando à Toletus LiteNet2 em {Host}:{Port}.",
+                    _options.Host,
+                    _options.Port);
+
+                board.Connect();
+
+                if (!board.Connected)
+                {
+                    throw new InvalidOperationException(
+                        "Não foi possível estabelecer conexão com a LiteNet2.");
+                }
+
+                _logger.LogInformation(
+                    "Conexão estabelecida com a Toletus LiteNet2 em {Host}:{Port}.",
+                    _options.Host,
+                    _options.Port);
+
+                while (
+                    board.Connected &&
+                    !cancellationToken.IsCancellationRequested)
+                {
+                    await Task.Delay(
+                        TimeSpan.FromSeconds(1),
+                        cancellationToken);
+                }
+
+                if (!cancellationToken.IsCancellationRequested)
+                {
+                    _logger.LogWarning(
+                        "Conexão com a Toletus LiteNet2 foi perdida.");
+                }
+            }
+            catch (OperationCanceledException)
+                when (cancellationToken.IsCancellationRequested)
+            {
+                break;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(
+                    ex,
+                    "Falha na conexão com a Toletus LiteNet2. Nova tentativa em {ReconnectDelaySeconds}s.",
+                    reconnectDelay.TotalSeconds);
+            }
+            finally
+            {
+                if (board is not null)
+                {
+                    board.OnIdentification -=
+                        BoardOnIdentification;
+
+                    if (board.Connected)
+                    {
+                        board.Close();
+                    }
+                }
+
+                _board = null;
             }
 
-            _logger.LogInformation(
-                "Conexão estabelecida com a Toletus LiteNet2 em {Host}:{Port}.",
-                _options.Host,
-                _options.Port);
-
-            await Task.Delay(
-                Timeout.Infinite,
-                cancellationToken);
-        }
-        catch (OperationCanceledException)
-            when (cancellationToken.IsCancellationRequested)
-        {
-        }
-        finally
-        {
-            board.OnIdentification -=
-                BoardOnIdentification;
-
-            if (board.Connected)
+            if (!cancellationToken.IsCancellationRequested)
             {
-                board.Close();
+                await Task.Delay(
+                    reconnectDelay,
+                    cancellationToken);
             }
-
-            _board = null;
         }
     }
 
-    public Task ApplyDecisionAsync(
+    public async Task ApplyDecisionAsync(
         DeviceAccessAttempt attempt,
         AccessDeviceDecision decision,
         CancellationToken cancellationToken)
@@ -138,7 +182,17 @@ public sealed class ToletusLiteNet2Adapter :
                 attempt.RequestId,
                 decision.Reason);
 
-            return Task.CompletedTask;
+            return;
+        }
+
+        if (!await _releaseControl.IsReleaseEnabledAsync(
+                cancellationToken))
+        {
+            _logger.LogInformation(
+                "Acesso autorizado pela Avelri, mas o acionamento físico está desativado. RequestId: {RequestId}.",
+                attempt.RequestId);
+
+            return;
         }
 
         var board =
@@ -154,8 +208,6 @@ public sealed class ToletusLiteNet2Adapter :
 
         board.ReleaseEntryAndExit(
             "ACESSO LIBERADO");
-
-        return Task.CompletedTask;
     }
 
     private void BoardOnIdentification(
