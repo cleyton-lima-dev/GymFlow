@@ -1,4 +1,4 @@
-﻿using GymFlow.AccessAgent.Services;
+using GymFlow.AccessAgent.Services;
 
 namespace GymFlow.AccessAgent.Offline;
 
@@ -9,7 +9,10 @@ public class OfflineSyncWorker :
         TimeSpan.FromSeconds(10);
 
     private readonly IOfflineEventSyncService
-        _syncService;
+        _eventSyncService;
+
+    private readonly IPhysicalPassageSyncService
+        _passageSyncService;
 
     private readonly IAccessOperationalHealthStore
         _operationalHealthStore;
@@ -18,12 +21,16 @@ public class OfflineSyncWorker :
         _logger;
 
     public OfflineSyncWorker(
-        IOfflineEventSyncService syncService,
+        IOfflineEventSyncService eventSyncService,
+        IPhysicalPassageSyncService passageSyncService,
         IAccessOperationalHealthStore operationalHealthStore,
         ILogger<OfflineSyncWorker> logger)
     {
-        _syncService =
-            syncService;
+        _eventSyncService =
+            eventSyncService;
+
+        _passageSyncService =
+            passageSyncService;
 
         _operationalHealthStore =
             operationalHealthStore;
@@ -44,16 +51,28 @@ public class OfflineSyncWorker :
         {
             try
             {
-                var syncedCount =
-                    await _syncService
+                var syncedEvents =
+                    await _eventSyncService
                         .SyncPendingAsync(
                             stoppingToken);
 
-                if (syncedCount > 0)
+                if (syncedEvents > 0)
                 {
                     _logger.LogInformation(
                         "{SyncedCount} evento(s) offline sincronizado(s).",
-                        syncedCount);
+                        syncedEvents);
+                }
+
+                var syncedPassages =
+                    await _passageSyncService
+                        .SyncPendingAsync(
+                            stoppingToken);
+
+                if (syncedPassages > 0)
+                {
+                    _logger.LogInformation(
+                        "{SyncedCount} passagem(ns) física(s) sincronizada(s).",
+                        syncedPassages);
                 }
             }
             catch (OperationCanceledException)
@@ -71,7 +90,7 @@ public class OfflineSyncWorker :
 
                 _logger.LogError(
                     ex,
-                    "Falha inesperada ao sincronizar eventos offline.");
+                    "Falha inesperada ao sincronizar dados offline.");
             }
 
             try

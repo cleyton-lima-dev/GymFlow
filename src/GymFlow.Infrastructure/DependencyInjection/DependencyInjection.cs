@@ -1,4 +1,4 @@
-﻿using GymFlow.Infrastructure.Data;
+using GymFlow.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -49,6 +49,7 @@ public static class DependencyInjection
         services.AddScoped<IPhysicalAccessCredentialRepository, PhysicalAccessCredentialRepository>();
         services.AddScoped<IPhysicalAccessOverrideRepository, PhysicalAccessOverrideRepository>();
         services.AddScoped<IPhysicalAccessEventRepository, PhysicalAccessEventRepository>();
+        services.AddScoped<ICheckInRepository, CheckInRepository>();
         services.AddScoped<IAccessAgentRepository, AccessAgentRepository>();
         services.AddScoped<IAccessAgentAuditRepository, AccessAgentAuditRepository>();
         services.AddScoped<IAccessAgentPairingCodeRepository, AccessAgentPairingCodeRepository>();
