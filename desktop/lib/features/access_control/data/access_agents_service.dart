@@ -27,6 +27,7 @@ class AccessAgentsService {
     required String agentId,
     required String host,
     required int port,
+    required bool enabled,
   }) async {
     final response = await _apiClient.patch(
       'api/access-agents/$agentId/devices',
@@ -35,7 +36,7 @@ class AccessAgentsService {
           {
             'deviceKey': 'primary',
             'providerKey': 'toletus-litenet2',
-            'enabled': false,
+            'enabled': enabled,
             'host': host,
             'port': port,
           },

@@ -47,6 +47,7 @@ class ConfigureAccessDeviceButton extends StatelessWidget {
         service: service,
         initialHost: existing?.host ?? '',
         initialPort: existing?.port ?? 7878,
+        initialEnabled: existing?.enabled ?? false,
       ),
     );
 
@@ -63,6 +64,7 @@ class _ConfigureAccessDeviceDialog extends StatefulWidget {
     required this.service,
     required this.initialHost,
     required this.initialPort,
+    required this.initialEnabled,
   });
 
   final String agentId;
@@ -70,6 +72,7 @@ class _ConfigureAccessDeviceDialog extends StatefulWidget {
   final AccessAgentsService service;
   final String initialHost;
   final int initialPort;
+  final bool initialEnabled;
 
   @override
   State<_ConfigureAccessDeviceDialog> createState() =>
@@ -80,6 +83,8 @@ class _ConfigureAccessDeviceDialogState
     extends State<_ConfigureAccessDeviceDialog> {
   late final TextEditingController _hostController;
   late final TextEditingController _portController;
+
+  late bool _enabled;
 
   bool _isSaving = false;
   String? _errorMessage;
@@ -93,6 +98,8 @@ class _ConfigureAccessDeviceDialogState
     _portController = TextEditingController(
       text: widget.initialPort.toString(),
     );
+
+    _enabled = widget.initialEnabled;
   }
 
   @override
@@ -109,12 +116,14 @@ class _ConfigureAccessDeviceDialogState
     }
 
     final host = _hostController.text.trim();
+
     final port = int.tryParse(_portController.text.trim());
 
     if (host.isEmpty) {
       setState(() {
         _errorMessage = 'Informe o endereço IP da catraca.';
       });
+
       return;
     }
 
@@ -122,6 +131,7 @@ class _ConfigureAccessDeviceDialogState
       setState(() {
         _errorMessage = 'Informe uma porta válida.';
       });
+
       return;
     }
 
@@ -135,6 +145,7 @@ class _ConfigureAccessDeviceDialogState
         agentId: widget.agentId,
         host: host,
         port: port,
+        enabled: _enabled,
       );
 
       if (!mounted) {
@@ -151,6 +162,7 @@ class _ConfigureAccessDeviceDialogState
         _errorMessage = exception.statusCode == 400
             ? 'O IP ou a porta informados são inválidos.'
             : 'Não foi possível salvar a configuração.';
+
         _isSaving = false;
       });
     } on TimeoutException {
@@ -160,6 +172,7 @@ class _ConfigureAccessDeviceDialogState
 
       setState(() {
         _errorMessage = 'A operação demorou mais que o esperado.';
+
         _isSaving = false;
       });
     } catch (_) {
@@ -169,6 +182,7 @@ class _ConfigureAccessDeviceDialogState
 
       setState(() {
         _errorMessage = 'Não foi possível salvar a configuração.';
+
         _isSaving = false;
       });
     }
@@ -187,8 +201,8 @@ class _ConfigureAccessDeviceDialogState
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text(
-                'Informe o endereço de rede da catraca. '
-                'A comunicação física permanecerá desabilitada nesta etapa.',
+                'Configure a comunicação de rede com a catraca. '
+                'Habilitar a comunicação não ativa a liberação física de acesso.',
               ),
               const SizedBox(height: 18),
               TextField(
@@ -205,6 +219,37 @@ class _ConfigureAccessDeviceDialogState
                 enabled: !_isSaving,
                 keyboardType: TextInputType.number,
                 decoration: const InputDecoration(labelText: 'Porta'),
+              ),
+              const SizedBox(height: 18),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                value: _enabled,
+                onChanged: _isSaving
+                    ? null
+                    : (value) {
+                        setState(() {
+                          _enabled = value;
+                        });
+                      },
+                title: const Text('Habilitar comunicação'),
+                subtitle: Text(
+                  _enabled
+                      ? 'O Agent tentará conectar à catraca pelo endereço configurado.'
+                      : 'O Agent manterá a catraca desconectada.',
+                ),
+              ),
+              const SizedBox(height: 8),
+              const Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(Icons.lock_outline_rounded, size: 18),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'A liberação física permanece desativada e exige uma etapa separada.',
+                    ),
+                  ),
+                ],
               ),
               if (_errorMessage != null) ...[
                 const SizedBox(height: 14),
