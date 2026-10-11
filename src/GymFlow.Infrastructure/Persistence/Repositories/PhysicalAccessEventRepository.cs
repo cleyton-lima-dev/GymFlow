@@ -1,4 +1,4 @@
-﻿using GymFlow.Application.Interfaces.Repositories;
+using GymFlow.Application.Interfaces.Repositories;
 using GymFlow.Domain.Entities;
 using GymFlow.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
@@ -63,5 +63,54 @@ public class PhysicalAccessEventRepository
 
             throw;
         }
+    }
+
+    public async Task<(List<PhysicalAccessEvent> Items, int TotalCount)>
+        GetPagedAsync(
+            Guid gymId,
+            Guid? studentId,
+            GymFlow.Domain.Enums.PhysicalAccessDecision? decision,
+            GymFlow.Domain.Enums.PhysicalAccessDecisionSource? source,
+            DateTime? occurredFrom,
+            DateTime? occurredTo,
+            int skip,
+            int take)
+    {
+        var query = _context.PhysicalAccessEvents
+            .AsNoTracking()
+            .Include(accessEvent => accessEvent.Student)
+                .ThenInclude(student => student!.User)
+            .Where(accessEvent => accessEvent.GymId == gymId);
+
+        if (studentId.HasValue)
+            query = query.Where(accessEvent =>
+                accessEvent.StudentId == studentId.Value);
+
+        if (decision.HasValue)
+            query = query.Where(accessEvent =>
+                accessEvent.Decision == decision.Value);
+
+        if (source.HasValue)
+            query = query.Where(accessEvent =>
+                accessEvent.Source == source.Value);
+
+        if (occurredFrom.HasValue)
+            query = query.Where(accessEvent =>
+                accessEvent.OccurredAt >= occurredFrom.Value);
+
+        if (occurredTo.HasValue)
+            query = query.Where(accessEvent =>
+                accessEvent.OccurredAt < occurredTo.Value);
+
+        var totalCount = await query.CountAsync();
+
+        var items = await query
+            .OrderByDescending(accessEvent => accessEvent.OccurredAt)
+            .ThenByDescending(accessEvent => accessEvent.Id)
+            .Skip(skip)
+            .Take(take)
+            .ToListAsync();
+
+        return (items, totalCount);
     }
 }

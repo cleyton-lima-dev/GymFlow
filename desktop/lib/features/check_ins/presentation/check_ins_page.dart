@@ -1,6 +1,10 @@
 import 'package:avelri_gestao/app/theme/branding_controller.dart';
 import 'package:avelri_gestao/core/network/api_client.dart';
 import 'package:avelri_gestao/features/check_ins/data/check_ins_service.dart';
+import 'package:avelri_gestao/features/check_ins/data/physical_access_events_service.dart';
+import 'package:avelri_gestao/features/check_ins/presentation/physical_access_events_view_model.dart';
+import 'package:avelri_gestao/features/check_ins/presentation/physical_access_events_table.dart';
+import 'package:avelri_gestao/features/check_ins/presentation/physical_access_events_filters.dart';
 import 'package:avelri_gestao/features/check_ins/models/check_in_history_item.dart';
 import 'package:avelri_gestao/features/check_ins/presentation/check_ins_view_model.dart';
 import 'package:avelri_gestao/features/check_ins/presentation/manual_check_in_button.dart';
@@ -16,17 +20,33 @@ class CheckInsPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ChangeNotifierProvider(
-      create: (context) =>
-          CheckInsViewModel(CheckInsService(context.read<ApiClient>()))
-            ..loadInitial(),
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider(
+          create: (context) =>
+              CheckInsViewModel(CheckInsService(context.read<ApiClient>()))
+                ..loadInitial(),
+        ),
+        ChangeNotifierProvider(
+          create: (context) => PhysicalAccessEventsViewModel(
+            PhysicalAccessEventsService(context.read<ApiClient>()),
+          ),
+        ),
+      ],
       child: const _CheckInsView(),
     );
   }
 }
 
-class _CheckInsView extends StatelessWidget {
+class _CheckInsView extends StatefulWidget {
   const _CheckInsView();
+
+  @override
+  State<_CheckInsView> createState() => _CheckInsViewState();
+}
+
+class _CheckInsViewState extends State<_CheckInsView> {
+  int _selectedTab = 0;
 
   @override
   Widget build(BuildContext context) {
@@ -63,7 +83,9 @@ class _CheckInsView extends StatelessWidget {
                       ),
                       const SizedBox(height: 7),
                       Text(
-                        'Acompanhe as presenças confirmadas dos alunos na academia.',
+                        _selectedTab == 0
+                            ? 'Acompanhe as presenças confirmadas dos alunos na academia.'
+                            : 'Consulte tentativas de acesso, decisões e motivos registrados.',
                         style: TextStyle(
                           color: colorScheme.onSurfaceVariant,
                           fontSize: 14,
@@ -72,97 +94,258 @@ class _CheckInsView extends StatelessWidget {
                     ],
                   ),
                 ),
-                ManualCheckInButton(
-                  apiClient: context.read<ApiClient>(),
-                  onCompleted: viewModel.refresh,
-                ),
-                const SizedBox(width: 8),
-                IconButton(
-                  tooltip: 'Atualizar',
-                  onPressed: viewModel.isLoading ? null : viewModel.refresh,
-                  icon: Icon(Icons.refresh_rounded, color: primaryColor),
-                ),
+                if (_selectedTab == 0) ...[
+                  ManualCheckInButton(
+                    apiClient: context.read<ApiClient>(),
+                    onCompleted: viewModel.refresh,
+                  ),
+                  const SizedBox(width: 8),
+                  IconButton(
+                    tooltip: 'Atualizar presenças',
+                    onPressed: viewModel.isLoading ? null : viewModel.refresh,
+                    icon: Icon(Icons.refresh_rounded, color: primaryColor),
+                  ),
+                ],
               ],
             ),
             const SizedBox(height: 26),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(22),
-              decoration: BoxDecoration(
-                color: colorScheme.surface,
-                borderRadius: BorderRadius.circular(18),
-                border: Border.all(color: theme.dividerColor),
-              ),
-              child: Column(
-                children: [
-                  _PeriodFilters(
-                    viewModel: viewModel,
-                    primaryColor: primaryColor,
-                  ),
-                  const SizedBox(height: 20),
-                  Divider(color: theme.dividerColor, height: 1),
-                  const SizedBox(height: 20),
-                  if (viewModel.isLoading && !viewModel.hasItems)
-                    const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 70),
-                      child: CircularProgressIndicator(),
-                    )
-                  else if (viewModel.errorMessage != null)
-                    _ErrorState(
-                      message: viewModel.errorMessage!,
-                      onRetry: viewModel.retry,
-                    )
-                  else if (!viewModel.hasItems)
-                    const _EmptyState()
-                  else
-                    _CheckInsTable(items: viewModel.items),
-                  if (viewModel.hasItems) ...[
-                    const SizedBox(height: 18),
+            SegmentedButton<int>(
+              segments: const [
+                ButtonSegment<int>(
+                  value: 0,
+                  icon: Icon(Icons.how_to_reg_outlined),
+                  label: Text('Presenças'),
+                ),
+                ButtonSegment<int>(
+                  value: 1,
+                  icon: Icon(Icons.sensor_door_outlined),
+                  label: Text('Eventos de acesso'),
+                ),
+              ],
+              selected: {_selectedTab},
+              showSelectedIcon: false,
+              onSelectionChanged: (selection) {
+                final nextTab = selection.first;
+
+                if (nextTab == 1 && _selectedTab != 1) {
+                  context.read<PhysicalAccessEventsViewModel>().loadInitial();
+                }
+
+                setState(() => _selectedTab = nextTab);
+              },
+            ),
+            const SizedBox(height: 20),
+            if (_selectedTab == 0)
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(22),
+                decoration: BoxDecoration(
+                  color: colorScheme.surface,
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(color: theme.dividerColor),
+                ),
+                child: Column(
+                  children: [
+                    _PeriodFilters(
+                      viewModel: viewModel,
+                      primaryColor: primaryColor,
+                    ),
+                    const SizedBox(height: 20),
                     Divider(color: theme.dividerColor, height: 1),
-                    const SizedBox(height: 16),
-                    Row(
-                      children: [
-                        Text(
-                          '${viewModel.totalCount} presença${viewModel.totalCount == 1 ? '' : 's'} registrada${viewModel.totalCount == 1 ? '' : 's'}',
-                          style: TextStyle(
-                            color: colorScheme.onSurfaceVariant,
-                            fontSize: 12,
-                          ),
-                        ),
-                        const Spacer(),
-                        IconButton(
-                          tooltip: 'Página anterior',
-                          onPressed:
-                              viewModel.hasPreviousPage && !viewModel.isLoading
-                              ? viewModel.goToPreviousPage
-                              : null,
-                          icon: const Icon(Icons.chevron_left_rounded),
-                        ),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 8),
-                          child: Text(
-                            'Página ${viewModel.page} de ${viewModel.totalPages}',
+                    const SizedBox(height: 20),
+                    if (viewModel.isLoading && !viewModel.hasItems)
+                      const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 70),
+                        child: CircularProgressIndicator(),
+                      )
+                    else if (viewModel.errorMessage != null)
+                      _ErrorState(
+                        message: viewModel.errorMessage!,
+                        onRetry: viewModel.retry,
+                      )
+                    else if (!viewModel.hasItems)
+                      const _EmptyState()
+                    else
+                      _CheckInsTable(items: viewModel.items),
+                    if (viewModel.hasItems) ...[
+                      const SizedBox(height: 18),
+                      Divider(color: theme.dividerColor, height: 1),
+                      const SizedBox(height: 16),
+                      Row(
+                        children: [
+                          Text(
+                            '${viewModel.totalCount} presença${viewModel.totalCount == 1 ? '' : 's'} registrada${viewModel.totalCount == 1 ? '' : 's'}',
                             style: TextStyle(
-                              color: colorScheme.onSurface,
+                              color: colorScheme.onSurfaceVariant,
                               fontSize: 12,
-                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          const Spacer(),
+                          IconButton(
+                            tooltip: 'Página anterior',
+                            onPressed:
+                                viewModel.hasPreviousPage &&
+                                    !viewModel.isLoading
+                                ? viewModel.goToPreviousPage
+                                : null,
+                            icon: const Icon(Icons.chevron_left_rounded),
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 8),
+                            child: Text(
+                              'Página ${viewModel.page} de ${viewModel.totalPages}',
+                              style: TextStyle(
+                                color: colorScheme.onSurface,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                          IconButton(
+                            tooltip: 'Próxima página',
+                            onPressed:
+                                viewModel.hasNextPage && !viewModel.isLoading
+                                ? viewModel.goToNextPage
+                                : null,
+                            icon: const Icon(Icons.chevron_right_rounded),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            if (_selectedTab == 1)
+              Consumer<PhysicalAccessEventsViewModel>(
+                builder: (context, events, _) {
+                  return Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(22),
+                    decoration: BoxDecoration(
+                      color: colorScheme.surface,
+                      borderRadius: BorderRadius.circular(18),
+                      border: Border.all(color: theme.dividerColor),
+                    ),
+                    child: Column(
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                'Histórico de eventos de acesso',
+                                style: TextStyle(
+                                  color: colorScheme.onSurface,
+                                  fontSize: 17,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ),
+                            IconButton(
+                              tooltip: 'Atualizar eventos',
+                              onPressed: events.isLoading
+                                  ? null
+                                  : events.refresh,
+                              icon: Icon(
+                                Icons.refresh_rounded,
+                                color: primaryColor,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            'Tentativas de acesso não representam '
+                            'presenças confirmadas.',
+                            style: TextStyle(
+                              color: colorScheme.onSurfaceVariant,
+                              fontSize: 12,
                             ),
                           ),
                         ),
-                        IconButton(
-                          tooltip: 'Próxima página',
-                          onPressed:
-                              viewModel.hasNextPage && !viewModel.isLoading
-                              ? viewModel.goToNextPage
-                              : null,
-                          icon: const Icon(Icons.chevron_right_rounded),
+                        const SizedBox(height: 20),
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: PhysicalAccessEventsFilters(viewModel: events),
                         ),
+                        const SizedBox(height: 20),
+                        Divider(color: theme.dividerColor, height: 1),
+                        const SizedBox(height: 20),
+                        if (events.isLoading && !events.hasItems)
+                          const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 70),
+                            child: CircularProgressIndicator(),
+                          )
+                        else if (events.errorMessage != null)
+                          _ErrorState(
+                            message: events.errorMessage!,
+                            onRetry: events.retry,
+                          )
+                        else if (!events.hasItems)
+                          const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 65),
+                            child: Column(
+                              children: [
+                                Icon(Icons.sensor_door_outlined, size: 38),
+                                SizedBox(height: 12),
+                                Text('Nenhum evento de acesso encontrado.'),
+                              ],
+                            ),
+                          )
+                        else
+                          PhysicalAccessEventsTable(items: events.items),
+                        if (events.hasItems) ...[
+                          const SizedBox(height: 18),
+                          Divider(color: theme.dividerColor, height: 1),
+                          const SizedBox(height: 16),
+                          Row(
+                            children: [
+                              Text(
+                                '${events.totalCount} evento${events.totalCount == 1 ? '' : 's'} encontrado${events.totalCount == 1 ? '' : 's'}',
+                                style: TextStyle(
+                                  color: colorScheme.onSurfaceVariant,
+                                  fontSize: 12,
+                                ),
+                              ),
+                              const Spacer(),
+                              IconButton(
+                                tooltip: 'Página anterior',
+                                onPressed:
+                                    events.hasPreviousPage && !events.isLoading
+                                    ? events.goToPreviousPage
+                                    : null,
+                                icon: const Icon(Icons.chevron_left_rounded),
+                              ),
+                              Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                ),
+                                child: Text(
+                                  'Página ${events.page} de ${events.totalPages}',
+                                  style: TextStyle(
+                                    color: colorScheme.onSurface,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                              IconButton(
+                                tooltip: 'Próxima página',
+                                onPressed:
+                                    events.hasNextPage && !events.isLoading
+                                    ? events.goToNextPage
+                                    : null,
+                                icon: const Icon(Icons.chevron_right_rounded),
+                              ),
+                            ],
+                          ),
+                        ],
                       ],
                     ),
-                  ],
-                ],
+                  );
+                },
               ),
-            ),
           ],
         ),
       ),
