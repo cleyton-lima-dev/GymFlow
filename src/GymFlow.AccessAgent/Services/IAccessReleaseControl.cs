@@ -1,4 +1,6 @@
-﻿namespace GymFlow.AccessAgent.Services;
+﻿using GymFlow.AccessAgent.Api;
+
+namespace GymFlow.AccessAgent.Services;
 
 public interface IAccessReleaseControl
 {
@@ -12,9 +14,11 @@ public interface IAccessReleaseControl
     Task ApplyConfigurationAsync(
         bool releaseEnabled,
         long configurationVersion,
+        IReadOnlyList<AgentDeviceConfiguration> desiredDevices,
         CancellationToken cancellationToken);
 }
 
 public sealed record AccessReleaseConfiguration(
     bool ReleaseEnabled,
-    long? ConfigurationVersion);
+    long? ConfigurationVersion,
+    IReadOnlyList<AgentDeviceConfiguration> DesiredDevices);

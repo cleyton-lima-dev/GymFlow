@@ -44,6 +44,9 @@ namespace GymFlow.Infrastructure.Migrations
                         .HasColumnType("bigint")
                         .HasDefaultValue(1L);
 
+                    b.Property<string>("DeviceConfigurationJson")
+                        .HasColumnType("jsonb");
+
                     b.Property<string>("DeviceStatusesJson")
                         .HasColumnType("jsonb");
 

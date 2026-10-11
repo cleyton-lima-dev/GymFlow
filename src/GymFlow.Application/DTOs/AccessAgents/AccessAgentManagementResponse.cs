@@ -24,6 +24,9 @@ public class AccessAgentManagementResponse
 
     public int? PendingOfflineEvents { get; set; }
 
+    public IReadOnlyList<AccessAgentDeviceConfigurationDto> DesiredDevices { get; set; } =
+        [];
+
     public IReadOnlyList<AccessAgentDeviceStatusDto> Devices { get; set; } =
         [];
 

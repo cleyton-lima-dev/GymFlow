@@ -15,6 +15,15 @@ void main() {
       'configurationApplied': true,
       'isOnline': true,
       'pendingOfflineEvents': 2,
+      'desiredDevices': [
+        {
+          'deviceKey': 'primary',
+          'providerKey': 'toletus-litenet2',
+          'enabled': false,
+          'host': '192.168.0.50',
+          'port': 7878,
+        },
+      ],
       'devices': [
         {
           'deviceKey': 'primary',
@@ -35,6 +44,12 @@ void main() {
     expect(agent.isOnline, isTrue);
     expect(agent.pendingOfflineEvents, 2);
     expect(agent.configurationApplied, isTrue);
+
+    expect(agent.desiredDevices, hasLength(1));
+    expect(agent.desiredDevices.single.host, '192.168.0.50');
+    expect(agent.desiredDevices.single.port, 7878);
+    expect(agent.desiredDevices.single.enabled, isFalse);
+
     expect(agent.devices, hasLength(1));
     expect(agent.hasConnectedDevice, isTrue);
     expect(agent.devices.single.providerKey, 'toletus-litenet2');

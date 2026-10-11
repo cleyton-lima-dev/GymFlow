@@ -119,6 +119,7 @@ public sealed class AccessControlPlaneSyncService :
             .ApplyConfigurationAsync(
                 desiredConfiguration.ReleaseEnabled,
                 desiredConfiguration.ConfigurationVersion,
+                desiredConfiguration.DesiredDevices,
                 cancellationToken);
 
         var confirmation =
@@ -145,6 +146,7 @@ public sealed class AccessControlPlaneSyncService :
                 .ApplyConfigurationAsync(
                     confirmation.ReleaseEnabled,
                     confirmation.ConfigurationVersion,
+                    confirmation.DesiredDevices,
                     cancellationToken);
         }
 
@@ -234,9 +236,53 @@ public sealed class AccessControlPlaneSyncService :
             local.ConfigurationVersion ==
                 desired.ConfigurationVersion &&
             local.ReleaseEnabled ==
-                desired.ReleaseEnabled;
+                desired.ReleaseEnabled &&
+            DevicesMatch(
+                local.DesiredDevices,
+                desired.DesiredDevices);
     }
 
+
+    private static bool DevicesMatch(
+        IReadOnlyList<AgentDeviceConfiguration> local,
+        IReadOnlyList<AgentDeviceConfiguration> desired)
+    {
+        if (local.Count != desired.Count)
+            return false;
+
+        for (var index = 0;
+             index < local.Count;
+             index++)
+        {
+            var localDevice =
+                local[index];
+
+            var desiredDevice =
+                desired[index];
+
+            if (!string.Equals(
+                    localDevice.DeviceKey,
+                    desiredDevice.DeviceKey,
+                    StringComparison.Ordinal) ||
+                !string.Equals(
+                    localDevice.ProviderKey,
+                    desiredDevice.ProviderKey,
+                    StringComparison.Ordinal) ||
+                localDevice.Enabled !=
+                    desiredDevice.Enabled ||
+                !string.Equals(
+                    localDevice.Host,
+                    desiredDevice.Host,
+                    StringComparison.Ordinal) ||
+                localDevice.Port !=
+                    desiredDevice.Port)
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
     private static void ValidateConfigurationVersion(
         long configurationVersion)
     {

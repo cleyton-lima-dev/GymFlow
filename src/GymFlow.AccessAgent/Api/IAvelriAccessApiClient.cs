@@ -48,7 +48,15 @@ public sealed record AgentAccessDecisionResult(
     string Reason,
     DateTime ProcessedAt);
 
+public sealed record AgentDeviceConfiguration(
+    string DeviceKey,
+    string ProviderKey,
+    bool Enabled,
+    string? Host,
+    int Port);
+
 public sealed record AgentControlPlaneHeartbeatResult(
     bool ReleaseEnabled,
     long ConfigurationVersion,
+    IReadOnlyList<AgentDeviceConfiguration> DesiredDevices,
     DateTime ServerTimeUtc);

@@ -23,6 +23,33 @@ class AccessAgentsService {
         .toList();
   }
 
+  Future<AccessAgentSummary> configureToletus({
+    required String agentId,
+    required String host,
+    required int port,
+  }) async {
+    final response = await _apiClient.patch(
+      'api/access-agents/$agentId/devices',
+      body: {
+        'devices': [
+          {
+            'deviceKey': 'primary',
+            'providerKey': 'toletus-litenet2',
+            'enabled': false,
+            'host': host,
+            'port': port,
+          },
+        ],
+      },
+    );
+
+    if (response is! Map) {
+      throw const FormatException('Invalid device configuration response.');
+    }
+
+    return AccessAgentSummary.fromJson(Map<String, dynamic>.from(response));
+  }
+
   Future<AccessAgentPairingCode> createPairingCode() async {
     final response = await _apiClient.post(
       'api/access-agents/pairing-code',

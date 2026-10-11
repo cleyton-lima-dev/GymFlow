@@ -1,6 +1,7 @@
 ﻿using System.Globalization;
 using System.Net;
 using GymFlow.AccessAgent.Abstractions;
+using GymFlow.AccessAgent.Api;
 using GymFlow.AccessAgent.Services;
 using Microsoft.Extensions.Options;
 using Toletus.LiteNet2;
@@ -29,7 +30,13 @@ public sealed class ToletusLiteNet2Adapter :
     private readonly SemaphoreSlim _processingLock =
         new(1, 1);
 
+    private readonly object _statusLock =
+        new();
+
     private LiteNet2Board? _board;
+
+    private AgentDeviceConfiguration?
+        _activeConfiguration;
 
     private volatile bool _connected;
 
@@ -56,23 +63,36 @@ public sealed class ToletusLiteNet2Adapter :
     public AccessDeviceRuntimeStatus
         GetRuntimeStatus()
     {
+        AgentDeviceConfiguration?
+            configuration;
+
+        lock (_statusLock)
+        {
+            configuration =
+                _activeConfiguration;
+        }
+
         var deviceKey =
             string.IsNullOrWhiteSpace(
-                _options.DeviceKey)
+                configuration?.DeviceKey)
                 ? "primary"
-                : _options.DeviceKey.Trim();
+                : configuration.DeviceKey.Trim();
+
+        var enabled =
+            configuration?.Enabled == true;
 
         var endpoint =
+            configuration is null ||
             string.IsNullOrWhiteSpace(
-                _options.Host)
+                configuration.Host)
                 ? null
-                : $"{_options.Host.Trim()}:{_options.Port}";
+                : $"{configuration.Host.Trim()}:{configuration.Port}";
 
         return new AccessDeviceRuntimeStatus(
             deviceKey,
             Provider,
-            _options.Enabled,
-            _options.Enabled &&
+            enabled,
+            enabled &&
                 _connected,
             endpoint);
     }
@@ -87,32 +107,6 @@ public sealed class ToletusLiteNet2Adapter :
     {
         _connected = false;
 
-        if (!_options.Enabled)
-        {
-            _logger.LogInformation(
-                "Adapter Toletus LiteNet2 está desabilitado.");
-
-            await Task.Delay(
-                Timeout.Infinite,
-                cancellationToken);
-
-            return;
-        }
-
-        if (!IPAddress.TryParse(
-                _options.Host,
-                out var ipAddress))
-        {
-            _logger.LogError(
-                "O endereço IP configurado para a LiteNet2 é inválido. O Agent continuará em execução sem conexão com a catraca.");
-
-            await Task.Delay(
-                Timeout.Infinite,
-                cancellationToken);
-
-            return;
-        }
-
         _handleAttemptAsync =
             handleAttemptAsync;
 
@@ -125,105 +119,198 @@ public sealed class ToletusLiteNet2Adapter :
                     1,
                     _options.ReconnectDelaySeconds));
 
-        while (!cancellationToken
-                   .IsCancellationRequested)
+        try
         {
-            LiteNet2Board? board = null;
-
-            try
+            while (!cancellationToken
+                       .IsCancellationRequested)
             {
-                _connected = false;
+                AgentDeviceConfiguration?
+                    configuration;
 
-                board =
-                    new LiteNet2Board(
-                        ipAddress,
-                        "AVELRI",
-                        0)
-                    {
-                        ConnectPort =
-                            _options.Port
-                    };
-
-                _board = board;
-
-                board.OnIdentification +=
-                    BoardOnIdentification;
-
-                _logger.LogInformation(
-                    "Conectando à Toletus LiteNet2 em {Host}:{Port}.",
-                    _options.Host,
-                    _options.Port);
-
-                board.Connect();
-
-                if (!board.Connected)
+                try
                 {
-                    throw new InvalidOperationException(
-                        "Não foi possível estabelecer conexão com a LiteNet2.");
+                    configuration =
+                        await GetDesiredConfigurationAsync(
+                            cancellationToken);
+                }
+                catch (Exception ex)
+                    when (ex is not OperationCanceledException)
+                {
+                    _connected = false;
+
+                    _logger.LogWarning(
+                        ex,
+                        "Não foi possível ler a configuração local da catraca.");
+
+                    await Task.Delay(
+                        reconnectDelay,
+                        cancellationToken);
+
+                    continue;
                 }
 
-                _connected = true;
+                SetActiveConfiguration(
+                    configuration);
 
-                _logger.LogInformation(
-                    "Conexão estabelecida com a Toletus LiteNet2 em {Host}:{Port}.",
-                    _options.Host,
-                    _options.Port);
-
-                while (
-                    board.Connected &&
-                    !cancellationToken
-                        .IsCancellationRequested)
+                if (configuration is null ||
+                    !configuration.Enabled)
                 {
+                    _connected = false;
+
                     await Task.Delay(
                         TimeSpan.FromSeconds(1),
                         cancellationToken);
+
+                    continue;
+                }
+
+                if (!IPAddress.TryParse(
+                        configuration.Host,
+                        out var ipAddress))
+                {
+                    _connected = false;
+
+                    _logger.LogError(
+                        "O endereço IP configurado para a LiteNet2 é inválido. O Agent continuará em execução sem conexão com a catraca.");
+
+                    await Task.Delay(
+                        reconnectDelay,
+                        cancellationToken);
+
+                    continue;
+                }
+
+                var configurationChanged =
+                    false;
+
+                LiteNet2Board? board =
+                    null;
+
+                try
+                {
+                    board =
+                        new LiteNet2Board(
+                            ipAddress,
+                            "AVELRI",
+                            0)
+                        {
+                            ConnectPort =
+                                configuration.Port
+                        };
+
+                    _board =
+                        board;
+
+                    board.OnIdentification +=
+                        BoardOnIdentification;
+
+                    _logger.LogInformation(
+                        "Conectando à Toletus LiteNet2 em {Host}:{Port}.",
+                        configuration.Host,
+                        configuration.Port);
+
+                    board.Connect();
+
+                    if (!board.Connected)
+                    {
+                        throw new InvalidOperationException(
+                            "Não foi possível estabelecer conexão com a LiteNet2.");
+                    }
+
+                    _connected = true;
+
+                    _logger.LogInformation(
+                        "Conexão estabelecida com a Toletus LiteNet2 em {Host}:{Port}.",
+                        configuration.Host,
+                        configuration.Port);
+
+                    while (
+                        board.Connected &&
+                        !cancellationToken
+                            .IsCancellationRequested)
+                    {
+                        await Task.Delay(
+                            TimeSpan.FromSeconds(1),
+                            cancellationToken);
+
+                        var latestConfiguration =
+                            await GetDesiredConfigurationAsync(
+                                cancellationToken);
+
+                        SetActiveConfiguration(
+                            latestConfiguration);
+
+                        if (!ConfigurationMatches(
+                                configuration,
+                                latestConfiguration))
+                        {
+                            configurationChanged =
+                                true;
+
+                            _logger.LogInformation(
+                                "A configuração da catraca foi alterada. A conexão será recriada.");
+
+                            break;
+                        }
+                    }
+
+                    if (!board.Connected &&
+                        !cancellationToken
+                            .IsCancellationRequested)
+                    {
+                        _logger.LogWarning(
+                            "Conexão com a Toletus LiteNet2 foi perdida.");
+                    }
+                }
+                catch (OperationCanceledException)
+                    when (cancellationToken
+                        .IsCancellationRequested)
+                {
+                    break;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(
+                        ex,
+                        "Falha na conexão com a Toletus LiteNet2. Nova tentativa em {ReconnectDelaySeconds}s.",
+                        reconnectDelay.TotalSeconds);
+                }
+                finally
+                {
+                    _connected = false;
+
+                    if (board is not null)
+                    {
+                        board.OnIdentification -=
+                            BoardOnIdentification;
+
+                        if (board.Connected)
+                        {
+                            board.Close();
+                        }
+                    }
+
+                    _board = null;
                 }
 
                 if (!cancellationToken
-                         .IsCancellationRequested)
+                         .IsCancellationRequested &&
+                    !configurationChanged)
                 {
-                    _logger.LogWarning(
-                        "Conexão com a Toletus LiteNet2 foi perdida.");
+                    await Task.Delay(
+                        reconnectDelay,
+                        cancellationToken);
                 }
             }
-            catch (OperationCanceledException)
-                when (cancellationToken
-                    .IsCancellationRequested)
-            {
-                break;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(
-                    ex,
-                    "Falha na conexão com a Toletus LiteNet2. Nova tentativa em {ReconnectDelaySeconds}s.",
-                    reconnectDelay.TotalSeconds);
-            }
-            finally
-            {
-                _connected = false;
-
-                if (board is not null)
-                {
-                    board.OnIdentification -=
-                        BoardOnIdentification;
-
-                    if (board.Connected)
-                    {
-                        board.Close();
-                    }
-                }
-
-                _board = null;
-            }
-
-            if (!cancellationToken
-                     .IsCancellationRequested)
-            {
-                await Task.Delay(
-                    reconnectDelay,
-                    cancellationToken);
-            }
+        }
+        catch (OperationCanceledException)
+            when (cancellationToken
+                .IsCancellationRequested)
+        {
+        }
+        finally
+        {
+            _connected = false;
         }
     }
 
@@ -268,6 +355,61 @@ public sealed class ToletusLiteNet2Adapter :
 
         board.ReleaseEntryAndExit(
             "ACESSO LIBERADO");
+    }
+
+    private async Task<AgentDeviceConfiguration?>
+        GetDesiredConfigurationAsync(
+            CancellationToken cancellationToken)
+    {
+        var configuration =
+            await _releaseControl
+                .GetConfigurationAsync(
+                    cancellationToken);
+
+        return configuration
+            .DesiredDevices
+            .FirstOrDefault(
+                device =>
+                    string.Equals(
+                        device.ProviderKey,
+                        Provider,
+                        StringComparison.OrdinalIgnoreCase));
+    }
+
+    private void SetActiveConfiguration(
+        AgentDeviceConfiguration? configuration)
+    {
+        lock (_statusLock)
+        {
+            _activeConfiguration =
+                configuration;
+        }
+    }
+
+    private static bool ConfigurationMatches(
+        AgentDeviceConfiguration current,
+        AgentDeviceConfiguration? latest)
+    {
+        if (latest is null)
+            return false;
+
+        return
+            string.Equals(
+                current.DeviceKey,
+                latest.DeviceKey,
+                StringComparison.Ordinal) &&
+            string.Equals(
+                current.ProviderKey,
+                latest.ProviderKey,
+                StringComparison.OrdinalIgnoreCase) &&
+            current.Enabled ==
+                latest.Enabled &&
+            string.Equals(
+                current.Host,
+                latest.Host,
+                StringComparison.OrdinalIgnoreCase) &&
+            current.Port ==
+                latest.Port;
     }
 
     private void BoardOnIdentification(

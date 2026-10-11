@@ -1,4 +1,5 @@
-﻿using GymFlow.AccessAgent.Offline;
+﻿using GymFlow.AccessAgent.Api;
+using GymFlow.AccessAgent.Offline;
 using GymFlow.AccessAgent.Services;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Options;
@@ -56,6 +57,14 @@ public class SqliteAccessReleaseControlTests
                 .ApplyConfigurationAsync(
                     true,
                     3,
+                    [
+                        new AgentDeviceConfiguration(
+                            "primary",
+                            "toletus-litenet2",
+                            false,
+                            "192.168.0.50",
+                            7878)
+                    ],
                     CancellationToken.None);
 
             var secondControl =
@@ -74,6 +83,22 @@ public class SqliteAccessReleaseControlTests
                 3,
                 state.ConfigurationVersion);
 
+            var device =
+                Assert.Single(
+                    state.DesiredDevices);
+
+            Assert.Equal(
+                "primary",
+                device.DeviceKey);
+
+            Assert.Equal(
+                "192.168.0.50",
+                device.Host);
+
+            Assert.Equal(
+                7878,
+                device.Port);
+
             Assert.True(
                 await secondControl
                     .IsReleaseEnabledAsync(
@@ -83,6 +108,7 @@ public class SqliteAccessReleaseControlTests
                 .ApplyConfigurationAsync(
                     false,
                     4,
+                    [],
                     CancellationToken.None);
 
             var thirdControl =
@@ -100,6 +126,9 @@ public class SqliteAccessReleaseControlTests
             Assert.Equal(
                 4,
                 updatedState.ConfigurationVersion);
+
+            Assert.Empty(
+                updatedState.DesiredDevices);
 
             Assert.False(
                 await thirdControl

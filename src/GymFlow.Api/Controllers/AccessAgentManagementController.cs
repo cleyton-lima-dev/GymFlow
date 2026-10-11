@@ -69,6 +69,41 @@ public class AccessAgentManagementController :
         }
     }
 
+
+    [HttpPatch("{agentId:guid}/devices")]
+    public async Task<IActionResult> SetDevices(
+        Guid agentId,
+        UpdateAccessAgentDevicesRequest request)
+    {
+        if (!TryGetGymId(out var gymId) ||
+            !TryGetUserId(out var userId))
+        {
+            return Unauthorized();
+        }
+
+        try
+        {
+            var result =
+                await _controlService
+                    .SetDevicesAsync(
+                        gymId,
+                        userId,
+                        agentId,
+                        request.Devices);
+
+            if (result is null)
+                return NotFound();
+
+            return Ok(result);
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new
+            {
+                message = ex.Message
+            });
+        }
+    }
     private bool TryGetGymId(
         out Guid gymId)
     {

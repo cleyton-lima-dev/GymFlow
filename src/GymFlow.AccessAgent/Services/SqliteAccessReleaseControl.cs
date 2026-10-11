@@ -1,4 +1,6 @@
 ﻿using System.Globalization;
+using System.Text.Json;
+using GymFlow.AccessAgent.Api;
 using GymFlow.AccessAgent.Offline;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Options;
@@ -13,6 +15,9 @@ public sealed class SqliteAccessReleaseControl :
 
     private const string ConfigurationVersionKey =
         "PhysicalAccess.ConfigurationVersion";
+
+    private const string DesiredDevicesKey =
+        "PhysicalAccess.DesiredDevices";
 
     private readonly AccessOfflineStoreOptions _options;
 
@@ -48,7 +53,8 @@ public sealed class SqliteAccessReleaseControl :
             WHERE "Key" IN
             (
                 $releaseEnabledKey,
-                $configurationVersionKey
+                $configurationVersionKey,
+                $desiredDevicesKey
             );
             """;
 
@@ -60,8 +66,15 @@ public sealed class SqliteAccessReleaseControl :
             "$configurationVersionKey",
             ConfigurationVersionKey);
 
+        command.Parameters.AddWithValue(
+            "$desiredDevicesKey",
+            DesiredDevicesKey);
+
         var releaseEnabled = false;
         long? configurationVersion = null;
+
+        IReadOnlyList<AgentDeviceConfiguration>
+            desiredDevices = [];
 
         await using var reader =
             await command.ExecuteReaderAsync(
@@ -101,11 +114,30 @@ public sealed class SqliteAccessReleaseControl :
                 configurationVersion =
                     parsedVersion;
             }
+            else if (string.Equals(
+                         key,
+                         DesiredDevicesKey,
+                         StringComparison.Ordinal))
+            {
+                try
+                {
+                    desiredDevices =
+                        JsonSerializer.Deserialize<
+                            List<AgentDeviceConfiguration>>(
+                            value) ??
+                        [];
+                }
+                catch (JsonException)
+                {
+                    desiredDevices = [];
+                }
+            }
         }
 
         return new AccessReleaseConfiguration(
             releaseEnabled,
-            configurationVersion);
+            configurationVersion,
+            desiredDevices);
     }
 
     public async Task<bool> IsReleaseEnabledAsync(
@@ -123,6 +155,7 @@ public sealed class SqliteAccessReleaseControl :
     public async Task ApplyConfigurationAsync(
         bool releaseEnabled,
         long configurationVersion,
+        IReadOnlyList<AgentDeviceConfiguration> desiredDevices,
         CancellationToken cancellationToken)
     {
         if (configurationVersion < 1)
@@ -162,6 +195,15 @@ public sealed class SqliteAccessReleaseControl :
             ConfigurationVersionKey,
             configurationVersion.ToString(
                 CultureInfo.InvariantCulture),
+            updatedAt,
+            cancellationToken);
+
+        await UpsertSettingAsync(
+            connection,
+            transaction,
+            DesiredDevicesKey,
+            JsonSerializer.Serialize(
+                desiredDevices ?? []),
             updatedAt,
             cancellationToken);
 

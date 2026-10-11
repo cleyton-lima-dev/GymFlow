@@ -6,5 +6,7 @@ public class AccessAgentHeartbeatResponse
 
     public long ConfigurationVersion { get; set; }
 
+    public List<AccessAgentDeviceConfigurationDto> DesiredDevices { get; set; } = [];
+
     public DateTime ServerTimeUtc { get; set; }
 }

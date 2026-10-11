@@ -64,7 +64,8 @@ public class AccessControlPlaneSyncServiceTests
             .Returns(
                 new AccessReleaseConfiguration(
                     false,
-                    1));
+                    1,
+                    []));
 
         dependencies.ApiClient
             .HeartbeatAsync(
@@ -83,6 +84,7 @@ public class AccessControlPlaneSyncServiceTests
                 new AgentControlPlaneHeartbeatResult(
                     false,
                     1,
+                    [],
                     DateTime.UtcNow));
 
         var result =
@@ -98,6 +100,7 @@ public class AccessControlPlaneSyncServiceTests
             .ApplyConfigurationAsync(
                 Arg.Any<bool>(),
                 Arg.Any<long>(),
+                Arg.Any<IReadOnlyList<AgentDeviceConfiguration>>(),
                 Arg.Any<CancellationToken>());
     }
 
@@ -113,7 +116,8 @@ public class AccessControlPlaneSyncServiceTests
             .Returns(
                 new AccessReleaseConfiguration(
                     false,
-                    1));
+                    1,
+                    []));
 
         dependencies.ApiClient
             .HeartbeatAsync(
@@ -132,6 +136,7 @@ public class AccessControlPlaneSyncServiceTests
                 new AgentControlPlaneHeartbeatResult(
                     true,
                     2,
+                    [],
                     DateTime.UtcNow));
 
         dependencies.ApiClient
@@ -151,6 +156,7 @@ public class AccessControlPlaneSyncServiceTests
                 new AgentControlPlaneHeartbeatResult(
                     true,
                     2,
+                    [],
                     DateTime.UtcNow));
 
         var result =
@@ -166,6 +172,7 @@ public class AccessControlPlaneSyncServiceTests
             .ApplyConfigurationAsync(
                 true,
                 2,
+                Arg.Any<IReadOnlyList<AgentDeviceConfiguration>>(),
                 Arg.Any<CancellationToken>());
     }
 
@@ -181,7 +188,8 @@ public class AccessControlPlaneSyncServiceTests
             .Returns(
                 new AccessReleaseConfiguration(
                     false,
-                    1));
+                    1,
+                    []));
 
         dependencies.ApiClient
             .HeartbeatAsync(
@@ -200,6 +208,7 @@ public class AccessControlPlaneSyncServiceTests
                 new AgentControlPlaneHeartbeatResult(
                     true,
                     2,
+                    [],
                     DateTime.UtcNow));
 
         dependencies.ApiClient
@@ -219,6 +228,7 @@ public class AccessControlPlaneSyncServiceTests
                 new AgentControlPlaneHeartbeatResult(
                     false,
                     3,
+                    [],
                     DateTime.UtcNow));
 
         var result =
@@ -234,6 +244,7 @@ public class AccessControlPlaneSyncServiceTests
             .ApplyConfigurationAsync(
                 true,
                 2,
+                Arg.Any<IReadOnlyList<AgentDeviceConfiguration>>(),
                 Arg.Any<CancellationToken>());
 
         await dependencies.ReleaseControl
@@ -241,6 +252,7 @@ public class AccessControlPlaneSyncServiceTests
             .ApplyConfigurationAsync(
                 false,
                 3,
+                Arg.Any<IReadOnlyList<AgentDeviceConfiguration>>(),
                 Arg.Any<CancellationToken>());
     }
 
@@ -281,7 +293,8 @@ public class AccessControlPlaneSyncServiceTests
             .Returns(
                 new AccessReleaseConfiguration(
                     false,
-                    1));
+                    1,
+                    []));
 
         offlineStore
             .CountPendingEventsAsync(
@@ -335,6 +348,7 @@ public class AccessControlPlaneSyncServiceTests
                 new AgentControlPlaneHeartbeatResult(
                     false,
                     1,
+                    [],
                     DateTime.UtcNow));
 
         var service =
@@ -370,7 +384,8 @@ public class AccessControlPlaneSyncServiceTests
             .Returns(
                 new AccessReleaseConfiguration(
                     false,
-                    1));
+                    1,
+                    []));
 
         dependencies.OfflineStore
             .CountPendingEventsAsync(
@@ -405,6 +420,7 @@ public class AccessControlPlaneSyncServiceTests
                 new AgentControlPlaneHeartbeatResult(
                     false,
                     1,
+                    [],
                     DateTime.UtcNow));
 
         var result =

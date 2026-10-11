@@ -3,6 +3,7 @@ import 'package:avelri_gestao/core/network/api_client.dart';
 import 'package:avelri_gestao/features/access_control/data/access_agents_service.dart';
 import 'package:avelri_gestao/features/access_control/models/access_agent_summary.dart';
 import 'package:avelri_gestao/features/access_control/presentation/access_control_view_model.dart';
+import 'package:avelri_gestao/features/access_control/presentation/configure_access_device_button.dart';
 import 'package:avelri_gestao/features/access_control/presentation/pair_access_agent_button.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -197,15 +198,36 @@ class _AgentCard extends StatelessWidget {
           const SizedBox(height: 22),
           Divider(color: theme.dividerColor),
           const SizedBox(height: 14),
-          Text(
-            'Catracas e dispositivos',
-            style: TextStyle(
-              color: colorScheme.onSurface,
-              fontSize: 15,
-              fontWeight: FontWeight.w800,
-            ),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Catracas e dispositivos',
+                  style: TextStyle(
+                    color: colorScheme.onSurface,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+              ConfigureAccessDeviceButton(
+                agent: agent,
+                primaryColor: primaryColor,
+                service: AccessAgentsService(context.read<ApiClient>()),
+                onSaved: context.read<AccessControlViewModel>().refresh,
+              ),
+            ],
           ),
           const SizedBox(height: 12),
+          if (agent.desiredDevices.isNotEmpty) ...[
+            ...agent.desiredDevices.map(
+              (device) => Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: _DesiredDeviceTile(device: device),
+              ),
+            ),
+            const SizedBox(height: 4),
+          ],
           if (agent.devices.isEmpty)
             Text(
               'Nenhum dispositivo foi reportado pelo Agent.',
@@ -227,6 +249,66 @@ class _AgentCard extends StatelessWidget {
               occurredAt: agent.lastFailureAt,
             ),
           ],
+        ],
+      ),
+    );
+  }
+}
+
+class _DesiredDeviceTile extends StatelessWidget {
+  const _DesiredDeviceTile({required this.device});
+
+  final AccessDeviceConfiguration device;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: theme.dividerColor),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            Icons.settings_ethernet_rounded,
+            color: colorScheme.onSurfaceVariant,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '${_providerLabel(device.providerKey)} — configuração desejada',
+                  style: TextStyle(
+                    color: colorScheme.onSurface,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  device.host == null
+                      ? 'Endereço não informado'
+                      : '${device.host}:${device.port}',
+                  style: TextStyle(
+                    color: colorScheme.onSurfaceVariant,
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          _StatusBadge(
+            label: device.enabled
+                ? 'Comunicação habilitada'
+                : 'Comunicação desabilitada',
+            healthy: false,
+          ),
         ],
       ),
     );

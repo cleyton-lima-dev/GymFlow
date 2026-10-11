@@ -1,4 +1,5 @@
-﻿using System.Text.Json;
+﻿using System.Net;
+using System.Text.Json;
 using GymFlow.Application.DTOs.AccessAgents;
 using GymFlow.Application.Interfaces.Repositories;
 using GymFlow.Domain.Entities;
@@ -13,6 +14,11 @@ public class AccessAgentControlService
     private const int MaxProviderKeyLength = 100;
     private const int MaxEndpointLength = 200;
     private const int MaxFailureCodeLength = 100;
+    private const int MaxConfiguredDevices = 1;
+    private const int MaxDeviceHostLength = 200;
+
+    private const string ToletusLiteNet2Provider =
+        "toletus-litenet2";
 
     private static readonly TimeSpan AgentOnlineThreshold =
         TimeSpan.FromMinutes(3);
@@ -127,6 +133,115 @@ public class AccessAgentControlService
         return ToResponse(agent);
     }
 
+
+    public async Task<AccessAgentManagementResponse?>
+        SetDevicesAsync(
+            Guid gymId,
+            Guid actorUserId,
+            Guid agentId,
+            IReadOnlyCollection<AccessAgentDeviceConfigurationDto>? devices)
+    {
+        if (gymId == Guid.Empty ||
+            actorUserId == Guid.Empty ||
+            agentId == Guid.Empty)
+        {
+            return null;
+        }
+
+        var agent =
+            await _accessAgentRepository
+                .GetByIdAsync(
+                    agentId,
+                    gymId);
+
+        if (agent is null)
+            return null;
+
+        var normalizedDevices =
+            NormalizeDesiredDevices(
+                devices ?? []);
+
+        var previousDevices =
+            DeserializeDesiredDevices(
+                agent.DeviceConfigurationJson);
+
+        var previousJson =
+            JsonSerializer.Serialize(
+                previousDevices);
+
+        var newJson =
+            JsonSerializer.Serialize(
+                normalizedDevices);
+
+        if (string.Equals(
+                previousJson,
+                newJson,
+                StringComparison.Ordinal))
+        {
+            return ToResponse(agent);
+        }
+
+        var previousValues =
+            JsonSerializer.Serialize(
+                new
+                {
+                    agent.ReleaseEnabled,
+                    agent.ConfigurationVersion,
+                    Devices = previousDevices
+                });
+
+        var now =
+            DateTime.UtcNow;
+
+        agent.DeviceConfigurationJson =
+            newJson;
+
+        agent.ReleaseEnabled = false;
+
+        agent.ConfigurationVersion =
+            checked(
+                agent.ConfigurationVersion + 1);
+
+        agent.UpdatedAt =
+            now;
+
+        var newValues =
+            JsonSerializer.Serialize(
+                new
+                {
+                    agent.ReleaseEnabled,
+                    agent.ConfigurationVersion,
+                    Devices = normalizedDevices
+                });
+
+        var auditLog =
+            new AccessAgentAuditLog
+            {
+                Id = Guid.NewGuid(),
+                GymId = gymId,
+                ActorUserId = actorUserId,
+                AccessAgentId = agent.Id,
+                Action =
+                    AccessAgentAuditAction
+                        .ConfigurationChanged,
+                PreviousValues =
+                    previousValues,
+                NewValues =
+                    newValues,
+                OccurredAt =
+                    now
+            };
+
+        await _auditRepository
+            .StageAsync(
+                auditLog);
+
+        await _accessAgentRepository
+            .UpdateAsync(
+                agent);
+
+        return ToResponse(agent);
+    }
     public async Task<AccessAgentHeartbeatResponse?>
         HeartbeatAsync(
             Guid gymId,
@@ -249,6 +364,10 @@ public class AccessAgentControlService
             ReleaseEnabled = agent.ReleaseEnabled,
             ConfigurationVersion =
                 agent.ConfigurationVersion,
+            DesiredDevices =
+                DeserializeDesiredDevices(
+                    agent.DeviceConfigurationJson)
+                    .ToList(),
             ServerTimeUtc = now
         };
     }
@@ -291,6 +410,131 @@ public class AccessAgentControlService
         }
     }
 
+
+    private static List<AccessAgentDeviceConfigurationDto>
+        NormalizeDesiredDevices(
+            IReadOnlyCollection<AccessAgentDeviceConfigurationDto> devices)
+    {
+        if (devices.Count > MaxConfiguredDevices)
+        {
+            throw new ArgumentException(
+                $"Nesta versão, o Agent suporta no máximo {MaxConfiguredDevices} catraca configurada.");
+        }
+
+        var result =
+            new List<AccessAgentDeviceConfigurationDto>();
+
+        var keys =
+            new HashSet<string>(
+                StringComparer.OrdinalIgnoreCase);
+
+        foreach (var device in devices)
+        {
+            var deviceKey =
+                device.DeviceKey?.Trim() ??
+                string.Empty;
+
+            var providerKey =
+                device.ProviderKey?.Trim() ??
+                string.Empty;
+
+            var host =
+                string.IsNullOrWhiteSpace(
+                    device.Host)
+                    ? null
+                    : device.Host.Trim();
+
+            if (string.IsNullOrWhiteSpace(deviceKey) ||
+                deviceKey.Length >
+                    MaxDeviceKeyLength)
+            {
+                throw new ArgumentException(
+                    "O identificador da catraca é inválido.");
+            }
+
+            if (!keys.Add(deviceKey))
+            {
+                throw new ArgumentException(
+                    "Existem catracas com identificadores duplicados.");
+            }
+
+            if (!string.Equals(
+                    providerKey,
+                    ToletusLiteNet2Provider,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                throw new ArgumentException(
+                    "O modelo de catraca informado ainda não é suportado.");
+            }
+
+            if (host is not null &&
+                host.Length >
+                    MaxDeviceHostLength)
+            {
+                throw new ArgumentException(
+                    "O endereço da catraca excede o tamanho permitido.");
+            }
+
+            if (device.Enabled &&
+                host is null)
+            {
+                throw new ArgumentException(
+                    "Informe o endereço IP da catraca antes de habilitá-la.");
+            }
+
+            if (host is not null &&
+                !IPAddress.TryParse(
+                    host,
+                    out _))
+            {
+                throw new ArgumentException(
+                    "O endereço IP da catraca é inválido.");
+            }
+
+            if (device.Port is < 1 or > 65535)
+            {
+                throw new ArgumentException(
+                    "A porta da catraca é inválida.");
+            }
+
+            result.Add(
+                new AccessAgentDeviceConfigurationDto
+                {
+                    DeviceKey =
+                        deviceKey,
+                    ProviderKey =
+                        ToletusLiteNet2Provider,
+                    Enabled =
+                        device.Enabled,
+                    Host =
+                        host,
+                    Port =
+                        device.Port
+                });
+        }
+
+        return result;
+    }
+
+    private static IReadOnlyList<AccessAgentDeviceConfigurationDto>
+        DeserializeDesiredDevices(
+            string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json))
+            return [];
+
+        try
+        {
+            return JsonSerializer.Deserialize<
+                       List<AccessAgentDeviceConfigurationDto>>(
+                       json) ??
+                   [];
+        }
+        catch (JsonException)
+        {
+            return [];
+        }
+    }
     private static void ValidateDevices(
         IReadOnlyCollection<AccessAgentDeviceStatusDto> devices)
     {
@@ -390,6 +634,9 @@ public class AccessAgentControlService
                         AgentOnlineThreshold,
             PendingOfflineEvents =
                 agent.PendingOfflineEvents,
+            DesiredDevices =
+                DeserializeDesiredDevices(
+                    agent.DeviceConfigurationJson),
             Devices =
                 DeserializeDeviceStatuses(
                     agent.DeviceStatusesJson),

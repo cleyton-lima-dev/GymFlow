@@ -11,6 +11,7 @@ class AccessAgentSummary {
     required this.configurationApplied,
     required this.isOnline,
     required this.pendingOfflineEvents,
+    required this.desiredDevices,
     required this.devices,
     required this.lastOfflineSyncAt,
     required this.lastFailureAt,
@@ -31,6 +32,7 @@ class AccessAgentSummary {
   final bool configurationApplied;
   final bool isOnline;
   final int? pendingOfflineEvents;
+  final List<AccessDeviceConfiguration> desiredDevices;
   final List<AccessDeviceStatus> devices;
   final DateTime? lastOfflineSyncAt;
   final DateTime? lastFailureAt;
@@ -43,6 +45,7 @@ class AccessAgentSummary {
       devices.any((device) => device.enabled && device.connected);
 
   factory AccessAgentSummary.fromJson(Map<String, dynamic> json) {
+    final rawDesiredDevices = json['desiredDevices'];
     final rawDevices = json['devices'];
 
     return AccessAgentSummary(
@@ -58,6 +61,15 @@ class AccessAgentSummary {
       configurationApplied: json['configurationApplied'] as bool,
       isOnline: json['isOnline'] as bool,
       pendingOfflineEvents: (json['pendingOfflineEvents'] as num?)?.toInt(),
+      desiredDevices: rawDesiredDevices is List
+          ? rawDesiredDevices
+                .map(
+                  (item) => AccessDeviceConfiguration.fromJson(
+                    Map<String, dynamic>.from(item as Map),
+                  ),
+                )
+                .toList()
+          : const [],
       devices: rawDevices is List
           ? rawDevices
                 .map(
@@ -107,6 +119,32 @@ class AccessDeviceStatus {
       enabled: json['enabled'] as bool,
       connected: json['connected'] as bool,
       endpoint: json['endpoint'] as String?,
+    );
+  }
+}
+
+class AccessDeviceConfiguration {
+  const AccessDeviceConfiguration({
+    required this.deviceKey,
+    required this.providerKey,
+    required this.enabled,
+    required this.host,
+    required this.port,
+  });
+
+  final String deviceKey;
+  final String providerKey;
+  final bool enabled;
+  final String? host;
+  final int port;
+
+  factory AccessDeviceConfiguration.fromJson(Map<String, dynamic> json) {
+    return AccessDeviceConfiguration(
+      deviceKey: json['deviceKey'] as String,
+      providerKey: json['providerKey'] as String,
+      enabled: json['enabled'] as bool,
+      host: json['host'] as String?,
+      port: (json['port'] as num).toInt(),
     );
   }
 }

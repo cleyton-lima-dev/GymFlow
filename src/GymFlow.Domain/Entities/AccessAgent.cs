@@ -24,8 +24,9 @@ public class AccessAgent
 
     public int? PendingOfflineEvents { get; set; }
 
-    public string? DeviceStatusesJson { get; set; }
+    public string? DeviceConfigurationJson { get; set; }
 
+    public string? DeviceStatusesJson { get; set; }
     public DateTime? LastOfflineSyncAt { get; set; }
 
     public DateTime? LastFailureAt { get; set; }
