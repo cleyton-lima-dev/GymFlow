@@ -1,6 +1,7 @@
 ﻿using System.Security.Cryptography;
 using System.Text;
 using GymFlow.Application.Interfaces.Security;
+using Microsoft.Extensions.Configuration;
 
 namespace GymFlow.Infrastructure.Security;
 
@@ -11,6 +12,35 @@ public class AccessAgentPairingCodeService :
         "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
 
     private const int CodeLength = 8;
+
+    private const string KeyDerivationContext =
+        "Avelri.AccessAgent.PairingCode.v1";
+
+    private readonly byte[] _hmacKey;
+
+    public AccessAgentPairingCodeService(
+        IConfiguration configuration)
+    {
+        var jwtKey =
+            configuration["Jwt:Key"];
+
+        if (string.IsNullOrWhiteSpace(
+                jwtKey))
+        {
+            throw new InvalidOperationException(
+                "Jwt:Key não configurada para proteção dos códigos de pareamento.");
+        }
+
+        using var keyDerivation =
+            new HMACSHA256(
+                Encoding.UTF8.GetBytes(
+                    jwtKey));
+
+        _hmacKey =
+            keyDerivation.ComputeHash(
+                Encoding.UTF8.GetBytes(
+                    KeyDerivationContext));
+    }
 
     public string GenerateCode()
     {
@@ -40,6 +70,9 @@ public class AccessAgentPairingCodeService :
     public string Hash(
         string code)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(
+            code);
+
         var normalized =
             Normalize(code);
 
@@ -47,8 +80,13 @@ public class AccessAgentPairingCodeService :
             Encoding.UTF8.GetBytes(
                 normalized);
 
+        using var hmac =
+            new HMACSHA256(
+                _hmacKey);
+
         var hash =
-            SHA256.HashData(bytes);
+            hmac.ComputeHash(
+                bytes);
 
         return Convert.ToBase64String(
             hash);
