@@ -1,4 +1,4 @@
-﻿namespace GymFlow.AccessAgent.Abstractions;
+namespace GymFlow.AccessAgent.Abstractions;
 
 public interface IAccessDeviceAdapter
 {
@@ -25,7 +25,9 @@ public sealed record AccessDeviceRuntimeStatus(
     string ProviderKey,
     bool Enabled,
     bool Connected,
-    string? Endpoint);
+    string? Endpoint,
+    DateTime? LastCredentialReadAt = null,
+    AccessCredentialType? LastCredentialType = null);
 
 public sealed record DeviceAccessAttempt(
     Guid RequestId,

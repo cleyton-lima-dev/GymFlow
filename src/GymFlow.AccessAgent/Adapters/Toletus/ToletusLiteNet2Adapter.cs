@@ -1,4 +1,4 @@
-﻿using System.Globalization;
+using System.Globalization;
 using System.Net;
 using GymFlow.AccessAgent.Abstractions;
 using GymFlow.AccessAgent.Api;
@@ -38,6 +38,11 @@ public sealed class ToletusLiteNet2Adapter :
     private AgentDeviceConfiguration?
         _activeConfiguration;
 
+    private DateTime? _lastCredentialReadAt;
+
+    private AccessCredentialType?
+        _lastCredentialType;
+
     private volatile bool _connected;
 
     private Func<
@@ -66,10 +71,22 @@ public sealed class ToletusLiteNet2Adapter :
         AgentDeviceConfiguration?
             configuration;
 
+        DateTime?
+            lastCredentialReadAt;
+
+        AccessCredentialType?
+            lastCredentialType;
+
         lock (_statusLock)
         {
             configuration =
                 _activeConfiguration;
+
+            lastCredentialReadAt =
+                _lastCredentialReadAt;
+
+            lastCredentialType =
+                _lastCredentialType;
         }
 
         var deviceKey =
@@ -94,7 +111,9 @@ public sealed class ToletusLiteNet2Adapter :
             enabled,
             enabled &&
                 _connected,
-            endpoint);
+            endpoint,
+            lastCredentialReadAt,
+            lastCredentialType);
     }
 
     public async Task StartAsync(
@@ -427,9 +446,26 @@ public sealed class ToletusLiteNet2Adapter :
             return;
         }
 
+        RecordCredentialRead(
+            attempt);
+
         _ = ProcessAttemptAsync(
             attempt,
             _stoppingToken);
+    }
+
+    private void RecordCredentialRead(
+        DeviceAccessAttempt attempt)
+    {
+        lock (_statusLock)
+        {
+            _lastCredentialReadAt =
+                attempt.OccurredAt
+                    .ToUniversalTime();
+
+            _lastCredentialType =
+                attempt.CredentialType;
+        }
     }
 
     private async Task ProcessAttemptAsync(

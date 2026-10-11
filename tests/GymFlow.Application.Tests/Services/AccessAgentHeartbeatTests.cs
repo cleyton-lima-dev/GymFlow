@@ -1,4 +1,4 @@
-﻿using GymFlow.Application.DTOs.AccessAgents;
+using GymFlow.Application.DTOs.AccessAgents;
 using GymFlow.Application.Interfaces.Repositories;
 using GymFlow.Application.Services;
 using GymFlow.Domain.Entities;
@@ -42,6 +42,9 @@ public class AccessAgentHeartbeatTests
                 agent.GymId)
             .Returns(agent);
 
+        var lastCredentialReadAt =
+            DateTime.UtcNow.AddSeconds(-30);
+
         var devices =
             new[]
             {
@@ -53,7 +56,10 @@ public class AccessAgentHeartbeatTests
                     Enabled = true,
                     Connected = true,
                     Endpoint =
-                        "192.168.0.50:7878"
+                        "192.168.0.50:7878",
+                    LastCredentialReadAt =
+                        lastCredentialReadAt,
+                    LastCredentialType = 1
                 }
             };
 
@@ -88,6 +94,14 @@ public class AccessAgentHeartbeatTests
 
         Assert.Contains(
             "toletus-litenet2",
+            agent.DeviceStatusesJson);
+
+        Assert.Contains(
+            "LastCredentialReadAt",
+            agent.DeviceStatusesJson);
+
+        Assert.Contains(
+            "LastCredentialType",
             agent.DeviceStatusesJson);
 
         Assert.Equal(
@@ -266,6 +280,77 @@ public class AccessAgentHeartbeatTests
                 Arg.Any<AccessAgent>());
     }
 
+
+    [Fact]
+    public async Task HeartbeatAsync_WithIncompleteCredentialTelemetry_ShouldReject()
+    {
+        var agent =
+            CreateAgent();
+
+        var devices =
+            new[]
+            {
+                new AccessAgentDeviceStatusDto
+                {
+                    DeviceKey = "primary",
+                    ProviderKey =
+                        "toletus-litenet2",
+                    Enabled = true,
+                    Connected = true,
+                    LastCredentialReadAt =
+                        DateTime.UtcNow
+                }
+            };
+
+        await Assert.ThrowsAsync<ArgumentException>(
+            () => _service.HeartbeatAsync(
+                agent.GymId,
+                agent.Id,
+                1,
+                0,
+                devices));
+
+        await _agentRepository
+            .DidNotReceive()
+            .UpdateAsync(
+                Arg.Any<AccessAgent>());
+    }
+
+    [Fact]
+    public async Task HeartbeatAsync_WithInvalidCredentialType_ShouldReject()
+    {
+        var agent =
+            CreateAgent();
+
+        var devices =
+            new[]
+            {
+                new AccessAgentDeviceStatusDto
+                {
+                    DeviceKey = "primary",
+                    ProviderKey =
+                        "toletus-litenet2",
+                    Enabled = true,
+                    Connected = true,
+                    LastCredentialReadAt =
+                        DateTime.UtcNow,
+                    LastCredentialType = 777
+                }
+            };
+
+        await Assert.ThrowsAsync<ArgumentException>(
+            () => _service.HeartbeatAsync(
+                agent.GymId,
+                agent.Id,
+                1,
+                0,
+                devices));
+
+        await _agentRepository
+            .DidNotReceive()
+            .UpdateAsync(
+                Arg.Any<AccessAgent>());
+    }
     private static AccessAgent CreateAgent()
     {
         return new AccessAgent

@@ -1,4 +1,4 @@
-﻿namespace GymFlow.Application.DTOs.AccessAgents;
+namespace GymFlow.Application.DTOs.AccessAgents;
 
 public class AccessAgentDeviceStatusDto
 {
@@ -11,4 +11,8 @@ public class AccessAgentDeviceStatusDto
     public bool Connected { get; set; }
 
     public string? Endpoint { get; set; }
+
+    public DateTime? LastCredentialReadAt { get; set; }
+
+    public int? LastCredentialType { get; set; }
 }

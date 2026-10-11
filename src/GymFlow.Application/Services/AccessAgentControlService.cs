@@ -1,4 +1,4 @@
-﻿using System.Net;
+using System.Net;
 using System.Text.Json;
 using GymFlow.Application.DTOs.AccessAgents;
 using GymFlow.Application.Interfaces.Repositories;
@@ -591,6 +591,40 @@ public class AccessAgentControlService
             {
                 throw new ArgumentException(
                     "Um dispositivo desabilitado não pode ser reportado como conectado.");
+            }
+
+            var hasCredentialReadAt =
+                device.LastCredentialReadAt.HasValue;
+
+            var hasCredentialType =
+                device.LastCredentialType.HasValue;
+
+            if (hasCredentialReadAt !=
+                hasCredentialType)
+            {
+                throw new ArgumentException(
+                    "A telemetria de leitura da catraca deve informar data e tipo da credencial em conjunto.");
+            }
+
+            if (device.LastCredentialType.HasValue &&
+                device.LastCredentialType.Value is
+                    not 1 and
+                    not 2 and
+                    not 3 and
+                    not 4 and
+                    not 5 and
+                    not 99)
+            {
+                throw new ArgumentException(
+                    "O tipo da última credencial lida é inválido.");
+            }
+
+            if (device.LastCredentialReadAt.HasValue)
+            {
+                device.LastCredentialReadAt =
+                    device.LastCredentialReadAt
+                        .Value
+                        .ToUniversalTime();
             }
 
             device.DeviceKey =
