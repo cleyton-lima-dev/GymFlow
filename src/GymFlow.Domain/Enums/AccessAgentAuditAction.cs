@@ -2,5 +2,7 @@
 
 public enum AccessAgentAuditAction
 {
-    ConfigurationChanged = 1
+    ConfigurationChanged = 1,
+    Paired = 2,
+    Repaired = 3
 }

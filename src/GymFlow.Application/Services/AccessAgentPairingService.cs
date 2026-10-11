@@ -1,8 +1,10 @@
-﻿using GymFlow.Application.DTOs.AccessAgents;
+﻿using System.Text.Json;
+using GymFlow.Application.DTOs.AccessAgents;
 using GymFlow.Application.Interfaces.Repositories;
 using GymFlow.Application.Interfaces.Security;
 using GymFlow.Application.Validation;
 using GymFlow.Domain.Entities;
+using GymFlow.Domain.Enums;
 
 namespace GymFlow.Application.Services;
 
@@ -17,6 +19,9 @@ public class AccessAgentPairingService
     private readonly IAccessAgentPairingCodeRepository
         _pairingCodeRepository;
 
+    private readonly IAccessAgentAuditRepository
+        _auditRepository;
+
     private readonly IAccessAgentPairingCodeService
         _pairingCodeService;
 
@@ -26,6 +31,7 @@ public class AccessAgentPairingService
     public AccessAgentPairingService(
         IAccessAgentRepository accessAgentRepository,
         IAccessAgentPairingCodeRepository pairingCodeRepository,
+        IAccessAgentAuditRepository auditRepository,
         IAccessAgentPairingCodeService pairingCodeService,
         IAccessAgentSecretService secretService)
     {
@@ -34,6 +40,9 @@ public class AccessAgentPairingService
 
         _pairingCodeRepository =
             pairingCodeRepository;
+
+        _auditRepository =
+            auditRepository;
 
         _pairingCodeService =
             pairingCodeService;
@@ -162,12 +171,54 @@ public class AccessAgentPairingService
                 CreatedAt = now
             };
 
+            var auditLog =
+                new AccessAgentAuditLog
+                {
+                    Id = Guid.NewGuid(),
+                    GymId = agent.GymId,
+                    ActorUserId =
+                        pairingCode.CreatedByUserId,
+                    AccessAgentId =
+                        agent.Id,
+                    Action =
+                        AccessAgentAuditAction.Paired,
+                    PreviousValues =
+                        "{}",
+                    NewValues =
+                        JsonSerializer.Serialize(
+                            new
+                            {
+                                agent.MachineName,
+                                agent.CredentialVersion,
+                                agent.IsActive,
+                                agent.ReleaseEnabled,
+                                agent.ConfigurationVersion
+                            }),
+                    OccurredAt =
+                        now
+                };
+
+            await _auditRepository
+                .StageAsync(
+                    auditLog);
+
             await _accessAgentRepository
                 .AddAsync(agent);
         }
         else
         {
             agent = existingAgent;
+
+            var previousValues =
+                JsonSerializer.Serialize(
+                    new
+                    {
+                        agent.MachineName,
+                        agent.CredentialVersion,
+                        agent.IsActive,
+                        agent.ReleaseEnabled,
+                        agent.ConfigurationVersion
+                    });
 
             agent.SecretHash =
                 secretHash;
@@ -195,6 +246,37 @@ public class AccessAgentPairingService
             agent.LastFailureCode = null;
             agent.LastSeenAt = null;
             agent.UpdatedAt = now;
+
+            var auditLog =
+                new AccessAgentAuditLog
+                {
+                    Id = Guid.NewGuid(),
+                    GymId = agent.GymId,
+                    ActorUserId =
+                        pairingCode.CreatedByUserId,
+                    AccessAgentId =
+                        agent.Id,
+                    Action =
+                        AccessAgentAuditAction.Repaired,
+                    PreviousValues =
+                        previousValues,
+                    NewValues =
+                        JsonSerializer.Serialize(
+                            new
+                            {
+                                agent.MachineName,
+                                agent.CredentialVersion,
+                                agent.IsActive,
+                                agent.ReleaseEnabled,
+                                agent.ConfigurationVersion
+                            }),
+                    OccurredAt =
+                        now
+                };
+
+            await _auditRepository
+                .StageAsync(
+                    auditLog);
 
             await _accessAgentRepository
                 .UpdateAsync(agent);

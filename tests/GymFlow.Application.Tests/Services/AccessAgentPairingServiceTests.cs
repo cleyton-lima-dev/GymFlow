@@ -3,6 +3,7 @@ using GymFlow.Application.Interfaces.Repositories;
 using GymFlow.Application.Interfaces.Security;
 using GymFlow.Application.Services;
 using GymFlow.Domain.Entities;
+using GymFlow.Domain.Enums;
 using NSubstitute;
 
 namespace GymFlow.Application.Tests.Services;
@@ -14,6 +15,9 @@ public class AccessAgentPairingServiceTests
 
     private readonly IAccessAgentPairingCodeRepository
         _pairingRepository;
+
+    private readonly IAccessAgentAuditRepository
+        _auditRepository;
 
     private readonly IAccessAgentPairingCodeService
         _pairingCodeService;
@@ -32,6 +36,9 @@ public class AccessAgentPairingServiceTests
         _pairingRepository =
             Substitute.For<IAccessAgentPairingCodeRepository>();
 
+        _auditRepository =
+            Substitute.For<IAccessAgentAuditRepository>();
+
         _pairingCodeService =
             Substitute.For<IAccessAgentPairingCodeService>();
 
@@ -42,6 +49,7 @@ public class AccessAgentPairingServiceTests
             new AccessAgentPairingService(
                 _accessAgentRepository,
                 _pairingRepository,
+                _auditRepository,
                 _pairingCodeService,
                 _secretService);
     }
@@ -167,6 +175,24 @@ public class AccessAgentPairingServiceTests
                         agent.CredentialVersion ==
                             1 &&
                         !agent.ReleaseEnabled));
+
+        await _auditRepository
+            .Received(1)
+            .StageAsync(
+                Arg.Is<AccessAgentAuditLog>(
+                    audit =>
+                        audit.GymId ==
+                            gymId &&
+                        audit.AccessAgentId ==
+                            result.AgentId &&
+                        audit.Action ==
+                            AccessAgentAuditAction.Paired &&
+                        audit.NewValues
+                            .Contains("RECEPCAO-01") &&
+                        !audit.NewValues
+                            .Contains("raw-secret") &&
+                        !audit.NewValues
+                            .Contains("hashed-secret")));
     }
 
     [Fact]
@@ -268,6 +294,28 @@ public class AccessAgentPairingServiceTests
         await _accessAgentRepository
             .Received(1)
             .UpdateAsync(existing);
+
+        await _auditRepository
+            .Received(1)
+            .StageAsync(
+                Arg.Is<AccessAgentAuditLog>(
+                    audit =>
+                        audit.GymId ==
+                            gymId &&
+                        audit.AccessAgentId ==
+                            existing.Id &&
+                        audit.Action ==
+                            AccessAgentAuditAction.Repaired &&
+                        audit.PreviousValues
+                            .Contains("\"CredentialVersion\":4") &&
+                        audit.NewValues
+                            .Contains("\"CredentialVersion\":5") &&
+                        !audit.PreviousValues
+                            .Contains("old-hash") &&
+                        !audit.NewValues
+                            .Contains("new-hash") &&
+                        !audit.NewValues
+                            .Contains("new-secret")));
     }
 
     [Fact]
@@ -305,5 +353,10 @@ public class AccessAgentPairingServiceTests
             .DidNotReceive()
             .UpdateAsync(
                 Arg.Any<AccessAgent>());
+
+        await _auditRepository
+            .DidNotReceive()
+            .StageAsync(
+                Arg.Any<AccessAgentAuditLog>());
     }
 }
