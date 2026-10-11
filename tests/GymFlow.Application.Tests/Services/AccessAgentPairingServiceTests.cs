@@ -1,4 +1,5 @@
-﻿using GymFlow.Application.DTOs.AccessAgents;
+﻿using GymFlow.Application.Interfaces.Persistence;
+using GymFlow.Application.DTOs.AccessAgents;
 using GymFlow.Application.Interfaces.Repositories;
 using GymFlow.Application.Interfaces.Security;
 using GymFlow.Application.Services;
@@ -25,6 +26,9 @@ public class AccessAgentPairingServiceTests
     private readonly IAccessAgentSecretService
         _secretService;
 
+    private readonly PassThroughApplicationTransaction
+        _transaction;
+
     private readonly AccessAgentPairingService
         _service;
 
@@ -45,13 +49,17 @@ public class AccessAgentPairingServiceTests
         _secretService =
             Substitute.For<IAccessAgentSecretService>();
 
+        _transaction =
+            new PassThroughApplicationTransaction();
+
         _service =
             new AccessAgentPairingService(
                 _accessAgentRepository,
                 _pairingRepository,
                 _auditRepository,
                 _pairingCodeService,
-                _secretService);
+                _secretService,
+                _transaction);
     }
 
     [Fact]
@@ -358,5 +366,19 @@ public class AccessAgentPairingServiceTests
             .DidNotReceive()
             .StageAsync(
                 Arg.Any<AccessAgentAuditLog>());
+    }
+
+    private sealed class PassThroughApplicationTransaction :
+        IApplicationTransaction
+    {
+        public int ExecutionCount { get; private set; }
+
+        public async Task ExecuteAsync(
+            Func<Task> operation)
+        {
+            ExecutionCount++;
+
+            await operation();
+        }
     }
 }

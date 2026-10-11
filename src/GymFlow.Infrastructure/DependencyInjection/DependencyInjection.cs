@@ -5,7 +5,9 @@ using Microsoft.Extensions.DependencyInjection;
 using GymFlow.Application.Interfaces.Security;
 using GymFlow.Infrastructure.Security;
 using GymFlow.Application.Interfaces.Repositories;
+using GymFlow.Application.Interfaces.Persistence;
 using GymFlow.Infrastructure.Persistence.Repositories;
+using GymFlow.Infrastructure.Persistence;
 using GymFlow.Application.Interfaces.Time;
 using GymFlow.Infrastructure.Time;
 
@@ -31,6 +33,10 @@ public static class DependencyInjection
             options =>
                 options.UseNpgsql(
                     connectionString));
+
+        services.AddScoped<
+            IApplicationTransaction,
+            EfApplicationTransaction>();
 
         services.AddScoped<IPasswordHasher, PasswordHasher>();
         services.AddScoped<IUserRepository, UserRepository>();

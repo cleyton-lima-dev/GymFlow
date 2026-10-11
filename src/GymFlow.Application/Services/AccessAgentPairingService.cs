@@ -1,5 +1,6 @@
 ﻿using System.Text.Json;
 using GymFlow.Application.DTOs.AccessAgents;
+using GymFlow.Application.Interfaces.Persistence;
 using GymFlow.Application.Interfaces.Repositories;
 using GymFlow.Application.Interfaces.Security;
 using GymFlow.Application.Validation;
@@ -28,12 +29,16 @@ public class AccessAgentPairingService
     private readonly IAccessAgentSecretService
         _secretService;
 
+    private readonly IApplicationTransaction
+        _transaction;
+
     public AccessAgentPairingService(
         IAccessAgentRepository accessAgentRepository,
         IAccessAgentPairingCodeRepository pairingCodeRepository,
         IAccessAgentAuditRepository auditRepository,
         IAccessAgentPairingCodeService pairingCodeService,
-        IAccessAgentSecretService secretService)
+        IAccessAgentSecretService secretService,
+        IApplicationTransaction transaction)
     {
         _accessAgentRepository =
             accessAgentRepository;
@@ -49,6 +54,9 @@ public class AccessAgentPairingService
 
         _secretService =
             secretService;
+
+        _transaction =
+            transaction;
     }
 
     public async Task<CreateAccessAgentPairingCodeResponse?>
@@ -62,7 +70,8 @@ public class AccessAgentPairingService
             return null;
         }
 
-        var now = DateTime.UtcNow;
+        var now =
+            DateTime.UtcNow;
 
         var code =
             _pairingCodeService
@@ -83,17 +92,28 @@ public class AccessAgentPairingService
                         PairingCodeLifetime)
             };
 
-        await _pairingCodeRepository
-            .ReplaceActiveAsync(
-                pairingCode,
-                now);
+        CreateAccessAgentPairingCodeResponse?
+            result = null;
 
-        return new CreateAccessAgentPairingCodeResponse
-        {
-            Code = code,
-            ExpiresAt =
-                pairingCode.ExpiresAt
-        };
+        await _transaction
+            .ExecuteAsync(
+                async () =>
+                {
+                    await _pairingCodeRepository
+                        .ReplaceActiveAsync(
+                            pairingCode,
+                            now);
+
+                    result =
+                        new CreateAccessAgentPairingCodeResponse
+                        {
+                            Code = code,
+                            ExpiresAt =
+                                pairingCode.ExpiresAt
+                        };
+                });
+
+        return result;
     }
 
     public async Task<PairAccessAgentResponse?>
@@ -124,172 +144,207 @@ public class AccessAgentPairingService
             _pairingCodeService
                 .Hash(request.Code);
 
-        var pairingCode =
-            await _pairingCodeRepository
-                .TryConsumeAsync(
-                    codeHash,
-                    now);
+        PairAccessAgentResponse?
+            result = null;
 
-        if (pairingCode is null)
-        {
-            return null;
-        }
-
-        var secret =
-            _secretService
-                .GenerateSecret();
-
-        var secretHash =
-            _secretService
-                .Hash(secret);
-
-        var existingAgent =
-            await _accessAgentRepository
-                .GetByMachineNameAsync(
-                    pairingCode.GymId,
-                    machineName);
-
-        AccessAgent agent;
-
-        if (existingAgent is null)
-        {
-            agent = new AccessAgent
-            {
-                Id = Guid.NewGuid(),
-                GymId =
-                    pairingCode.GymId,
-                Name =
-                    "Avelri Access Agent",
-                MachineName =
-                    machineName,
-                SecretHash =
-                    secretHash,
-                CredentialVersion = 1,
-                IsActive = true,
-                ReleaseEnabled = false,
-                ConfigurationVersion = 1,
-                CreatedAt = now
-            };
-
-            var auditLog =
-                new AccessAgentAuditLog
+        await _transaction
+            .ExecuteAsync(
+                async () =>
                 {
-                    Id = Guid.NewGuid(),
-                    GymId = agent.GymId,
-                    ActorUserId =
-                        pairingCode.CreatedByUserId,
-                    AccessAgentId =
-                        agent.Id,
-                    Action =
-                        AccessAgentAuditAction.Paired,
-                    PreviousValues =
-                        "{}",
-                    NewValues =
-                        JsonSerializer.Serialize(
-                            new
-                            {
-                                agent.MachineName,
-                                agent.CredentialVersion,
-                                agent.IsActive,
-                                agent.ReleaseEnabled,
-                                agent.ConfigurationVersion
-                            }),
-                    OccurredAt =
-                        now
-                };
+                    var pairingCode =
+                        await _pairingCodeRepository
+                            .TryConsumeAsync(
+                                codeHash,
+                                now);
 
-            await _auditRepository
-                .StageAsync(
-                    auditLog);
-
-            await _accessAgentRepository
-                .AddAsync(agent);
-        }
-        else
-        {
-            agent = existingAgent;
-
-            var previousValues =
-                JsonSerializer.Serialize(
-                    new
+                    if (pairingCode is null)
                     {
-                        agent.MachineName,
-                        agent.CredentialVersion,
-                        agent.IsActive,
-                        agent.ReleaseEnabled,
-                        agent.ConfigurationVersion
-                    });
+                        return;
+                    }
 
-            agent.SecretHash =
-                secretHash;
+                    var secret =
+                        _secretService
+                            .GenerateSecret();
 
-            agent.CredentialVersion =
-                checked(
-                    agent.CredentialVersion + 1);
+                    var secretHash =
+                        _secretService
+                            .Hash(secret);
 
-            agent.IsActive = true;
+                    var existingAgent =
+                        await _accessAgentRepository
+                            .GetByMachineNameAsync(
+                                pairingCode.GymId,
+                                machineName);
 
-            // Repareamento sempre volta para estado físico seguro.
-            agent.ReleaseEnabled = false;
+                    AccessAgent agent;
 
-            agent.ConfigurationVersion =
-                checked(
-                    agent.ConfigurationVersion + 1);
-
-            agent.AppliedConfigurationVersion =
-                null;
-
-            agent.PendingOfflineEvents = 0;
-            agent.DeviceStatusesJson = null;
-            agent.LastOfflineSyncAt = null;
-            agent.LastFailureAt = null;
-            agent.LastFailureCode = null;
-            agent.LastSeenAt = null;
-            agent.UpdatedAt = now;
-
-            var auditLog =
-                new AccessAgentAuditLog
-                {
-                    Id = Guid.NewGuid(),
-                    GymId = agent.GymId,
-                    ActorUserId =
-                        pairingCode.CreatedByUserId,
-                    AccessAgentId =
-                        agent.Id,
-                    Action =
-                        AccessAgentAuditAction.Repaired,
-                    PreviousValues =
-                        previousValues,
-                    NewValues =
-                        JsonSerializer.Serialize(
-                            new
+                    if (existingAgent is null)
+                    {
+                        agent =
+                            new AccessAgent
                             {
+                                Id = Guid.NewGuid(),
+                                GymId =
+                                    pairingCode.GymId,
+                                Name =
+                                    "Avelri Access Agent",
+                                MachineName =
+                                    machineName,
+                                SecretHash =
+                                    secretHash,
+                                CredentialVersion = 1,
+                                IsActive = true,
+                                ReleaseEnabled = false,
+                                ConfigurationVersion = 1,
+                                CreatedAt = now
+                            };
+
+                        var auditLog =
+                            new AccessAgentAuditLog
+                            {
+                                Id = Guid.NewGuid(),
+                                GymId = agent.GymId,
+                                ActorUserId =
+                                    pairingCode.CreatedByUserId,
+                                AccessAgentId =
+                                    agent.Id,
+                                Action =
+                                    AccessAgentAuditAction.Paired,
+                                PreviousValues =
+                                    "{}",
+                                NewValues =
+                                    JsonSerializer.Serialize(
+                                        new
+                                        {
+                                            agent.MachineName,
+                                            agent.CredentialVersion,
+                                            agent.IsActive,
+                                            agent.ReleaseEnabled,
+                                            agent.ConfigurationVersion
+                                        }),
+                                OccurredAt =
+                                    now
+                            };
+
+                        await _auditRepository
+                            .StageAsync(
+                                auditLog);
+
+                        await _accessAgentRepository
+                            .AddAsync(
+                                agent);
+                    }
+                    else
+                    {
+                        agent =
+                            existingAgent;
+
+                        var previousValues =
+                            JsonSerializer.Serialize(
+                                new
+                                {
+                                    agent.MachineName,
+                                    agent.CredentialVersion,
+                                    agent.IsActive,
+                                    agent.ReleaseEnabled,
+                                    agent.ConfigurationVersion
+                                });
+
+                        agent.SecretHash =
+                            secretHash;
+
+                        agent.CredentialVersion =
+                            checked(
+                                agent.CredentialVersion + 1);
+
+                        agent.IsActive =
+                            true;
+
+                        // Repareamento sempre volta
+                        // para estado físico seguro.
+                        agent.ReleaseEnabled =
+                            false;
+
+                        agent.ConfigurationVersion =
+                            checked(
+                                agent.ConfigurationVersion + 1);
+
+                        agent.AppliedConfigurationVersion =
+                            null;
+
+                        agent.PendingOfflineEvents =
+                            0;
+
+                        agent.DeviceStatusesJson =
+                            null;
+
+                        agent.LastOfflineSyncAt =
+                            null;
+
+                        agent.LastFailureAt =
+                            null;
+
+                        agent.LastFailureCode =
+                            null;
+
+                        agent.LastSeenAt =
+                            null;
+
+                        agent.UpdatedAt =
+                            now;
+
+                        var auditLog =
+                            new AccessAgentAuditLog
+                            {
+                                Id = Guid.NewGuid(),
+                                GymId = agent.GymId,
+                                ActorUserId =
+                                    pairingCode.CreatedByUserId,
+                                AccessAgentId =
+                                    agent.Id,
+                                Action =
+                                    AccessAgentAuditAction.Repaired,
+                                PreviousValues =
+                                    previousValues,
+                                NewValues =
+                                    JsonSerializer.Serialize(
+                                        new
+                                        {
+                                            agent.MachineName,
+                                            agent.CredentialVersion,
+                                            agent.IsActive,
+                                            agent.ReleaseEnabled,
+                                            agent.ConfigurationVersion
+                                        }),
+                                OccurredAt =
+                                    now
+                            };
+
+                        await _auditRepository
+                            .StageAsync(
+                                auditLog);
+
+                        await _accessAgentRepository
+                            .UpdateAsync(
+                                agent);
+                    }
+
+                    result =
+                        new PairAccessAgentResponse
+                        {
+                            AgentId =
+                                agent.Id,
+                            GymId =
+                                agent.GymId,
+                            Name =
+                                agent.Name,
+                            MachineName =
                                 agent.MachineName,
-                                agent.CredentialVersion,
-                                agent.IsActive,
-                                agent.ReleaseEnabled,
-                                agent.ConfigurationVersion
-                            }),
-                    OccurredAt =
-                        now
-                };
+                            Secret =
+                                secret
+                        };
+                });
 
-            await _auditRepository
-                .StageAsync(
-                    auditLog);
-
-            await _accessAgentRepository
-                .UpdateAsync(agent);
-        }
-
-        return new PairAccessAgentResponse
-        {
-            AgentId = agent.Id,
-            GymId = agent.GymId,
-            Name = agent.Name,
-            MachineName =
-                agent.MachineName,
-            Secret = secret
-        };
+        return result;
     }
 }
