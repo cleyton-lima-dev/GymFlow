@@ -5,6 +5,7 @@ import 'package:avelri_gestao/features/access_control/models/access_agent_summar
 import 'package:avelri_gestao/features/access_control/presentation/access_control_view_model.dart';
 import 'package:avelri_gestao/features/access_control/presentation/configure_access_device_button.dart';
 import 'package:avelri_gestao/features/access_control/presentation/pair_access_agent_button.dart';
+import 'package:avelri_gestao/features/access_control/presentation/physical_release_control_button.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
@@ -194,6 +195,16 @@ class _AgentCard extends StatelessWidget {
                 value: agent.releaseEnabled ? 'Ativada' : 'Desativada',
               ),
             ],
+          ),
+          const SizedBox(height: 14),
+          Align(
+            alignment: Alignment.centerRight,
+            child: PhysicalReleaseControlButton(
+              agent: agent,
+              primaryColor: primaryColor,
+              service: AccessAgentsService(context.read<ApiClient>()),
+              onSaved: context.read<AccessControlViewModel>().refresh,
+            ),
           ),
           const SizedBox(height: 22),
           Divider(color: theme.dividerColor),

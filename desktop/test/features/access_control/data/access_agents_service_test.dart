@@ -83,4 +83,57 @@ void main() {
 
     apiClient.close();
   });
+
+  test('setReleaseEnabled sends physical release separately from device communication', () async {
+    final client = MockClient((request) async {
+      expect(request.method, 'PATCH');
+      expect(request.url.path, '/api/access-agents/agent-1/release');
+
+      final body = jsonDecode(request.body) as Map<String, dynamic>;
+
+      expect(body['enabled'], isTrue);
+
+      return http.Response(
+        jsonEncode({
+          'id': 'agent-1',
+          'gymId': 'gym-1',
+          'name': 'Avelri Access Agent',
+          'machineName': 'PC-01',
+          'isActive': true,
+          'releaseEnabled': true,
+          'configurationVersion': 3,
+          'appliedConfigurationVersion': 2,
+          'configurationApplied': false,
+          'isOnline': true,
+          'pendingOfflineEvents': 0,
+          'desiredDevices': [],
+          'devices': [],
+          'lastOfflineSyncAt': null,
+          'lastFailureAt': null,
+          'lastFailureCode': null,
+          'lastSeenAt': null,
+          'createdAt': '2026-10-10T00:00:00Z',
+          'updatedAt': null,
+        }),
+        200,
+        headers: {'content-type': 'application/json'},
+      );
+    });
+
+    final apiClient = ApiClient(
+      baseUrl: 'http://localhost:5137/',
+      client: client,
+    );
+
+    final service = AccessAgentsService(apiClient);
+
+    final result = await service.setReleaseEnabled(
+      agentId: 'agent-1',
+      enabled: true,
+    );
+
+    expect(result.releaseEnabled, isTrue);
+
+    apiClient.close();
+  });
 }

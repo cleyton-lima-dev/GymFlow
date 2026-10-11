@@ -51,6 +51,21 @@ class AccessAgentsService {
     return AccessAgentSummary.fromJson(Map<String, dynamic>.from(response));
   }
 
+  Future<AccessAgentSummary> setReleaseEnabled({
+    required String agentId,
+    required bool enabled,
+  }) async {
+    final response = await _apiClient.patch(
+      'api/access-agents/$agentId/release',
+      body: {'enabled': enabled},
+    );
+
+    if (response is! Map) {
+      throw const FormatException('Invalid physical release response.');
+    }
+
+    return AccessAgentSummary.fromJson(Map<String, dynamic>.from(response));
+  }
   Future<AccessAgentPairingCode> createPairingCode() async {
     final response = await _apiClient.post(
       'api/access-agents/pairing-code',
