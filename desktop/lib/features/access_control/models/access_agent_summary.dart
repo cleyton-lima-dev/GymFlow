@@ -104,6 +104,8 @@ class AccessDeviceStatus {
     required this.enabled,
     required this.connected,
     required this.endpoint,
+    required this.lastCredentialReadAt,
+    required this.lastCredentialType,
   });
 
   final String deviceKey;
@@ -111,6 +113,8 @@ class AccessDeviceStatus {
   final bool enabled;
   final bool connected;
   final String? endpoint;
+  final DateTime? lastCredentialReadAt;
+  final int? lastCredentialType;
 
   factory AccessDeviceStatus.fromJson(Map<String, dynamic> json) {
     return AccessDeviceStatus(
@@ -119,6 +123,10 @@ class AccessDeviceStatus {
       enabled: json['enabled'] as bool,
       connected: json['connected'] as bool,
       endpoint: json['endpoint'] as String?,
+      lastCredentialReadAt: AccessAgentSummary._parseNullableDateTime(
+        json['lastCredentialReadAt'],
+      ),
+      lastCredentialType: (json['lastCredentialType'] as num?)?.toInt(),
     );
   }
 }

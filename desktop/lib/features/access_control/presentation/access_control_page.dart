@@ -362,6 +362,14 @@ class _DeviceTile extends StatelessWidget {
                     fontSize: 12,
                   ),
                 ),
+                const SizedBox(height: 4),
+                Text(
+                  _credentialReadLabel(device),
+                  style: TextStyle(
+                    color: colorScheme.onSurfaceVariant,
+                    fontSize: 12,
+                  ),
+                ),
               ],
             ),
           ),
@@ -581,6 +589,27 @@ String _formatDateTime(DateTime? value) {
   }
 
   return DateFormat('dd/MM/yyyy HH:mm').format(value.toLocal());
+}
+
+String _credentialReadLabel(AccessDeviceStatus device) {
+  if (device.lastCredentialReadAt == null ||
+      device.lastCredentialType == null) {
+    return 'Nenhuma credencial lida desde que o Agent iniciou.';
+  }
+
+  final occurredAt = _formatDateTime(device.lastCredentialReadAt);
+
+  final credentialType = switch (device.lastCredentialType) {
+    1 => 'Cartão',
+    2 => 'QR Code',
+    3 => 'Biometria',
+    4 => 'Reconhecimento facial',
+    5 => 'PIN',
+    99 => 'Outro',
+    _ => 'Tipo desconhecido',
+  };
+
+  return 'Última leitura: $occurredAt • $credentialType';
 }
 
 String _providerLabel(String providerKey) {

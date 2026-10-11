@@ -31,6 +31,8 @@ void main() {
           'enabled': true,
           'connected': true,
           'endpoint': '192.168.0.50:7878',
+          'lastCredentialReadAt': '2026-10-10T15:00:30Z',
+          'lastCredentialType': 1,
         },
       ],
       'lastOfflineSyncAt': '2026-10-10T15:00:00Z',
@@ -53,5 +55,10 @@ void main() {
     expect(agent.devices, hasLength(1));
     expect(agent.hasConnectedDevice, isTrue);
     expect(agent.devices.single.providerKey, 'toletus-litenet2');
+    expect(agent.devices.single.lastCredentialType, 1);
+    expect(
+      agent.devices.single.lastCredentialReadAt,
+      DateTime.parse('2026-10-10T15:00:30Z'),
+    );
   });
 }
