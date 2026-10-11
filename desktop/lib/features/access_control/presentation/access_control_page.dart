@@ -4,6 +4,7 @@ import 'package:avelri_gestao/features/access_control/data/access_agents_service
 import 'package:avelri_gestao/features/access_control/models/access_agent_summary.dart';
 import 'package:avelri_gestao/features/access_control/presentation/access_control_view_model.dart';
 import 'package:avelri_gestao/features/access_control/presentation/configure_access_device_button.dart';
+import 'package:avelri_gestao/features/access_control/presentation/credential_read_test_button.dart';
 import 'package:avelri_gestao/features/access_control/presentation/pair_access_agent_button.dart';
 import 'package:avelri_gestao/features/access_control/presentation/physical_release_control_button.dart';
 import 'package:flutter/material.dart';
@@ -221,6 +222,13 @@ class _AgentCard extends StatelessWidget {
                   ),
                 ),
               ),
+              CredentialReadTestButton(
+                agent: agent,
+                primaryColor: primaryColor,
+                service: AccessAgentsService(context.read<ApiClient>()),
+                onCompleted: context.read<AccessControlViewModel>().refresh,
+              ),
+              const SizedBox(width: 8),
               ConfigureAccessDeviceButton(
                 agent: agent,
                 primaryColor: primaryColor,
