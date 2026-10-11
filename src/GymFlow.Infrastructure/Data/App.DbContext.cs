@@ -35,6 +35,9 @@ public class AppDbContext : DbContext
     public DbSet<PhysicalAccessCredential> PhysicalAccessCredentials { get; set; }
     public DbSet<PhysicalAccessOverride> PhysicalAccessOverrides { get; set; }
     public DbSet<PhysicalAccessEvent> PhysicalAccessEvents { get; set; }
+    public DbSet<AccessAgent> AccessAgents { get; set; }
+    public DbSet<AccessAgentAuditLog> AccessAgentAuditLogs { get; set; }
+    public DbSet<AccessAgentPairingCode> AccessAgentPairingCodes { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

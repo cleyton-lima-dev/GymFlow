@@ -21,6 +21,9 @@ public static class PersistenceTextPolicy
     public const int PhysicalAccessExternalIdentifierMaxLength = 200;
     public const int PhysicalAccessOverrideReasonMaxLength = 500;
 
+    public const int AccessAgentNameMaxLength = 150;
+    public const int AccessAgentMachineNameMaxLength = 200;
+
     public static void ValidateMaxLength(
         string? value,
         int maxLength,

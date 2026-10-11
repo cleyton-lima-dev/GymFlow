@@ -5,22 +5,23 @@ using Microsoft.Extensions.DependencyInjection;
 using GymFlow.Application.Interfaces.Security;
 using GymFlow.Infrastructure.Security;
 using GymFlow.Application.Interfaces.Repositories;
+using GymFlow.Application.Interfaces.Persistence;
 using GymFlow.Infrastructure.Persistence.Repositories;
+using GymFlow.Infrastructure.Persistence;
 using GymFlow.Application.Interfaces.Time;
 using GymFlow.Infrastructure.Time;
-
 
 namespace GymFlow.Infrastructure.DependencyInjection;
 
 public static class DependencyInjection
-
 {
     public static IServiceCollection AddInfrastructure(
         this IServiceCollection services,
         IConfiguration configuration)
     {
         var connectionString =
-         configuration.GetConnectionString("DefaultConnection");
+            configuration.GetConnectionString(
+                "DefaultConnection");
 
         if (string.IsNullOrWhiteSpace(connectionString))
         {
@@ -28,8 +29,14 @@ public static class DependencyInjection
                 "ConnectionStrings:DefaultConnection não configurada.");
         }
 
-        services.AddDbContext<AppDbContext>(options =>
-            options.UseNpgsql(connectionString));
+        services.AddDbContext<AppDbContext>(
+            options =>
+                options.UseNpgsql(
+                    connectionString));
+
+        services.AddScoped<
+            IApplicationTransaction,
+            EfApplicationTransaction>();
 
         services.AddScoped<IPasswordHasher, PasswordHasher>();
         services.AddScoped<IUserRepository, UserRepository>();
@@ -39,19 +46,25 @@ public static class DependencyInjection
         services.AddScoped<IEnrollmentRepository, EnrollmentRepository>();
         services.AddScoped<IChargeRepository, ChargeRepository>();
         services.AddScoped<IFinancialAuditRepository, FinancialAuditRepository>();
-        services.AddScoped<IPhysicalAccessCredentialRepository,PhysicalAccessCredentialRepository>();
-        services.AddScoped<IPhysicalAccessOverrideRepository,PhysicalAccessOverrideRepository>();
-        services.AddScoped<IPhysicalAccessEventRepository,PhysicalAccessEventRepository>();
+        services.AddScoped<IPhysicalAccessCredentialRepository, PhysicalAccessCredentialRepository>();
+        services.AddScoped<IPhysicalAccessOverrideRepository, PhysicalAccessOverrideRepository>();
+        services.AddScoped<IPhysicalAccessEventRepository, PhysicalAccessEventRepository>();
+        services.AddScoped<IAccessAgentRepository, AccessAgentRepository>();
+        services.AddScoped<IAccessAgentAuditRepository, AccessAgentAuditRepository>();
+        services.AddScoped<IAccessAgentPairingCodeRepository, AccessAgentPairingCodeRepository>();
         services.AddScoped<IWorkoutTemplateRepository, WorkoutTemplateRepository>();
         services.AddScoped<IWorkoutRepository, WorkoutRepository>();
         services.AddScoped<IPhysicalAssessmentRepository, PhysicalAssessmentRepository>();
         services.AddScoped<IWorkoutExecutionRepository, WorkoutExecutionRepository>();
         services.AddScoped<IWorkoutDayProgressRepository, WorkoutDayProgressRepository>();
+
         services.AddScoped<ITokenService, JwtTokenService>();
+        services.AddScoped<IAccessAgentTokenService, AccessAgentJwtTokenService>();
+        services.AddScoped<IAccessAgentSecretService, AccessAgentSecretService>();
+        services.AddScoped<IAccessAgentPairingCodeService, AccessAgentPairingCodeService>();
+
         services.AddSingleton<IGymTimeZoneProvider, ConfigurationGymTimeZoneProvider>();
 
         return services;
-
     }
-
 }

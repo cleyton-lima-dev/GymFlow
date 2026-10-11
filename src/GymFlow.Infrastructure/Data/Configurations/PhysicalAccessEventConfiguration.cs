@@ -26,6 +26,9 @@ public class PhysicalAccessEventConfiguration
         builder.Property(accessEvent => accessEvent.Reason)
             .IsRequired();
 
+        builder.Property(accessEvent => accessEvent.Source)
+            .IsRequired();
+
         builder.Property(accessEvent => accessEvent.OccurredAt)
             .IsRequired();
 

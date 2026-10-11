@@ -1,4 +1,4 @@
-using GymFlow.Application.DependencyInjection;
+﻿using GymFlow.Application.DependencyInjection;
 using GymFlow.Infrastructure.DependencyInjection;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
@@ -49,7 +49,7 @@ var jwtKey = builder.Configuration["Jwt:Key"];
 if (string.IsNullOrWhiteSpace(jwtKey))
 {
     throw new InvalidOperationException(
-        "Jwt:Key não configurada.");
+        "Jwt:Key nÃ£o configurada.");
 }
 
 if (Encoding.UTF8.GetByteCount(jwtKey) < 32)
@@ -63,7 +63,7 @@ var jwtIssuer = builder.Configuration["Jwt:Issuer"];
 if (string.IsNullOrWhiteSpace(jwtIssuer))
 {
     throw new InvalidOperationException(
-        "Jwt:Issuer não configurado.");
+        "Jwt:Issuer nÃ£o configurado.");
 }
 
 var jwtAudience = builder.Configuration["Jwt:Audience"];
@@ -71,7 +71,7 @@ var jwtAudience = builder.Configuration["Jwt:Audience"];
 if (string.IsNullOrWhiteSpace(jwtAudience))
 {
     throw new InvalidOperationException(
-        "Jwt:Audience não configurado.");
+        "Jwt:Audience nÃ£o configurado.");
 }
 
 var jwtExpirationRaw =
@@ -117,7 +117,7 @@ builder.Services
                         .GetRequiredService<ILoggerFactory>()
                         .CreateLogger("JwtValidation");
 
-                var userIdClaim =
+                var principalIdClaim =
                     context.Principal?
                         .FindFirst(ClaimTypes.NameIdentifier)?
                         .Value;
@@ -128,20 +128,77 @@ builder.Services
                         .Value;
 
                 if (!Guid.TryParse(
-                        userIdClaim,
-                        out var userId) ||
+                        principalIdClaim,
+                        out var principalId) ||
                     !Guid.TryParse(
                         gymIdClaim,
                         out var gymId))
-
-
                 {
                     logger.LogWarning(
-                    "Token rejeitado por claims inválidas. IP: {ClientIp}",
-                    GetClientIp(context.HttpContext));
+                        "Token rejeitado por claims invÃ¡lidas. IP: {ClientIp}",
+                        GetClientIp(context.HttpContext));
 
                     context.Fail(
-                        "Token sem identificação válida.");
+                        "Token sem identificaÃ§Ã£o vÃ¡lida.");
+
+                    return;
+                }
+
+                var identityType =
+                    context.Principal?
+                        .FindFirst("identity_type")?
+                        .Value;
+
+                if (string.Equals(
+                        identityType,
+                        "access_agent",
+                        StringComparison.Ordinal))
+                {
+                    var accessAgentRepository =
+                        context.HttpContext
+                            .RequestServices
+                            .GetRequiredService<IAccessAgentRepository>();
+
+                    var agent =
+                        await accessAgentRepository.GetByIdAsync(
+                            principalId,
+                            gymId);
+
+                    if (agent is null || !agent.IsActive)
+                    {
+                        logger.LogWarning(
+                            "Token rejeitado para agente inativo ou inexistente. AgentId: {AgentId}, GymId: {GymId}",
+                            principalId,
+                            gymId);
+
+                        context.Fail(
+                            "Agente inativo ou inexistente.");
+
+                        return;
+                    }
+
+                    var credentialVersionClaim =
+                        context.Principal?
+                            .FindFirst(
+                                "agent_credential_version")
+                            ?.Value;
+
+                    if (!long.TryParse(
+                            credentialVersionClaim,
+                            out var tokenCredentialVersion) ||
+                        tokenCredentialVersion !=
+                            agent.CredentialVersion)
+                    {
+                        logger.LogWarning(
+                            "Token rejeitado por versão de credencial inválida. AgentId: {AgentId}, GymId: {GymId}",
+                            principalId,
+                            gymId);
+
+                        context.Fail(
+                            "Credencial do agente foi substituída.");
+
+                        return;
+                    }
 
                     return;
                 }
@@ -153,18 +210,18 @@ builder.Services
 
                 var isActive =
                     await userRepository.IsActiveAsync(
-                        userId,
+                        principalId,
                         gymId);
 
                 if (!isActive)
                 {
                     logger.LogWarning(
-                        "Token rejeitado para usuário inativo ou inexistente. UserId: {UserId}, GymId: {GymId}",
-                        userId,
+                        "Token rejeitado para usuÃ¡rio inativo ou inexistente. UserId: {UserId}, GymId: {GymId}",
+                        principalId,
                         gymId);
 
                     context.Fail(
-                        "Usuário inativo ou inexistente.");
+                        "UsuÃ¡rio inativo ou inexistente.");
 
                     return;
                 }
@@ -183,18 +240,18 @@ builder.Services
                     var hasActiveEnrollment =
                         await studentAccessService
                             .HasActiveEnrollmentAsync(
-                                userId,
+                                principalId,
                                 gymId);
 
                     if (!hasActiveEnrollment)
                     {
                         logger.LogWarning(
-                            "Token rejeitado por matrícula inválida. UserId: {UserId}, GymId: {GymId}",
-                            userId,
+                            "Token rejeitado por matrÃ­cula invÃ¡lida. UserId: {UserId}, GymId: {GymId}",
+                            principalId,
                             gymId);
 
                         context.Fail(
-                            "Matrícula inexistente, vencida ou cancelada.");
+                            "MatrÃ­cula inexistente, vencida ou cancelada.");
 
                         return;
                     }
@@ -248,7 +305,22 @@ builder.Services.AddCors(options =>
     });
 });
 
-builder.Services.AddAuthorization();
+builder.Services.AddAuthorization(options =>
+{
+    options.AddPolicy(
+        "AccessAgentOnly",
+        policy =>
+        {
+            policy.RequireAuthenticatedUser();
+
+            policy.RequireClaim(
+                "identity_type",
+                "access_agent");
+
+            policy.RequireRole(
+                "AccessAgent");
+        });
+});
 
 builder.Services.AddRateLimiter(options =>
 {

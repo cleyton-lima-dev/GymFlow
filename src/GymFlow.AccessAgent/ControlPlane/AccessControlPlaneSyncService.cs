@@ -1,0 +1,295 @@
+﻿using System.Net;
+using GymFlow.AccessAgent.Abstractions;
+using GymFlow.AccessAgent.Api;
+using GymFlow.AccessAgent.Offline;
+using GymFlow.AccessAgent.Security;
+using GymFlow.AccessAgent.Services;
+
+namespace GymFlow.AccessAgent.ControlPlane;
+
+public sealed class AccessControlPlaneSyncService :
+    IAccessControlPlaneSyncService
+{
+    private readonly IAgentCredentialStore
+        _credentialStore;
+
+    private readonly IAvelriAccessApiClient
+        _apiClient;
+
+    private readonly IAgentSessionService
+        _sessionService;
+
+    private readonly IAccessReleaseControl
+        _releaseControl;
+
+    private readonly IAccessOfflineStore
+        _offlineStore;
+
+    private readonly IReadOnlyList<IAccessDeviceAdapter>
+        _adapters;
+
+    private readonly IAccessOperationalHealthStore
+        _operationalHealthStore;
+
+    public AccessControlPlaneSyncService(
+        IAgentCredentialStore credentialStore,
+        IAvelriAccessApiClient apiClient,
+        IAgentSessionService sessionService,
+        IAccessReleaseControl releaseControl,
+        IAccessOfflineStore offlineStore,
+        IEnumerable<IAccessDeviceAdapter> adapters,
+        IAccessOperationalHealthStore operationalHealthStore)
+    {
+        _credentialStore =
+            credentialStore;
+
+        _apiClient =
+            apiClient;
+
+        _sessionService =
+            sessionService;
+
+        _releaseControl =
+            releaseControl;
+
+        _offlineStore =
+            offlineStore;
+
+        _adapters =
+            adapters.ToArray();
+
+        _operationalHealthStore =
+            operationalHealthStore;
+    }
+
+    public async Task<bool> SyncAsync(
+        CancellationToken cancellationToken)
+    {
+        var credentials =
+            await _credentialStore.LoadAsync(
+                cancellationToken);
+
+        if (credentials is null)
+            return false;
+
+        var localConfiguration =
+            await _releaseControl
+                .GetConfigurationAsync(
+                    cancellationToken);
+
+        var pendingOfflineEvents =
+            await _offlineStore
+                .CountPendingEventsAsync(
+                    cancellationToken);
+
+        var devices =
+            _adapters
+                .Select(
+                    adapter =>
+                        adapter.GetRuntimeStatus())
+                .ToArray();
+
+        var operationalHealth =
+            _operationalHealthStore
+                .GetSnapshot();
+
+        var desiredConfiguration =
+            await SendHeartbeatAsync(
+                credentials,
+                localConfiguration.ConfigurationVersion,
+                pendingOfflineEvents,
+                devices,
+                operationalHealth,
+                cancellationToken);
+
+        if (desiredConfiguration is null)
+            return false;
+
+        ValidateConfigurationVersion(
+            desiredConfiguration.ConfigurationVersion);
+
+        if (Matches(
+                localConfiguration,
+                desiredConfiguration))
+        {
+            return true;
+        }
+
+        await _releaseControl
+            .ApplyConfigurationAsync(
+                desiredConfiguration.ReleaseEnabled,
+                desiredConfiguration.ConfigurationVersion,
+                desiredConfiguration.DesiredDevices,
+                cancellationToken);
+
+        var confirmation =
+            await SendHeartbeatAsync(
+                credentials,
+                desiredConfiguration.ConfigurationVersion,
+                pendingOfflineEvents,
+                devices,
+                operationalHealth,
+                cancellationToken);
+
+        if (confirmation is null)
+            return false;
+
+        ValidateConfigurationVersion(
+            confirmation.ConfigurationVersion);
+
+        if (confirmation.ConfigurationVersion !=
+                desiredConfiguration.ConfigurationVersion ||
+            confirmation.ReleaseEnabled !=
+                desiredConfiguration.ReleaseEnabled)
+        {
+            await _releaseControl
+                .ApplyConfigurationAsync(
+                    confirmation.ReleaseEnabled,
+                    confirmation.ConfigurationVersion,
+                    confirmation.DesiredDevices,
+                    cancellationToken);
+        }
+
+        return true;
+    }
+
+    private async Task<AgentControlPlaneHeartbeatResult?>
+        SendHeartbeatAsync(
+            AgentCredentials credentials,
+            long? appliedConfigurationVersion,
+            int pendingOfflineEvents,
+            IReadOnlyCollection<
+                AccessDeviceRuntimeStatus> devices,
+            AccessOperationalHealthSnapshot operationalHealth,
+            CancellationToken cancellationToken)
+    {
+        var token =
+            await _sessionService
+                .GetTokenAsync(
+                    credentials,
+                    cancellationToken);
+
+        if (token is null)
+            return null;
+
+        try
+        {
+            return await _apiClient
+                .HeartbeatAsync(
+                    credentials,
+                    token,
+                    appliedConfigurationVersion,
+                    pendingOfflineEvents,
+                    devices,
+                    operationalHealth.LastOfflineSyncAt,
+                    operationalHealth.LastFailureAt,
+                    operationalHealth.LastFailureCode,
+                    cancellationToken);
+        }
+        catch (HttpRequestException ex)
+            when (ex.StatusCode ==
+                  HttpStatusCode.Unauthorized)
+        {
+            _sessionService
+                .InvalidateToken();
+
+            token =
+                await _sessionService
+                    .GetTokenAsync(
+                        credentials,
+                        cancellationToken);
+
+            if (token is null)
+                return null;
+
+            try
+            {
+                return await _apiClient
+                    .HeartbeatAsync(
+                        credentials,
+                        token,
+                        appliedConfigurationVersion,
+                        pendingOfflineEvents,
+                        devices,
+                        operationalHealth.LastOfflineSyncAt,
+                        operationalHealth.LastFailureAt,
+                        operationalHealth.LastFailureCode,
+                        cancellationToken);
+            }
+            catch (HttpRequestException retryException)
+                when (retryException.StatusCode ==
+                      HttpStatusCode.Unauthorized)
+            {
+                _sessionService
+                    .InvalidateToken();
+
+                return null;
+            }
+        }
+    }
+
+    private static bool Matches(
+        AccessReleaseConfiguration local,
+        AgentControlPlaneHeartbeatResult desired)
+    {
+        return
+            local.ConfigurationVersion ==
+                desired.ConfigurationVersion &&
+            local.ReleaseEnabled ==
+                desired.ReleaseEnabled &&
+            DevicesMatch(
+                local.DesiredDevices,
+                desired.DesiredDevices);
+    }
+
+
+    private static bool DevicesMatch(
+        IReadOnlyList<AgentDeviceConfiguration> local,
+        IReadOnlyList<AgentDeviceConfiguration> desired)
+    {
+        if (local.Count != desired.Count)
+            return false;
+
+        for (var index = 0;
+             index < local.Count;
+             index++)
+        {
+            var localDevice =
+                local[index];
+
+            var desiredDevice =
+                desired[index];
+
+            if (!string.Equals(
+                    localDevice.DeviceKey,
+                    desiredDevice.DeviceKey,
+                    StringComparison.Ordinal) ||
+                !string.Equals(
+                    localDevice.ProviderKey,
+                    desiredDevice.ProviderKey,
+                    StringComparison.Ordinal) ||
+                localDevice.Enabled !=
+                    desiredDevice.Enabled ||
+                !string.Equals(
+                    localDevice.Host,
+                    desiredDevice.Host,
+                    StringComparison.Ordinal) ||
+                localDevice.Port !=
+                    desiredDevice.Port)
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+    private static void ValidateConfigurationVersion(
+        long configurationVersion)
+    {
+        if (configurationVersion < 1)
+        {
+            throw new InvalidOperationException(
+                "A API retornou uma versão de configuração inválida.");
+        }
+    }
+}

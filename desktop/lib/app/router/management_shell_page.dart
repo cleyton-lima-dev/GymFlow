@@ -26,11 +26,7 @@ class ManagementShellPage extends StatelessWidget {
       label: 'Alunos',
       icon: Icons.people_outline_rounded,
     ),
-    _NavigationItem(
-      path: '/plans',
-      label: 'Planos',
-      icon: Icons.sell_outlined,
-    ),
+    _NavigationItem(path: '/plans', label: 'Planos', icon: Icons.sell_outlined),
     _NavigationItem(
       path: '/enrollments',
       label: 'Matrículas',
@@ -40,6 +36,11 @@ class ManagementShellPage extends StatelessWidget {
       path: '/finance',
       label: 'Financeiro',
       icon: Icons.account_balance_wallet_outlined,
+    ),
+    _NavigationItem(
+      path: '/access-control',
+      label: 'Controle de acesso',
+      icon: Icons.door_front_door_outlined,
     ),
     _NavigationItem(
       path: '/check-in',
@@ -92,12 +93,7 @@ class ManagementShellPage extends StatelessWidget {
               child: Column(
                 children: [
                   Padding(
-                    padding: const EdgeInsets.fromLTRB(
-                      22,
-                      28,
-                      22,
-                      28,
-                    ),
+                    padding: const EdgeInsets.fromLTRB(22, 28, 22, 28),
                     child: Row(
                       children: [
                         SizedBox(
@@ -105,14 +101,14 @@ class ManagementShellPage extends StatelessWidget {
                           height: 48,
                           child: branding.logoAsset == null
                               ? Icon(
-                            Icons.fitness_center_rounded,
-                            color: primaryColor,
-                            size: 28,
-                          )
+                                  Icons.fitness_center_rounded,
+                                  color: primaryColor,
+                                  size: 28,
+                                )
                               : Image.asset(
-                            branding.logoAsset!,
-                            fit: BoxFit.contain,
-                          ),
+                                  branding.logoAsset!,
+                                  fit: BoxFit.contain,
+                                ),
                         ),
                         const SizedBox(width: 14),
                         Expanded(
@@ -150,8 +146,7 @@ class ManagementShellPage extends StatelessWidget {
                     child: ListView.separated(
                       padding: const EdgeInsets.symmetric(horizontal: 12),
                       itemCount: _navigationItems.length,
-                      separatorBuilder: (_, _) =>
-                      const SizedBox(height: 4),
+                      separatorBuilder: (_, _) => const SizedBox(height: 4),
                       itemBuilder: (context, index) {
                         final item = _navigationItems[index];
                         final selected = _isSelected(item.path);
@@ -173,16 +168,13 @@ class ManagementShellPage extends StatelessWidget {
                     decoration: BoxDecoration(
                       color: const Color(0xFF191D31),
                       borderRadius: BorderRadius.circular(14),
-                      border: Border.all(
-                        color: const Color(0xFF292E45),
-                      ),
+                      border: Border.all(color: const Color(0xFF292E45)),
                     ),
                     child: Row(
                       children: [
                         CircleAvatar(
                           radius: 18,
-                          backgroundColor:
-                          primaryColor.withValues(alpha: 0.18),
+                          backgroundColor: primaryColor.withValues(alpha: 0.18),
                           child: Text(
                             _initials(session.user?.name),
                             style: TextStyle(
@@ -244,9 +236,7 @@ class ManagementShellPage extends StatelessWidget {
                   decoration: BoxDecoration(
                     color: colorScheme.surface,
                     border: Border(
-                      bottom: BorderSide(
-                        color: theme.dividerColor,
-                      ),
+                      bottom: BorderSide(color: theme.dividerColor),
                     ),
                   ),
                   child: Row(
@@ -268,9 +258,7 @@ class ManagementShellPage extends StatelessWidget {
                         decoration: BoxDecoration(
                           color: colorScheme.surfaceContainerHighest,
                           borderRadius: BorderRadius.circular(30),
-                          border: Border.all(
-                            color: theme.dividerColor,
-                          ),
+                          border: Border.all(color: theme.dividerColor),
                         ),
                         child: Row(
                           children: [
@@ -349,34 +337,26 @@ class _SidebarItem extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 13),
           decoration: selected
               ? BoxDecoration(
-            borderRadius: BorderRadius.circular(11),
-            border: Border(
-              left: BorderSide(
-                color: accentColor,
-                width: 3,
-              ),
-            ),
-          )
+                  borderRadius: BorderRadius.circular(11),
+                  border: Border(
+                    left: BorderSide(color: accentColor, width: 3),
+                  ),
+                )
               : null,
           child: Row(
             children: [
               Icon(
                 item.icon,
                 size: 20,
-                color: selected
-                    ? accentColor
-                    : const Color(0xFF8D93A8),
+                color: selected ? accentColor : const Color(0xFF8D93A8),
               ),
               const SizedBox(width: 13),
               Text(
                 item.label,
                 style: TextStyle(
-                  color: selected
-                      ? Colors.white
-                      : const Color(0xFFB0B5C5),
+                  color: selected ? Colors.white : const Color(0xFFB0B5C5),
                   fontSize: 13,
-                  fontWeight:
-                  selected ? FontWeight.w700 : FontWeight.w500,
+                  fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
                 ),
               ),
             ],
