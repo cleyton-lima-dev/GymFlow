@@ -25,3 +25,4 @@ artifacts/release/*.aab
 artifacts/release/*.sql
 # IntelliJ / Android Studio
 .idea/
+artifacts/access-agent/
