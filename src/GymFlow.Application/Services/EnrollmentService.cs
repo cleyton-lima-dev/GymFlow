@@ -475,8 +475,8 @@ public class EnrollmentService
             request.StartDate <= today &&
             endDate > today;
 
-        // Unarchiving must not override a manual block in a legacy tenant.
-        var preserveManualBlock = !requiresEnrollment &&
+        // Unarchiving must not override a manual block, regardless of the tenant policy.
+        var preserveManualBlock =
             student.InactivationReason == StudentInactivationReason.Manual;
 
         if (!preserveManualBlock && (isValidToday || !requiresEnrollment))

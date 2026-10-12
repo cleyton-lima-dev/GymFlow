@@ -23,7 +23,7 @@ using System.Data.Common;
 
 namespace GymFlow.IntegrationTests.Security;
 
-public class TenantEnrollmentAccessTests
+public partial class TenantEnrollmentAccessTests
 {
     [Theory]
     [InlineData("profile")]
@@ -210,6 +210,8 @@ public class TenantEnrollmentAccessTests
     [Theory]
     [InlineData("enabled", false, 0)]
     [InlineData("enabled", false, 10)]
+    [InlineData("enabled", true, 0)]
+    [InlineData("enabled", true, 10)]
     [InlineData("disabled", false, 0)]
     [InlineData("disabled", false, 10)]
     [InlineData("missing", false, 0)]
@@ -218,7 +220,7 @@ public class TenantEnrollmentAccessTests
     [InlineData("disabled", true, 10)]
     [InlineData("missing", true, 0)]
     [InlineData("missing", true, 10)]
-    public async Task Reactivation_UsesTenantPolicyAndPreservesLegacyManualBlock(string mode, bool manual, int start)
+    public async Task Reactivation_UsesTenantPolicyAndPreservesManualBlock(string mode, bool manual, int start)
     {
         await using var factory = new TestApi();
         var gym = mode == "enabled" ? factory.EnabledGym : mode == "disabled" ? factory.DisabledGym : factory.LegacyGym;

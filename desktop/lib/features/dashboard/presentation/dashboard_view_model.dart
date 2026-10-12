@@ -19,8 +19,9 @@ class DashboardViewModel extends ChangeNotifier {
       final result = await _service.load();
       if (!_disposed) summary = result;
     } catch (_) {
-      if (!_disposed)
+      if (!_disposed) {
         error = 'Não foi possível carregar os indicadores. Tente novamente.';
+      }
     } finally {
       isLoading = false;
       if (!_disposed) notifyListeners();
