@@ -30,6 +30,7 @@ public class UserConfiguration : IEntityTypeConfiguration<User>
             .IsRequired();
 
         builder.Property(x => x.IsActive)
+            .IsConcurrencyToken()
             .IsRequired();
 
         builder.Property(x => x.CreatedAt)

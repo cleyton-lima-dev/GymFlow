@@ -1,5 +1,6 @@
 ﻿using GymFlow.Application.Interfaces.Repositories;
 using GymFlow.Application.Interfaces.Time;
+using GymFlow.Application.Interfaces.Security;
 using GymFlow.Domain.Enums;
 
 namespace GymFlow.Application.Services;
@@ -9,19 +10,25 @@ public class StudentLifecycleService
     private readonly IStudentRepository _studentRepository;
     private readonly IEnrollmentRepository _enrollmentRepository;
     private readonly IGymTimeZoneProvider _gymTimeZoneProvider;
+    private readonly IGymErpPolicy _erpPolicy;
 
     public StudentLifecycleService(
         IStudentRepository studentRepository,
         IEnrollmentRepository enrollmentRepository,
-        IGymTimeZoneProvider gymTimeZoneProvider)
+        IGymTimeZoneProvider gymTimeZoneProvider,
+        IGymErpPolicy erpPolicy)
     {
         _studentRepository = studentRepository;
         _enrollmentRepository = enrollmentRepository;
         _gymTimeZoneProvider = gymTimeZoneProvider;
+        _erpPolicy = erpPolicy;
     }
 
     public async Task ProcessAsync(Guid gymId)
     {
+        if (!_erpPolicy.IsEnabled(gymId))
+            return;
+
         var timeZone =
             _gymTimeZoneProvider.GetTimeZone(gymId);
 
@@ -166,7 +173,7 @@ public class StudentLifecycleService
 
         if (hasChanges)
         {
-            await _studentRepository.SaveChangesAsync();
+            await _studentRepository.TrySaveLifecycleChangesAsync();
         }
     }
 }

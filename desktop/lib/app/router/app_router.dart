@@ -21,6 +21,7 @@ import 'package:avelri_gestao/features/enrollments/presentation/enrollments_page
 import 'package:avelri_gestao/features/enrollments/presentation/create_enrollment_page.dart';
 import 'package:avelri_gestao/features/charges/presentation/charges_page.dart';
 import 'package:avelri_gestao/features/access_control/presentation/access_control_page.dart';
+import 'package:avelri_gestao/features/check_ins/presentation/check_ins_page.dart';
 
 class AppRouter {
   AppRouter(this._sessionController, this._brandingController);
@@ -140,7 +141,7 @@ class AppRouter {
           GoRoute(
             path: '/finance',
             pageBuilder: (context, state) =>
-                const NoTransitionPage(child: ChargesPage()),
+                NoTransitionPage(child: ChargesPage(overdueOnly: state.uri.queryParameters['status'] == 'overdue')),
           ),
           GoRoute(
             path: '/access-control',
@@ -149,9 +150,8 @@ class AppRouter {
           ),
           GoRoute(
             path: '/check-in',
-            pageBuilder: (context, state) => const NoTransitionPage(
-              child: ModulePlaceholderPage(title: 'Check-in'),
-            ),
+            pageBuilder: (context, state) =>
+                const NoTransitionPage(child: CheckInsPage()),
           ),
           GoRoute(
             path: '/reports',

@@ -7,6 +7,8 @@ using GymFlow.Domain.Entities;
 using GymFlow.Domain.Enums;
 using GymFlow.Application.DTOs.Students;
 using GymFlow.Application.DTOs.Charges;
+using GymFlow.Application.Interfaces.Security;
+using GymFlow.Application.Interfaces.Persistence;
 
 namespace GymFlow.Application.Tests.Services;
 
@@ -40,13 +42,20 @@ public class EnrollmentServiceTests
         _financialAuditRepository =
              Substitute.For<IFinancialAuditRepository>();
 
+        var erpPolicy = Substitute.For<IGymErpPolicy>();
+        erpPolicy.IsEnabled(Arg.Any<Guid>()).Returns(true);
+        var transaction = Substitute.For<IApplicationTransaction>();
+        transaction.ExecuteAsync(Arg.Any<Func<Task>>()).Returns(call => call.Arg<Func<Task>>()());
+
         _service = new EnrollmentService(
     _enrollmentRepository,
     _studentRepository,
     _planRepository,
     _chargeRepository,
     _gymTimeZoneProvider,
-    _financialAuditRepository);
+    _financialAuditRepository,
+    erpPolicy,
+    transaction);
 
     }
 

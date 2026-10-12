@@ -12,6 +12,9 @@ public class StudentConfiguration : IEntityTypeConfiguration<Student>
 
         builder.HasKey(student => student.Id);
 
+        // Existing column: optimistic concurrency needs no schema change.
+        builder.Property(student => student.InactivationReason).IsConcurrencyToken();
+
         builder.Property(student => student.Phone)
             .HasMaxLength(20);
 

@@ -1,4 +1,4 @@
-﻿using GymFlow.Application.Services;
+using GymFlow.Application.Services;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace GymFlow.Application.DependencyInjection;
@@ -14,8 +14,11 @@ public static class DependencyInjection
         services.AddScoped<PlanService>();
         services.AddScoped<EnrollmentService>();
         services.AddScoped<ChargeService>();
+        services.AddScoped<DashboardService>();
+        services.AddSingleton(TimeProvider.System);
         services.AddScoped<StudentAccessService>();
         services.AddScoped<PhysicalAccessService>();
+        services.AddScoped<CheckInService>();
         services.AddScoped<PhysicalAccessCredentialService>();
         services.AddScoped<PhysicalAccessOverrideService>();
         services.AddScoped<AccessAgentService>();

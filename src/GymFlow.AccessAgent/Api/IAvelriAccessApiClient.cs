@@ -1,4 +1,4 @@
-﻿using GymFlow.AccessAgent.Abstractions;
+using GymFlow.AccessAgent.Abstractions;
 using GymFlow.AccessAgent.Offline;
 using GymFlow.AccessAgent.Security;
 
@@ -15,6 +15,13 @@ public interface IAvelriAccessApiClient
         string token,
         string providerKey,
         DeviceAccessAttempt attempt,
+        CancellationToken cancellationToken);
+
+    Task ConfirmPhysicalPassageAsync(
+        AgentCredentials credentials,
+        string token,
+        Guid requestId,
+        DateTime occurredAt,
         CancellationToken cancellationToken);
 
     Task SyncOfflineEventAsync(

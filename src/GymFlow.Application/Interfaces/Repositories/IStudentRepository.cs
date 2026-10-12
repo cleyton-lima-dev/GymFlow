@@ -31,4 +31,6 @@ public interface IStudentRepository
 
     Task SaveChangesAsync();
 
+    Task<bool> TrySaveLifecycleChangesAsync();
+
 }

@@ -1,6 +1,7 @@
-﻿using GymFlow.Application.DTOs.Enrollments;
+using GymFlow.Application.DTOs.Enrollments;
 using GymFlow.Application.Interfaces.Repositories;
 using GymFlow.Application.Interfaces.Time;
+using GymFlow.Application.Interfaces.Security;
 using GymFlow.Application.Services;
 using GymFlow.Domain.Entities;
 using GymFlow.Domain.Enums;
@@ -10,6 +11,24 @@ namespace GymFlow.Application.Tests.Services;
 
 public class StudentLifecycleServiceTests
 {
+    [Fact]
+    public async Task ProcessAsync_WhenTenantHasNoErp_ShouldNotReadOrModifyStudents()
+    {
+        var students = Substitute.For<IStudentRepository>();
+        var enrollments = Substitute.For<IEnrollmentRepository>();
+        var timeZones = Substitute.For<IGymTimeZoneProvider>();
+        var policy = Substitute.For<IGymErpPolicy>();
+        var enabledGym = Guid.NewGuid();
+        policy.IsEnabled(enabledGym).Returns(true);
+        var service = new StudentLifecycleService(students, enrollments, timeZones, policy);
+
+        await service.ProcessAsync(Guid.NewGuid());
+
+        Assert.Empty(students.ReceivedCalls());
+        Assert.Empty(enrollments.ReceivedCalls());
+        Assert.Empty(timeZones.ReceivedCalls());
+    }
+
     [Fact]
     public async Task ProcessAsync_WhenStudentHas30DaysWithoutValidEnrollment_ShouldInactivateAutomatically()
     {
@@ -59,7 +78,8 @@ public class StudentLifecycleServiceTests
         var service = new StudentLifecycleService(
             studentRepository,
             enrollmentRepository,
-            gymTimeZoneProvider);
+            gymTimeZoneProvider,
+            EnabledPolicy(gymId));
 
         await service.ProcessAsync(gymId);
 
@@ -73,7 +93,7 @@ public class StudentLifecycleServiceTests
 
         await studentRepository
             .Received(1)
-            .SaveChangesAsync();
+            .TrySaveLifecycleChangesAsync();
     }
 
     [Fact]
@@ -125,7 +145,8 @@ public class StudentLifecycleServiceTests
         var service = new StudentLifecycleService(
             studentRepository,
             enrollmentRepository,
-            gymTimeZoneProvider);
+            gymTimeZoneProvider,
+            EnabledPolicy(gymId));
 
         await service.ProcessAsync(gymId);
 
@@ -135,7 +156,7 @@ public class StudentLifecycleServiceTests
 
         await studentRepository
             .DidNotReceive()
-            .SaveChangesAsync();
+            .TrySaveLifecycleChangesAsync();
     }
 
     [Fact]
@@ -190,7 +211,8 @@ public class StudentLifecycleServiceTests
         var service = new StudentLifecycleService(
             studentRepository,
             enrollmentRepository,
-            gymTimeZoneProvider);
+            gymTimeZoneProvider,
+            EnabledPolicy(gymId));
 
         await service.ProcessAsync(gymId);
 
@@ -199,7 +221,7 @@ public class StudentLifecycleServiceTests
 
         await studentRepository
             .Received(1)
-            .SaveChangesAsync();
+            .TrySaveLifecycleChangesAsync();
     }
 
     [Fact]
@@ -263,7 +285,8 @@ public class StudentLifecycleServiceTests
         var service = new StudentLifecycleService(
             studentRepository,
             enrollmentRepository,
-            gymTimeZoneProvider);
+            gymTimeZoneProvider,
+            EnabledPolicy(gymId));
 
         await service.ProcessAsync(gymId);
 
@@ -274,7 +297,7 @@ public class StudentLifecycleServiceTests
 
         await studentRepository
             .Received(1)
-            .SaveChangesAsync();
+            .TrySaveLifecycleChangesAsync();
     }
 
     [Fact]
@@ -338,7 +361,8 @@ public class StudentLifecycleServiceTests
         var service = new StudentLifecycleService(
             studentRepository,
             enrollmentRepository,
-            gymTimeZoneProvider);
+            gymTimeZoneProvider,
+            EnabledPolicy(gymId));
 
         await service.ProcessAsync(gymId);
 
@@ -353,7 +377,7 @@ public class StudentLifecycleServiceTests
 
         await studentRepository
             .Received(1)
-            .SaveChangesAsync();
+            .TrySaveLifecycleChangesAsync();
     }
 
     [Fact]
@@ -412,7 +436,8 @@ public class StudentLifecycleServiceTests
         var service = new StudentLifecycleService(
             studentRepository,
             enrollmentRepository,
-            gymTimeZoneProvider);
+            gymTimeZoneProvider,
+            EnabledPolicy(gymId));
 
         await service.ProcessAsync(gymId);
 
@@ -477,7 +502,8 @@ public class StudentLifecycleServiceTests
         var service = new StudentLifecycleService(
             studentRepository,
             enrollmentRepository,
-            gymTimeZoneProvider);
+            gymTimeZoneProvider,
+            EnabledPolicy(gymId));
 
         await service.ProcessAsync(gymId);
 
@@ -546,7 +572,8 @@ public class StudentLifecycleServiceTests
         var service = new StudentLifecycleService(
             studentRepository,
             enrollmentRepository,
-            gymTimeZoneProvider);
+            gymTimeZoneProvider,
+            EnabledPolicy(gymId));
 
         await service.ProcessAsync(gymId);
 
@@ -619,7 +646,8 @@ public class StudentLifecycleServiceTests
         var service = new StudentLifecycleService(
             studentRepository,
             enrollmentRepository,
-            gymTimeZoneProvider);
+            gymTimeZoneProvider,
+            EnabledPolicy(gymId));
 
         await service.ProcessAsync(gymId);
 
@@ -680,7 +708,8 @@ public class StudentLifecycleServiceTests
         var service = new StudentLifecycleService(
             studentRepository,
             enrollmentRepository,
-            gymTimeZoneProvider);
+            gymTimeZoneProvider,
+            EnabledPolicy(gymId));
 
         await service.ProcessAsync(gymId);
 
@@ -692,6 +721,13 @@ public class StudentLifecycleServiceTests
 
         await studentRepository
             .DidNotReceive()
-            .SaveChangesAsync();
+            .TrySaveLifecycleChangesAsync();
+    }
+
+    private static IGymErpPolicy EnabledPolicy(Guid gymId)
+    {
+        var policy = Substitute.For<IGymErpPolicy>();
+        policy.IsEnabled(gymId).Returns(true);
+        return policy;
     }
 }

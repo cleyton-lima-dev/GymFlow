@@ -1,4 +1,4 @@
-﻿using GymFlow.Infrastructure.Data;
+using GymFlow.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -19,6 +19,8 @@ public static class DependencyInjection
         this IServiceCollection services,
         IConfiguration configuration)
     {
+        services.AddSingleton<IGymErpPolicy>(new ConfigurationGymErpPolicy(configuration));
+
         var connectionString =
             configuration.GetConnectionString(
                 "DefaultConnection");
@@ -45,10 +47,12 @@ public static class DependencyInjection
         services.AddScoped<IPlanRepository, PlanRepository>();
         services.AddScoped<IEnrollmentRepository, EnrollmentRepository>();
         services.AddScoped<IChargeRepository, ChargeRepository>();
+        services.AddScoped<IDashboardRepository, DashboardRepository>();
         services.AddScoped<IFinancialAuditRepository, FinancialAuditRepository>();
         services.AddScoped<IPhysicalAccessCredentialRepository, PhysicalAccessCredentialRepository>();
         services.AddScoped<IPhysicalAccessOverrideRepository, PhysicalAccessOverrideRepository>();
         services.AddScoped<IPhysicalAccessEventRepository, PhysicalAccessEventRepository>();
+        services.AddScoped<ICheckInRepository, CheckInRepository>();
         services.AddScoped<IAccessAgentRepository, AccessAgentRepository>();
         services.AddScoped<IAccessAgentAuditRepository, AccessAgentAuditRepository>();
         services.AddScoped<IAccessAgentPairingCodeRepository, AccessAgentPairingCodeRepository>();

@@ -1,4 +1,4 @@
-﻿using GymFlow.AccessAgent;
+using GymFlow.AccessAgent;
 using GymFlow.AccessAgent.Abstractions;
 using GymFlow.AccessAgent.Adapters.Toletus;
 using GymFlow.AccessAgent.Api;
@@ -90,6 +90,11 @@ builder.Services
 
 builder.Services
     .AddSingleton<
+        IPhysicalPassageOfflineStore,
+        SqlitePhysicalPassageOfflineStore>();
+
+builder.Services
+    .AddSingleton<
         IAccessReleaseControl,
         SqliteAccessReleaseControl>();
 
@@ -106,6 +111,11 @@ builder.Services
     .AddSingleton<
         IOfflineEventSyncService,
         OfflineEventSyncService>();
+
+builder.Services
+    .AddSingleton<
+        IPhysicalPassageSyncService,
+        PhysicalPassageSyncService>();
 
 builder.Services
     .AddHostedService<Worker>();

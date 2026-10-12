@@ -5,6 +5,8 @@ using GymFlow.Domain.Entities;
 using GymFlow.Domain.Enums;
 using GymFlow.Application.DTOs.Students;
 using System.Text.Json;
+using GymFlow.Application.Interfaces.Security;
+using GymFlow.Application.Interfaces.Persistence;
 
 namespace GymFlow.Application.Services;
 
@@ -16,6 +18,8 @@ public class EnrollmentService
     private readonly IGymTimeZoneProvider _gymTimeZoneProvider;
     private readonly IChargeRepository _chargeRepository;
     private readonly IFinancialAuditRepository _financialAuditRepository;
+    private readonly IGymErpPolicy _erpPolicy;
+    private readonly IApplicationTransaction _transaction;
 
     public EnrollmentService(
     IEnrollmentRepository enrollmentRepository,
@@ -23,7 +27,9 @@ public class EnrollmentService
     IPlanRepository planRepository,
     IChargeRepository chargeRepository,
     IGymTimeZoneProvider gymTimeZoneProvider,
-    IFinancialAuditRepository financialAuditRepository)
+    IFinancialAuditRepository financialAuditRepository,
+    IGymErpPolicy erpPolicy,
+    IApplicationTransaction transaction)
     {
         _enrollmentRepository = enrollmentRepository;
         _studentRepository = studentRepository;
@@ -31,6 +37,8 @@ public class EnrollmentService
         _chargeRepository = chargeRepository;
         _gymTimeZoneProvider = gymTimeZoneProvider;
         _financialAuditRepository = financialAuditRepository;
+        _erpPolicy = erpPolicy;
+        _transaction = transaction;
     }
 
     public async Task<EnrollmentResponse?> CreateAsync(
@@ -166,44 +174,43 @@ public class EnrollmentService
 
         enrollment.Charge = charge;
 
-        await _financialAuditRepository.StageAsync(auditLog);
-
-        await _enrollmentRepository.AddAsync(enrollment);
-
-        var isValidToday =
-    enrollment.Status == EnrollmentStatus.Active &&
-    enrollment.StartDate <= today &&
-    enrollment.EndDate > today;
-
-        if (isValidToday)
+        // Repository saves share this transaction. Financial writes are not
+        // committed until the student update also succeeds. Never retry payments.
+        await _transaction.ExecuteAsync(async () =>
         {
-            var studentChanged = false;
+            await _financialAuditRepository.StageAsync(auditLog);
+            await _enrollmentRepository.AddAsync(enrollment);
 
-            if (student.NoValidEnrollmentSince is not null)
+            var isValidToday =
+                enrollment.Status == EnrollmentStatus.Active &&
+                enrollment.StartDate <= today &&
+                enrollment.EndDate > today;
+
+            if (isValidToday)
             {
-                student.NoValidEnrollmentSince = null;
-                studentChanged = true;
+                var studentChanged = false;
+
+                if (student.NoValidEnrollmentSince is not null)
+                {
+                    student.NoValidEnrollmentSince = null;
+                    studentChanged = true;
+                }
+
+                if (student.InactivationReason ==
+                    StudentInactivationReason.NoValidEnrollment)
+                {
+                    student.User.IsActive = true;
+                    student.InactivationReason = null;
+                    student.InactivatedAt = null;
+                    student.User.UpdatedAt = now;
+                    student.UpdatedAt = now;
+                    studentChanged = true;
+                }
+
+                if (studentChanged)
+                    await _studentRepository.SaveChangesAsync();
             }
-
-            if (student.InactivationReason ==
-                StudentInactivationReason.NoValidEnrollment)
-            {
-
-                student.User.IsActive = true;
-                student.InactivationReason = null;
-                student.InactivatedAt = null;
-
-                student.User.UpdatedAt = now;
-                student.UpdatedAt = now;
-
-                studentChanged = true;
-            }
-
-            if (studentChanged)
-            {
-                await _studentRepository.SaveChangesAsync();
-            }
-        }
+        });
 
         return ToResponse(
             enrollment,
@@ -462,18 +469,24 @@ public class EnrollmentService
 
         student.ArchivedAt = null;
 
+        var requiresEnrollment = _erpPolicy.IsEnabled(gymId);
+
         var isValidToday =
             request.StartDate <= today &&
             endDate > today;
 
-        if (isValidToday)
+        // Unarchiving must not override a manual block, regardless of the tenant policy.
+        var preserveManualBlock =
+            student.InactivationReason == StudentInactivationReason.Manual;
+
+        if (!preserveManualBlock && (isValidToday || !requiresEnrollment))
         {
             student.User.IsActive = true;
             student.NoValidEnrollmentSince = null;
             student.InactivationReason = null;
             student.InactivatedAt = null;
         }
-        else
+        else if (!preserveManualBlock)
         {
             student.User.IsActive = false;
             student.NoValidEnrollmentSince = today;
