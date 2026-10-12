@@ -1,5 +1,6 @@
 ﻿using GymFlow.Application.Interfaces.Repositories;
 using GymFlow.Application.Interfaces.Time;
+using GymFlow.Application.Interfaces.Security;
 using GymFlow.Application.Services;
 using GymFlow.Domain.Entities;
 using NSubstitute;
@@ -12,6 +13,7 @@ public class StudentAccessServiceTests
     private readonly IEnrollmentRepository _enrollmentRepository;
     private readonly IGymTimeZoneProvider _gymTimeZoneProvider;
     private readonly StudentAccessService _service;
+    private readonly IGymErpPolicy _erpPolicy;
 
     public StudentAccessServiceTests()
     {
@@ -24,10 +26,35 @@ public class StudentAccessServiceTests
         _gymTimeZoneProvider =
             Substitute.For<IGymTimeZoneProvider>();
 
+        _erpPolicy = Substitute.For<IGymErpPolicy>();
         _service = new StudentAccessService(
             _studentRepository,
             _enrollmentRepository,
-            _gymTimeZoneProvider);
+            _gymTimeZoneProvider,
+            _erpPolicy);
+    }
+
+    [Fact]
+    public async Task CanAccessApplicationAsync_LegacyTenant_DoesNotQueryEnrollmentOrTimeZone()
+    {
+        Assert.True(await _service.CanAccessApplicationAsync(Guid.NewGuid(), Guid.NewGuid()));
+        Assert.Empty(_studentRepository.ReceivedCalls());
+        Assert.Empty(_enrollmentRepository.ReceivedCalls());
+        Assert.Empty(_gymTimeZoneProvider.ReceivedCalls());
+    }
+
+    [Fact]
+    public async Task CanAccessApplicationAsync_EnabledTenant_DoesNotUseAnotherTenantsPolicy()
+    {
+        var enabledGym = Guid.NewGuid();
+        var legacyGym = Guid.NewGuid();
+        var userId = Guid.NewGuid();
+        _erpPolicy.IsEnabled(enabledGym).Returns(true);
+
+        Assert.False(await _service.CanAccessApplicationAsync(userId, enabledGym));
+        Assert.True(await _service.CanAccessApplicationAsync(userId, legacyGym));
+        await _studentRepository.Received(1).GetByUserIdAndGymIdAsync(userId, enabledGym);
+        await _studentRepository.DidNotReceive().GetByUserIdAndGymIdAsync(userId, legacyGym);
     }
 
     [Fact]

@@ -14,17 +14,14 @@ public class AuthController : ControllerBase
     private readonly AuthenticationService _authenticationService;
     private readonly ILogger<AuthController> _logger;
     private readonly StudentAccessService _studentAccessService;
-    private readonly IConfiguration _configuration;
 
     public AuthController(
     AuthenticationService authenticationService,
     StudentAccessService studentAccessService,
-    IConfiguration configuration,
     ILogger<AuthController> logger)
     {
         _authenticationService = authenticationService;
         _studentAccessService = studentAccessService;
-        _configuration = configuration;
         _logger = logger;
     }
 
@@ -46,20 +43,15 @@ public class AuthController : ControllerBase
             });
         }
 
-        var enforceStudentEnrollment =
-            _configuration.GetValue<bool>(
-        "EnrollmentAccess:EnforceStudentEnrollment");
-
-        if (enforceStudentEnrollment &&
-            result.Role == "Student")
+        if (result.Role == "Student")
         {
-            var hasActiveEnrollment =
+            var canAccessApplication =
                 await _studentAccessService
-                    .HasActiveEnrollmentAsync(
+                    .CanAccessApplicationAsync(
                         result.UserId,
                         result.GymId);
 
-            if (!hasActiveEnrollment)
+            if (!canAccessApplication)
             {
                 _logger.LogWarning(
                     "Login rejeitado por matrícula inválida. UserId: {UserId}, GymId: {GymId}",

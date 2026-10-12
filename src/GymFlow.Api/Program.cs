@@ -86,10 +86,6 @@ if (!int.TryParse(
         "Jwt:ExpirationMinutes deve ser um inteiro maior que zero.");
 }
 
-var enforceStudentEnrollment =
-    builder.Configuration.GetValue<bool>(
-        "EnrollmentAccess:EnforceStudentEnrollment");
-
 builder.Services
     .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
@@ -230,20 +226,20 @@ builder.Services
                     context.Principal?.IsInRole(
                         UserRole.Student.ToString()) == true;
 
-                if (enforceStudentEnrollment && isStudent)
+                if (isStudent)
                 {
                     var studentAccessService =
                         context.HttpContext
                             .RequestServices
                             .GetRequiredService<StudentAccessService>();
 
-                    var hasActiveEnrollment =
+                    var canAccessApplication =
                         await studentAccessService
-                            .HasActiveEnrollmentAsync(
+                            .CanAccessApplicationAsync(
                                 principalId,
                                 gymId);
 
-                    if (!hasActiveEnrollment)
+                    if (!canAccessApplication)
                     {
                         logger.LogWarning(
                             "Token rejeitado por matrÃ­cula invÃ¡lida. UserId: {UserId}, GymId: {GymId}",
@@ -428,3 +424,5 @@ static string GetClientIp(HttpContext httpContext)
     return httpContext.Connection.RemoteIpAddress?.ToString()
         ?? "unknown";
 }
+
+public partial class Program { }

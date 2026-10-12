@@ -4,16 +4,19 @@ using GymFlow.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using GymFlow.Application.DTOs.Students;
 using GymFlow.Domain.Enums;
+using Microsoft.Extensions.Logging;
 
 namespace GymFlow.Infrastructure.Persistence.Repositories;
 
 public class StudentRepository : IStudentRepository
 {
     private readonly AppDbContext _context;
+    private readonly ILogger<StudentRepository>? _logger;
 
-    public StudentRepository(AppDbContext context)
+    public StudentRepository(AppDbContext context, ILogger<StudentRepository>? logger = null)
     {
         _context = context;
+        _logger = logger;
     }
 
     public async Task AddAsync(User user, Student student)
@@ -179,6 +182,24 @@ public class StudentRepository : IStudentRepository
     public async Task SaveChangesAsync()
     {
         await _context.SaveChangesAsync();
+    }
+
+    public async Task<bool> TrySaveLifecycleChangesAsync()
+    {
+        try
+        {
+            // EF saves the Student and User changes in one transaction. A stale
+            // reason or activity rolls back the entire batch, including reactivation.
+            await _context.SaveChangesAsync();
+            return true;
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            // Never retry stale entities; the next scheduled pass reads fresh state.
+            _context.ChangeTracker.Clear();
+            _logger?.LogWarning("Student lifecycle batch deferred because activity or inactivation reason changed concurrently.");
+            return false;
+        }
     }
 
     public async Task<Student?> GetByUserIdAndGymIdAsync(
