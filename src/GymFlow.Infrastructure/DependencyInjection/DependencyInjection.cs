@@ -49,6 +49,7 @@ public static class DependencyInjection
         services.AddScoped<IChargeRepository, ChargeRepository>();
         services.AddScoped<IDashboardRepository, DashboardRepository>();
         services.AddScoped<IReportRepository, ReportRepository>();
+        services.AddScoped<IGymSettingsRepository, GymSettingsRepository>();
         services.AddScoped<IFinancialAuditRepository, FinancialAuditRepository>();
         services.AddScoped<IPhysicalAccessCredentialRepository, PhysicalAccessCredentialRepository>();
         services.AddScoped<IPhysicalAccessOverrideRepository, PhysicalAccessOverrideRepository>();
@@ -68,7 +69,8 @@ public static class DependencyInjection
         services.AddScoped<IAccessAgentSecretService, AccessAgentSecretService>();
         services.AddScoped<IAccessAgentPairingCodeService, AccessAgentPairingCodeService>();
 
-        services.AddSingleton<IGymTimeZoneProvider, ConfigurationGymTimeZoneProvider>();
+        services.AddSingleton<ConfigurationGymTimeZoneProvider>();
+        services.AddScoped<IGymTimeZoneProvider, PersistedGymTimeZoneProvider>();
 
         return services;
     }

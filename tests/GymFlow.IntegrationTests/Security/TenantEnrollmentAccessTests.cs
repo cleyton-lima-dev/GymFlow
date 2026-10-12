@@ -544,7 +544,7 @@ public partial class TenantEnrollmentAccessTests
         });
     }
 
-    private sealed class TestApi(bool usePostgres = false) : WebApplicationFactory<Program>
+    private sealed class TestApi(bool usePostgres = false, bool migrateSchema = false) : WebApplicationFactory<Program>
     {
         public const string Password = "synthetic-password-123";
         public Guid EnabledGym { get; } = Guid.NewGuid();
@@ -626,7 +626,12 @@ public partial class TenantEnrollmentAccessTests
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
             if (!_initialized)
             {
-                db.Database.EnsureCreated();
+                if (migrateSchema)
+                {
+                    if (!usePostgres) throw new InvalidOperationException("Migration validation requires the isolated PostgreSQL fixture.");
+                    db.Database.Migrate();
+                }
+                else db.Database.EnsureCreated();
                 _initialized = true;
             }
             action(db);

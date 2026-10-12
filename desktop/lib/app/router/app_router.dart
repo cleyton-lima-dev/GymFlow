@@ -8,7 +8,7 @@ import 'package:avelri_gestao/app/session/session_status.dart';
 import 'package:avelri_gestao/app/theme/branding_controller.dart';
 import 'package:avelri_gestao/features/auth/presentation/login_page.dart';
 import 'package:avelri_gestao/features/dashboard/presentation/dashboard_page.dart';
-import 'package:avelri_gestao/features/dashboard/presentation/module_placeholder_page.dart';
+import 'package:avelri_gestao/features/gym_settings/presentation/gym_settings_page.dart';
 import 'package:avelri_gestao/features/students/presentation/students_page.dart';
 import 'package:avelri_gestao/features/students/presentation/create_student_page.dart';
 import 'package:avelri_gestao/features/students/presentation/edit_student_page.dart';
@@ -163,7 +163,7 @@ class AppRouter {
           GoRoute(
             path: '/settings',
             pageBuilder: (context, state) => const NoTransitionPage(
-              child: ModulePlaceholderPage(title: 'Configurações'),
+              child: GymSettingsPage(),
             ),
           ),
         ],

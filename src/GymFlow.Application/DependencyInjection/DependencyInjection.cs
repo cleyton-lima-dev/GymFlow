@@ -16,6 +16,7 @@ public static class DependencyInjection
         services.AddScoped<ChargeService>();
         services.AddScoped<DashboardService>();
         services.AddScoped<ReportService>();
+        services.AddScoped<GymSettingsService>();
         services.AddSingleton(TimeProvider.System);
         services.AddScoped<StudentAccessService>();
         services.AddScoped<PhysicalAccessService>();
