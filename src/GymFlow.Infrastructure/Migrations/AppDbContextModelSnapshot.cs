@@ -425,6 +425,68 @@ namespace GymFlow.Infrastructure.Migrations
                     b.ToTable("FinancialAuditLogs", (string)null);
                 });
 
+            modelBuilder.Entity("GymFlow.Domain.Entities.GymSettings", b =>
+                {
+                    b.Property<Guid>("GymId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("AdministrativeName")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("TimeZoneId")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("bigint");
+
+                    b.HasKey("GymId");
+
+                    b.ToTable("GymSettings", (string)null);
+                });
+
+            modelBuilder.Entity("GymFlow.Domain.Entities.GymSettingsAuditLog", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ActorUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("GymId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("NewValues")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.Property<DateTime>("OccurredAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("PreviousValues")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ActorUserId");
+
+                    b.HasIndex("GymId", "OccurredAt");
+
+                    b.ToTable("GymSettingsAuditLogs", (string)null);
+                });
+
             modelBuilder.Entity("GymFlow.Domain.Entities.PhysicalAccessCredential", b =>
                 {
                     b.Property<Guid>("Id")
@@ -706,6 +768,7 @@ namespace GymFlow.Infrastructure.Migrations
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<int?>("InactivationReason")
+                        .IsConcurrencyToken()
                         .HasColumnType("integer");
 
                     b.Property<DateOnly?>("NoValidEnrollmentSince")
@@ -751,6 +814,7 @@ namespace GymFlow.Infrastructure.Migrations
                         .HasColumnType("uuid");
 
                     b.Property<bool>("IsActive")
+                        .IsConcurrencyToken()
                         .HasColumnType("boolean");
 
                     b.Property<string>("Name")
@@ -1175,6 +1239,21 @@ namespace GymFlow.Infrastructure.Migrations
                         .IsRequired();
 
                     b.Navigation("ActorUser");
+                });
+
+            modelBuilder.Entity("GymFlow.Domain.Entities.GymSettingsAuditLog", b =>
+                {
+                    b.HasOne("GymFlow.Domain.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("ActorUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("GymFlow.Domain.Entities.GymSettings", null)
+                        .WithMany()
+                        .HasForeignKey("GymId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("GymFlow.Domain.Entities.PhysicalAccessCredential", b =>

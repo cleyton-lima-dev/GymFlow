@@ -11,6 +11,8 @@ public class AppDbContext : DbContext
     }
 
     public DbSet<User> Users { get; set; }
+    public DbSet<GymSettings> GymSettings { get; set; }
+    public DbSet<GymSettingsAuditLog> GymSettingsAuditLogs { get; set; }
     public DbSet<Student> Students { get; set; }
     public DbSet<Exercise> Exercises { get; set; }
 
