@@ -22,6 +22,7 @@ import 'package:avelri_gestao/features/enrollments/presentation/create_enrollmen
 import 'package:avelri_gestao/features/charges/presentation/charges_page.dart';
 import 'package:avelri_gestao/features/access_control/presentation/access_control_page.dart';
 import 'package:avelri_gestao/features/check_ins/presentation/check_ins_page.dart';
+import 'package:avelri_gestao/features/reports/presentation/reports_page.dart';
 
 class AppRouter {
   AppRouter(this._sessionController, this._brandingController);
@@ -156,7 +157,7 @@ class AppRouter {
           GoRoute(
             path: '/reports',
             pageBuilder: (context, state) => const NoTransitionPage(
-              child: ModulePlaceholderPage(title: 'Relatórios'),
+              child: ReportsPage(),
             ),
           ),
           GoRoute(

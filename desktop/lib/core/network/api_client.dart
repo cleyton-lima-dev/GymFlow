@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:avelri_gestao/core/network/api_exception.dart';
 import 'package:http/http.dart' as http;
@@ -202,5 +203,13 @@ class ApiClient {
 
   void close() {
     _client.close();
+  }
+
+  Future<Uint8List> getBytes(String path) async {
+    final response = await _client.get(
+      buildUri(path),
+      headers: _buildHeaders(headers: {'Accept': 'text/csv'}, authenticated: true),
+    ).timeout(requestTimeout);
+    return (await _validateResponse(response, authenticated: true)).bodyBytes;
   }
 }
