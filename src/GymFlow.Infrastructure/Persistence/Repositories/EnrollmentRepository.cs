@@ -47,6 +47,7 @@ public class EnrollmentRepository : IEnrollmentRepository
             .FirstOrDefaultAsync(enrollment =>
                 enrollment.StudentId == studentId &&
                 enrollment.Student.User.GymId == gymId &&
+                enrollment.Plan.GymId == gymId &&
                 enrollment.Status == EnrollmentStatus.Active &&
                 enrollment.StartDate <= referenceDate &&
                 enrollment.EndDate > referenceDate);

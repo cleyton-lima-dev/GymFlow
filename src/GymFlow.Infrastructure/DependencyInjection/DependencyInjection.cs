@@ -19,6 +19,8 @@ public static class DependencyInjection
         this IServiceCollection services,
         IConfiguration configuration)
     {
+        services.AddSingleton<IGymErpPolicy>(new ConfigurationGymErpPolicy(configuration));
+
         var connectionString =
             configuration.GetConnectionString(
                 "DefaultConnection");
