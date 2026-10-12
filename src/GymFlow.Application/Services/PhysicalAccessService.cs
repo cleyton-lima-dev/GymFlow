@@ -1,4 +1,5 @@
-﻿using GymFlow.Application.DTOs.PhysicalAccess;
+using GymFlow.Application.DTOs.Common;
+using GymFlow.Application.DTOs.PhysicalAccess;
 using GymFlow.Application.Interfaces.Repositories;
 using GymFlow.Application.Interfaces.Time;
 using GymFlow.Domain.Entities;
@@ -325,6 +326,93 @@ public class PhysicalAccessService
         return ToResponse(persistedEvent);
     }
 
+    public async Task<PagedResponse<PhysicalAccessEventHistoryItemResponse>>
+        GetEventHistoryAsync(
+            Guid gymId,
+            Guid? studentId,
+            PhysicalAccessDecision? decision,
+            PhysicalAccessDecisionSource? source,
+            DateOnly? fromDate,
+            DateOnly? toDate,
+            int page,
+            int pageSize)
+    {
+        if (gymId == Guid.Empty)
+            throw new ArgumentException("A academia é obrigatória.");
+
+        if (studentId == Guid.Empty)
+            throw new ArgumentException("O identificador do aluno é inválido.");
+
+        if (decision.HasValue && !Enum.IsDefined(decision.Value))
+            throw new ArgumentException("A decisão de acesso é inválida.");
+
+        if (source.HasValue && !Enum.IsDefined(source.Value))
+            throw new ArgumentException("A origem da decisão é inválida.");
+
+        if (page < 1)
+            throw new ArgumentException("A página deve ser maior ou igual a 1.");
+
+        if (pageSize < 1 || pageSize > 100)
+            throw new ArgumentException("O tamanho da página deve estar entre 1 e 100.");
+
+        if (fromDate.HasValue && toDate.HasValue &&
+            fromDate.Value > toDate.Value)
+        {
+            throw new ArgumentException(
+                "A data inicial não pode ser posterior à data final.");
+        }
+
+        var timeZone = _gymTimeZoneProvider.GetTimeZone(gymId);
+
+        static DateTime ToUtcStart(DateOnly date, TimeZoneInfo zone)
+        {
+            var local = date.ToDateTime(
+                TimeOnly.MinValue,
+                DateTimeKind.Unspecified);
+
+            return TimeZoneInfo.ConvertTimeToUtc(local, zone);
+        }
+
+        DateTime? occurredFrom = fromDate.HasValue
+            ? ToUtcStart(fromDate.Value, timeZone)
+            : null;
+
+        DateTime? occurredTo = toDate.HasValue
+            ? ToUtcStart(toDate.Value.AddDays(1), timeZone)
+            : null;
+
+        var skip = checked((page - 1) * pageSize);
+
+        var result = await _eventRepository.GetPagedAsync(
+            gymId,
+            studentId,
+            decision,
+            source,
+            occurredFrom,
+            occurredTo,
+            skip,
+            pageSize);
+
+        return new PagedResponse<PhysicalAccessEventHistoryItemResponse>
+        {
+            Items = result.Items.Select(accessEvent =>
+                new PhysicalAccessEventHistoryItemResponse
+                {
+                    Id = accessEvent.Id,
+                    RequestId = accessEvent.RequestId,
+                    StudentId = accessEvent.StudentId,
+                    StudentName = accessEvent.Student?.User?.Name,
+                    Decision = accessEvent.Decision,
+                    Reason = accessEvent.Reason,
+                    Source = accessEvent.Source,
+                    OccurredAt = accessEvent.OccurredAt,
+                    ProcessedAt = accessEvent.ProcessedAt
+                }).ToList(),
+            Page = page,
+            PageSize = pageSize,
+            TotalCount = result.TotalCount
+        };
+    }
     private DateOnly GetToday(Guid gymId)
     {
         var timeZone =

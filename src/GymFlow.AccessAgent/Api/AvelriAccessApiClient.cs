@@ -1,4 +1,4 @@
-﻿using System.Net;
+using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using GymFlow.AccessAgent.Abstractions;
@@ -106,6 +106,43 @@ public class AvelriAccessApiClient :
             result.Decision == 1,
             MapReason(result.Reason),
             result.ProcessedAt);
+    }
+
+    public async Task ConfirmPhysicalPassageAsync(
+        AgentCredentials credentials,
+        string token,
+        Guid requestId,
+        DateTime occurredAt,
+        CancellationToken cancellationToken)
+    {
+        var baseUrl =
+            credentials.ApiBaseUrl.TrimEnd('/');
+
+        var requestBody =
+            new PhysicalPassageConfirmationRequest(
+                requestId,
+                occurredAt);
+
+        using var request =
+            new HttpRequestMessage(
+                HttpMethod.Post,
+                $"{baseUrl}/api/access-agent/check-ins/physical-passage");
+
+        request.Headers.Authorization =
+            new AuthenticationHeaderValue(
+                "Bearer",
+                token);
+
+        request.Content =
+            JsonContent.Create(
+                requestBody);
+
+        using var response =
+            await _httpClient.SendAsync(
+                request,
+                cancellationToken);
+
+        response.EnsureSuccessStatusCode();
     }
 
     public async Task SyncOfflineEventAsync(
@@ -271,6 +308,10 @@ public class AvelriAccessApiClient :
         Guid AgentId,
         Guid GymId,
         string Secret);
+
+    private sealed record PhysicalPassageConfirmationRequest(
+        Guid RequestId,
+        DateTime OccurredAt);
 
     private sealed record SyncOfflineAccessEventRequest(
         Guid RequestId,

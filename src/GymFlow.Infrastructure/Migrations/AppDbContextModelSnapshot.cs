@@ -233,6 +233,55 @@ namespace GymFlow.Infrastructure.Migrations
                     b.ToTable("Charges", (string)null);
                 });
 
+            modelBuilder.Entity("GymFlow.Domain.Entities.CheckIn", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("GymId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("OccurredAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("PhysicalAccessEventId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("RecordedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("RequestId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Source")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("StudentId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PhysicalAccessEventId")
+                        .IsUnique();
+
+                    b.HasIndex("RecordedByUserId");
+
+                    b.HasIndex("StudentId");
+
+                    b.HasIndex("GymId", "OccurredAt");
+
+                    b.HasIndex("GymId", "RequestId")
+                        .IsUnique();
+
+                    b.HasIndex("GymId", "StudentId", "OccurredAt");
+
+                    b.ToTable("CheckIns", (string)null);
+                });
+
             modelBuilder.Entity("GymFlow.Domain.Entities.Enrollment", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1073,6 +1122,29 @@ namespace GymFlow.Infrastructure.Migrations
                         .IsRequired();
 
                     b.Navigation("Enrollment");
+                });
+
+            modelBuilder.Entity("GymFlow.Domain.Entities.CheckIn", b =>
+                {
+                    b.HasOne("GymFlow.Domain.Entities.PhysicalAccessEvent", "PhysicalAccessEvent")
+                        .WithMany()
+                        .HasForeignKey("PhysicalAccessEventId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("GymFlow.Domain.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("RecordedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("GymFlow.Domain.Entities.Student", "Student")
+                        .WithMany()
+                        .HasForeignKey("StudentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("PhysicalAccessEvent");
+
+                    b.Navigation("Student");
                 });
 
             modelBuilder.Entity("GymFlow.Domain.Entities.Enrollment", b =>
