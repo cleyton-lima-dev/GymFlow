@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import 'package:avelri_gestao/app/session/session_controller.dart';
 import 'package:avelri_gestao/app/theme/branding_controller.dart';
+import 'dashboard_metrics.dart';
 
 class DashboardPage extends StatelessWidget {
   const DashboardPage({super.key});
@@ -42,6 +43,8 @@ class DashboardPage extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 28),
+            const DashboardMetrics(),
+            const SizedBox(height: 20),
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(26),

@@ -9,7 +9,9 @@ import 'package:intl/intl.dart';
 import 'package:avelri_gestao/features/charges/models/payment_details.dart';
 
 class ChargesPage extends StatelessWidget {
-  const ChargesPage({super.key});
+  const ChargesPage({this.overdueOnly = false, super.key});
+
+  final bool overdueOnly;
 
   @override
   Widget build(BuildContext context) {
@@ -18,7 +20,8 @@ class ChargesPage extends StatelessWidget {
         ChargesService(
           context.read<ApiClient>(),
         ),
-      )..loadInitial(),
+      )..updateStatusFilter(overdueOnly ? ChargesStatusFilter.overdue : ChargesStatusFilter.all)
+       ..loadInitial(),
       child: const _ChargesView(),
     );
   }
