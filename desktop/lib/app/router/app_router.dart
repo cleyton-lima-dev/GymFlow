@@ -140,7 +140,7 @@ class AppRouter {
           GoRoute(
             path: '/finance',
             pageBuilder: (context, state) =>
-                const NoTransitionPage(child: ChargesPage()),
+                NoTransitionPage(child: ChargesPage(overdueOnly: state.uri.queryParameters['status'] == 'overdue')),
           ),
           GoRoute(
             path: '/access-control',
