@@ -11,6 +11,10 @@ public class AppDbContext : DbContext
     }
 
     public DbSet<User> Users { get; set; }
+    public DbSet<PlatformOperator> PlatformOperators => Set<PlatformOperator>();
+    public DbSet<GymOnboarding> GymOnboardings => Set<GymOnboarding>();
+    public DbSet<AdminActivationInvitation> AdminActivationInvitations => Set<AdminActivationInvitation>();
+    public DbSet<GymOnboardingAuditLog> GymOnboardingAuditLogs => Set<GymOnboardingAuditLog>();
     public DbSet<GymSettings> GymSettings { get; set; }
     public DbSet<GymSettingsAuditLog> GymSettingsAuditLogs { get; set; }
     public DbSet<Student> Students { get; set; }

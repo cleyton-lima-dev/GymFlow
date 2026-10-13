@@ -12,6 +12,7 @@ using GymFlow.Api.ExceptionHandling;
 using GymFlow.Application.Services;
 using GymFlow.Domain.Enums;
 using GymFlow.Api.BackgroundServices;
+using GymFlow.Api.Platform;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -256,6 +257,8 @@ builder.Services
         };
     });
 
+builder.Services.AddAvelriPlatform(builder.Configuration);
+
 var configuredCorsOrigins =
     builder.Configuration["Cors:AllowedOrigins"]?
         .Split(
@@ -404,6 +407,12 @@ app.MapControllers();
 
 app.MapGet("/health", () => Results.Ok(new { status = "ok" }))
     .AllowAnonymous();
+
+if (args.Contains("--bootstrap-platform-operator", StringComparer.Ordinal))
+{
+    await PlatformBootstrap.RunAsync(app);
+    return;
+}
 
 app.Run();
 
