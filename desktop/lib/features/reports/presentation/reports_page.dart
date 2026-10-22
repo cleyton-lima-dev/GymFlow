@@ -5,6 +5,9 @@ import 'report_table.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:avelri_gestao/core/network/api_client.dart';
+import 'package:avelri_gestao/core/network/erp_access_policy.dart';
+import 'package:avelri_gestao/app/session/session_controller.dart';
+import 'package:avelri_gestao/app/session/erp_feature_controller.dart';
 import 'package:avelri_gestao/features/reports/data/reports_service.dart';
 import 'package:avelri_gestao/features/reports/presentation/reports_view_model.dart';
 import 'package:avelri_gestao/features/reports/presentation/save_report.dart';
@@ -16,16 +19,24 @@ import 'package:avelri_gestao/features/students/models/student_summary.dart';
 class ReportsPage extends StatelessWidget {
   const ReportsPage({super.key});
   @override
-  Widget build(BuildContext context) => ChangeNotifierProvider(
-    create: (context) =>
-        ReportsViewModel(ReportsService(context.read<ApiClient>()))
-          ..load('students', {}),
-    child: const _ReportsView(),
-  );
+  Widget build(BuildContext context) {
+    final gymId = context.watch<SessionController>().user?.gymId;
+    final erpEnabled =
+        gymId != null &&
+        context.watch<ErpFeatureController>().isEnabledForGym(gymId);
+    return ChangeNotifierProvider(
+      key: ValueKey(erpEnabled),
+      create: (context) =>
+          ReportsViewModel(ReportsService(context.read<ApiClient>()))
+            ..load('students', {}),
+      child: _ReportsView(erpEnabled: erpEnabled),
+    );
+  }
 }
 
 class _ReportsView extends StatefulWidget {
-  const _ReportsView();
+  const _ReportsView({required this.erpEnabled});
+  final bool erpEnabled;
   @override
   State<_ReportsView> createState() => _ReportsViewState();
 }
@@ -152,6 +163,11 @@ class _ReportsViewState extends State<_ReportsView> {
             spacing: 10,
             runSpacing: 10,
             children: kinds.entries
+                .where(
+                  (entry) =>
+                      widget.erpEnabled ||
+                      !ErpAccessPolicy.isErpReport(entry.key),
+                )
                 .map(
                   (entry) => ChoiceChip(
                     label: Text(entry.value),
@@ -188,7 +204,7 @@ class _ReportsViewState extends State<_ReportsView> {
                       (v) => status = v,
                       model.busy,
                     ),
-                  if (kind == 'students')
+                  if (kind == 'students' && widget.erpEnabled)
                     select(
                       'Matrícula',
                       enrollment,

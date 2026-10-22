@@ -29,6 +29,12 @@
 	</ItemGroup>
 
 	<ItemGroup>
+		<None Include="..\..\desktop\assets\import_templates\*.csv"
+		      Link="import_templates\%(Filename)%(Extension)"
+		      CopyToOutputDirectory="PreserveNewest" />
+	</ItemGroup>
+
+	<ItemGroup>
 		<FrameworkReference Include="Microsoft.AspNetCore.App" />
 	</ItemGroup>
 

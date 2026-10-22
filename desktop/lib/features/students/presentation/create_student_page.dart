@@ -34,13 +34,9 @@ class _CreateStudentViewState extends State<_CreateStudentView> {
   final _emailController = TextEditingController();
   final _phoneController = TextEditingController();
   final _birthDateController = TextEditingController();
-  final _passwordController = TextEditingController();
-  final _confirmPasswordController = TextEditingController();
 
   DateTime? _birthDate;
 
-  bool _obscurePassword = true;
-  bool _obscureConfirmPassword = true;
 
   @override
   void dispose() {
@@ -48,8 +44,6 @@ class _CreateStudentViewState extends State<_CreateStudentView> {
     _emailController.dispose();
     _phoneController.dispose();
     _birthDateController.dispose();
-    _passwordController.dispose();
-    _confirmPasswordController.dispose();
 
     super.dispose();
   }
@@ -89,8 +83,6 @@ class _CreateStudentViewState extends State<_CreateStudentView> {
     final created = await context.read<CreateStudentViewModel>().createStudent(
       name: _nameController.text,
       email: _emailController.text,
-      password: _passwordController.text,
-      confirmPassword: _confirmPasswordController.text,
       phone: _phoneController.text,
       birthDate: _birthDate,
     );
@@ -148,7 +140,7 @@ class _CreateStudentViewState extends State<_CreateStudentView> {
                         ),
                         SizedBox(height: 7),
                         Text(
-                          'Crie o cadastro e o acesso do aluno ao aplicativo.',
+                          'Cadastre o aluno com os dados disponíveis. O acesso ao app é opcional.',
                           style: TextStyle(
                             color: colorScheme.onSurfaceVariant,
                             fontSize: 14,
@@ -214,7 +206,6 @@ class _CreateStudentViewState extends State<_CreateStudentView> {
                         Expanded(
                           child: _Field(
                             label: 'E-mail',
-                            requiredField: true,
                             child: TextFormField(
                               controller: _emailController,
                               keyboardType: TextInputType.emailAddress,
@@ -225,15 +216,11 @@ class _CreateStudentViewState extends State<_CreateStudentView> {
                               validator: (value) {
                                 final email = value?.trim() ?? '';
 
-                                if (email.isEmpty) {
-                                  return 'Informe o e-mail.';
-                                }
-
                                 final valid = RegExp(
                                   r'^[^@\s]+@[^@\s]+\.[^@\s]+$',
                                 ).hasMatch(email);
 
-                                if (!valid) {
+                                if (email.isNotEmpty && !valid) {
                                   return 'Informe um e-mail válido.';
                                 }
 
@@ -273,18 +260,10 @@ class _CreateStudentViewState extends State<_CreateStudentView> {
                         Expanded(
                           child: _Field(
                             label: 'Data de nascimento',
-                            requiredField: true,
                             child: TextFormField(
                               controller: _birthDateController,
                               readOnly: true,
                               onTap: _selectBirthDate,
-                              validator: (_) {
-                                if (_birthDate == null) {
-                                  return 'Informe a data de nascimento.';
-                                }
-
-                                return null;
-                              },
                               decoration: _decoration(
                                 context,
                                 hintText: 'dd/mm/aaaa',
@@ -298,145 +277,8 @@ class _CreateStudentViewState extends State<_CreateStudentView> {
                     const SizedBox(height: 32),
                     Divider(color: theme.dividerColor),
                     const SizedBox(height: 24),
-                    _SectionTitle(
-                      icon: Icons.lock_outline_rounded,
-                      title: 'Acesso ao aplicativo',
-                      color: primaryColor,
-                    ),
-                    const SizedBox(height: 24),
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(
-                          child: _Field(
-                            label: 'Senha',
-                            requiredField: true,
-                            child: TextFormField(
-                              controller: _passwordController,
-                              obscureText: _obscurePassword,
-                              textInputAction: TextInputAction.next,
-                              autocorrect: false,
-                              enableSuggestions: false,
-                              onChanged: (_) => viewModel.clearError(),
-                              validator: (value) {
-                                if (value == null || value.isEmpty) {
-                                  return 'Informe uma senha.';
-                                }
+                    const SizedBox(height: 8),
 
-                                if (value.length < 8) {
-                                  return 'Use pelo menos 8 caracteres.';
-                                }
-
-                                return null;
-                              },
-                              decoration: _decoration(
-                                context,
-                                hintText: 'Mínimo de 8 caracteres',
-                                icon: Icons.lock_outline_rounded,
-                                suffixIcon: IconButton(
-                                  tooltip: _obscurePassword
-                                      ? 'Mostrar senha'
-                                      : 'Ocultar senha',
-                                  onPressed: () {
-                                    setState(() {
-                                      _obscurePassword = !_obscurePassword;
-                                    });
-                                  },
-                                  icon: Icon(
-                                    _obscurePassword
-                                        ? Icons.visibility_outlined
-                                        : Icons.visibility_off_outlined,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 18),
-                        Expanded(
-                          child: _Field(
-                            label: 'Confirmar senha',
-                            requiredField: true,
-                            child: TextFormField(
-                              controller: _confirmPasswordController,
-                              obscureText: _obscureConfirmPassword,
-                              textInputAction: TextInputAction.done,
-                              autocorrect: false,
-                              enableSuggestions: false,
-                              onFieldSubmitted: (_) {
-                                if (!viewModel.isLoading) {
-                                  _submit();
-                                }
-                              },
-                              onChanged: (_) => viewModel.clearError(),
-                              validator: (value) {
-                                if (value == null || value.isEmpty) {
-                                  return 'Confirme a senha.';
-                                }
-
-                                if (value != _passwordController.text) {
-                                  return 'As senhas não coincidem.';
-                                }
-
-                                return null;
-                              },
-                              decoration: _decoration(
-                                context,
-                                hintText: 'Repita a senha',
-                                icon: Icons.lock_outline_rounded,
-                                suffixIcon: IconButton(
-                                  tooltip: _obscureConfirmPassword
-                                      ? 'Mostrar senha'
-                                      : 'Ocultar senha',
-                                  onPressed: () {
-                                    setState(() {
-                                      _obscureConfirmPassword =
-                                          !_obscureConfirmPassword;
-                                    });
-                                  },
-                                  icon: Icon(
-                                    _obscureConfirmPassword
-                                        ? Icons.visibility_outlined
-                                        : Icons.visibility_off_outlined,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 22),
-                    Container(
-                      padding: const EdgeInsets.all(15),
-                      decoration: BoxDecoration(
-                        color: primaryColor.withValues(alpha: 0.07),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: primaryColor.withValues(alpha: 0.15),
-                        ),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(
-                            Icons.info_outline_rounded,
-                            color: primaryColor,
-                            size: 20,
-                          ),
-                          const SizedBox(width: 11),
-                          const Expanded(
-                            child: Text(
-                              'Essa senha será utilizada pelo aluno para acessar o aplicativo da academia.',
-                              style: TextStyle(
-                                color: Color(0xFF656A7E),
-                                fontSize: 12,
-                                height: 1.4,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
                     if (viewModel.errorMessage != null) ...[
                       const SizedBox(height: 20),
                       Container(

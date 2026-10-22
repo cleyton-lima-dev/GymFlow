@@ -111,7 +111,9 @@ void main() {
           value: api,
           child: const MaterialApp(
             home: Scaffold(
-              body: SingleChildScrollView(child: DashboardMetrics()),
+              body: SingleChildScrollView(
+                child: DashboardMetrics(erpEnabled: true),
+              ),
             ),
           ),
         ),
@@ -145,7 +147,9 @@ void main() {
           GoRoute(
             path: '/',
             builder: (_, _) => const Scaffold(
-              body: SingleChildScrollView(child: DashboardMetrics()),
+              body: SingleChildScrollView(
+                child: DashboardMetrics(erpEnabled: true),
+              ),
             ),
           ),
           GoRoute(
@@ -214,4 +218,46 @@ void main() {
     expect(tester.takeException(), isNull);
     api.close();
   });
+
+  testWidgets(
+    'App-only dashboard loads only operational metrics and hides financial values',
+    (tester) async {
+      final paths = <String>[];
+      final api = ApiClient(
+        baseUrl: 'https://synthetic.invalid',
+        client: MockClient((request) async {
+          paths.add(request.url.path);
+          return http.Response(
+            jsonEncode({
+              'today': '2026-10-19',
+              'activeStudents': 7,
+              'studentsWithoutAssessment': 2,
+              'reassessmentsDue': 1,
+            }),
+            200,
+          );
+        }),
+      );
+      await tester.pumpWidget(
+        Provider.value(
+          value: api,
+          child: const MaterialApp(
+            home: Scaffold(
+              body: SingleChildScrollView(child: DashboardMetrics()),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(paths, ['/api/dashboard/operational']);
+      expect(find.text('Alunos ativos'), findsOneWidget);
+      expect(find.text('Sem avaliação física'), findsOneWidget);
+      expect(find.text('Receita prevista no mês'), findsNothing);
+      expect(find.text('Cobranças vencidas'), findsNothing);
+      expect(find.text('Matrículas vigentes'), findsNothing);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+      api.close();
+    },
+  );
 }

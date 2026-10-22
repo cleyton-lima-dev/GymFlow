@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import 'package:avelri_gestao/app/theme/branding_controller.dart';
+import 'package:avelri_gestao/app/session/erp_feature_controller.dart';
+import 'package:avelri_gestao/app/session/session_controller.dart';
 import 'package:avelri_gestao/core/network/api_client.dart';
 import 'package:avelri_gestao/features/students/data/students_service.dart';
 import 'package:avelri_gestao/features/students/models/student_summary.dart';
@@ -13,7 +15,12 @@ class StudentsPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final gymId = context.watch<SessionController>().user?.gymId;
+    final erpEnabled =
+        gymId != null &&
+        context.watch<ErpFeatureController>().isEnabledForGym(gymId);
     return ChangeNotifierProvider(
+      key: ValueKey(erpEnabled),
       create: (context) =>
           StudentsViewModel(StudentsService(context.read<ApiClient>()))
             ..loadInitial(),
@@ -29,6 +36,10 @@ class _StudentsView extends StatelessWidget {
   Widget build(BuildContext context) {
     final viewModel = context.watch<StudentsViewModel>();
     final branding = context.watch<BrandingController>().branding;
+    final userGymId = context.watch<SessionController>().user?.gymId;
+    final erpEnabled =
+        userGymId != null &&
+        context.watch<ErpFeatureController>().isEnabledForGym(userGymId);
     final primaryColor = branding.primaryColor;
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
@@ -67,6 +78,29 @@ class _StudentsView extends StatelessWidget {
                     ],
                   ),
                 ),
+                if (erpEnabled) ...[
+                  OutlinedButton.icon(
+                    onPressed: () => context.go('/students/import'),
+                    icon: const Icon(Icons.upload_file_outlined),
+                    label: const Text('Importar CSV/XLSX'),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 18,
+                        vertical: 17,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(11),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  OutlinedButton.icon(
+                    onPressed: () => context.go('/students/migration'),
+                    icon: const Icon(Icons.sync_alt),
+                    label: const Text('Migração universal'),
+                  ),
+                  const SizedBox(width: 10),
+                ],
                 FilledButton.icon(
                   onPressed: () => context.go('/students/new'),
                   icon: const Icon(Icons.person_add_alt_1_rounded),
@@ -115,15 +149,11 @@ class _StudentsView extends StatelessWidget {
                             ),
                             border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(11),
-                              borderSide: BorderSide(
-                                color: theme.dividerColor,
-                              ),
+                              borderSide: BorderSide(color: theme.dividerColor),
                             ),
                             enabledBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(11),
-                              borderSide: BorderSide(
-                                color: theme.dividerColor,
-                              ),
+                              borderSide: BorderSide(color: theme.dividerColor),
                             ),
                           ),
                         ),
@@ -133,9 +163,10 @@ class _StudentsView extends StatelessWidget {
                         onPressed: viewModel.isLoading
                             ? null
                             : () => _showStudentsFilters(
-                          context,
-                          viewModel,
-                        ),
+                                context,
+                                viewModel,
+                                erpEnabled: erpEnabled,
+                              ),
                         icon: Icon(
                           viewModel.hasActiveFilter
                               ? Icons.filter_alt_rounded
@@ -145,9 +176,7 @@ class _StudentsView extends StatelessWidget {
                         label: const Text('Filtros'),
                         style: OutlinedButton.styleFrom(
                           minimumSize: const Size(0, 50),
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 18,
-                          ),
+                          padding: const EdgeInsets.symmetric(horizontal: 18),
                         ),
                       ),
                       const SizedBox(width: 6),
@@ -177,6 +206,7 @@ class _StudentsView extends StatelessWidget {
                     _StudentsTable(
                       students: viewModel.students,
                       primaryColor: primaryColor,
+                      erpEnabled: erpEnabled,
                     ),
                   if (viewModel.hasStudents) ...[
                     const SizedBox(height: 18),
@@ -233,10 +263,15 @@ class _StudentsView extends StatelessWidget {
 }
 
 class _StudentsTable extends StatelessWidget {
-  const _StudentsTable({required this.students, required this.primaryColor});
+  const _StudentsTable({
+    required this.students,
+    required this.primaryColor,
+    required this.erpEnabled,
+  });
 
   final List<StudentSummary> students;
   final Color primaryColor;
+  final bool erpEnabled;
 
   @override
   Widget build(BuildContext context) {
@@ -260,14 +295,16 @@ class _StudentsTable extends StatelessWidget {
             fontSize: 11,
             fontWeight: FontWeight.w800,
           ),
-          columns: const [
-            DataColumn(label: Text('ALUNO')),
-            DataColumn(label: Text('E-MAIL')),
-            DataColumn(label: Text('TELEFONE')),
-            DataColumn(label: Text('CONTA')),
-            DataColumn(label: Text('MATRÍCULA')),
-            DataColumn(label: Text('PLANO')),
-            DataColumn(label: Text('VENCIMENTO')),
+          columns: [
+            const DataColumn(label: Text('ALUNO')),
+            const DataColumn(label: Text('E-MAIL')),
+            const DataColumn(label: Text('TELEFONE')),
+            const DataColumn(label: Text('CONTA')),
+            if (erpEnabled) ...[
+              const DataColumn(label: Text('MATRÍCULA')),
+              const DataColumn(label: Text('PLANO')),
+              const DataColumn(label: Text('VENCIMENTO')),
+            ],
           ],
           rows: students.map((student) {
             return DataRow(
@@ -317,39 +354,31 @@ class _StudentsTable extends StatelessWidget {
                 DataCell(
                   SizedBox(width: 110, child: Text(student.phone ?? '—')),
                 ),
-                DataCell(
-                  _StatusBadge(
-                    isActive: student.isActive,
+                DataCell(_StatusBadge(isActive: student.isActive)),
+                if (erpEnabled) ...[
+                  DataCell(
+                    Text(_enrollmentStatusLabel(student.enrollmentStatus)),
                   ),
-                ),
-                DataCell(
-                  Text(
-                    _enrollmentStatusLabel(
-                      student.enrollmentStatus,
-                    ),
-                  ),
-                ),
-                DataCell(
-                  SizedBox(
-                    width: 120,
-                    child: Text(
-                      student.planName ?? '—',
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                ),
-                DataCell(
-                  SizedBox(
-                    width: 90,
-                    child: Text(
-                      student.enrollmentEndDate == null
-                          ? '—'
-                          : _formatDate(
-                        student.enrollmentEndDate!,
+                  DataCell(
+                    SizedBox(
+                      width: 120,
+                      child: Text(
+                        student.planName ?? '—',
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
                   ),
-                ),
+                  DataCell(
+                    SizedBox(
+                      width: 90,
+                      child: Text(
+                        student.enrollmentEndDate == null
+                            ? '—'
+                            : _formatDate(student.enrollmentEndDate!),
+                      ),
+                    ),
+                  ),
+                ],
               ],
             );
           }).toList(),
@@ -358,9 +387,7 @@ class _StudentsTable extends StatelessWidget {
     );
   }
 
-  static String _enrollmentStatusLabel(
-      EnrollmentStatus? status,
-      ) {
+  static String _enrollmentStatusLabel(EnrollmentStatus? status) {
     return switch (status) {
       EnrollmentStatus.active => 'Ativa',
       EnrollmentStatus.cancelled => 'Cancelada',
@@ -492,10 +519,12 @@ class _ErrorState extends StatelessWidget {
     );
   }
 }
+
 Future<void> _showStudentsFilters(
-    BuildContext context,
-    StudentsViewModel viewModel,
-    ) async {
+  BuildContext context,
+  StudentsViewModel viewModel, {
+  required bool erpEnabled,
+}) async {
   var statusFilter = viewModel.statusFilter;
   var enrollmentFilter = viewModel.enrollmentFilter;
   var archiveFilter = viewModel.archiveFilter;
@@ -514,9 +543,7 @@ Future<void> _showStudentsFilters(
                 children: [
                   DropdownButtonFormField<StudentsStatusFilter>(
                     initialValue: statusFilter,
-                    decoration: const InputDecoration(
-                      labelText: 'Conta',
-                    ),
+                    decoration: const InputDecoration(labelText: 'Conta'),
                     items: const [
                       DropdownMenuItem(
                         value: StudentsStatusFilter.all,
@@ -539,42 +566,42 @@ Future<void> _showStudentsFilters(
                       });
                     },
                   ),
-                  const SizedBox(height: 18),
-                  DropdownButtonFormField<StudentsEnrollmentFilter>(
-                    initialValue: enrollmentFilter,
-                    decoration: const InputDecoration(
-                      labelText: 'Matrícula',
-                    ),
-                    items: const [
-                      DropdownMenuItem(
-                        value: StudentsEnrollmentFilter.all,
-                        child: Text('Todas'),
-                      ),
-                      DropdownMenuItem(
-                        value: StudentsEnrollmentFilter.active,
-                        child: Text('Ativa'),
-                      ),
-                      DropdownMenuItem(
-                        value: StudentsEnrollmentFilter.expired,
-                        child: Text('Vencida'),
-                      ),
-                      DropdownMenuItem(
-                        value: StudentsEnrollmentFilter.cancelled,
-                        child: Text('Cancelada'),
-                      ),
-                      DropdownMenuItem(
-                        value: StudentsEnrollmentFilter.none,
-                        child: Text('Sem matrícula'),
-                      ),
-                    ],
-                    onChanged: (value) {
-                      if (value == null) return;
+                  if (erpEnabled) ...[
+                    const SizedBox(height: 18),
+                    DropdownButtonFormField<StudentsEnrollmentFilter>(
+                      initialValue: enrollmentFilter,
+                      decoration: const InputDecoration(labelText: 'Matrícula'),
+                      items: const [
+                        DropdownMenuItem(
+                          value: StudentsEnrollmentFilter.all,
+                          child: Text('Todas'),
+                        ),
+                        DropdownMenuItem(
+                          value: StudentsEnrollmentFilter.active,
+                          child: Text('Ativa'),
+                        ),
+                        DropdownMenuItem(
+                          value: StudentsEnrollmentFilter.expired,
+                          child: Text('Vencida'),
+                        ),
+                        DropdownMenuItem(
+                          value: StudentsEnrollmentFilter.cancelled,
+                          child: Text('Cancelada'),
+                        ),
+                        DropdownMenuItem(
+                          value: StudentsEnrollmentFilter.none,
+                          child: Text('Sem matrícula'),
+                        ),
+                      ],
+                      onChanged: (value) {
+                        if (value == null) return;
 
-                      setState(() {
-                        enrollmentFilter = value;
-                      });
-                    },
-                  ),
+                        setState(() {
+                          enrollmentFilter = value;
+                        });
+                      },
+                    ),
+                  ],
                   const SizedBox(height: 18),
 
                   DropdownButtonFormField<StudentsArchiveFilter>(
@@ -611,21 +638,18 @@ Future<void> _showStudentsFilters(
               TextButton(
                 onPressed: () {
                   statusFilter = StudentsStatusFilter.all;
-                  enrollmentFilter =
-                      StudentsEnrollmentFilter.all;
+                  enrollmentFilter = StudentsEnrollmentFilter.all;
 
                   Navigator.of(context).pop(true);
                 },
                 child: const Text('Limpar'),
               ),
               TextButton(
-                onPressed: () =>
-                    Navigator.of(context).pop(false),
+                onPressed: () => Navigator.of(context).pop(false),
                 child: const Text('Cancelar'),
               ),
               FilledButton(
-                onPressed: () =>
-                    Navigator.of(context).pop(true),
+                onPressed: () => Navigator.of(context).pop(true),
                 child: const Text('Aplicar'),
               ),
             ],
@@ -635,11 +659,13 @@ Future<void> _showStudentsFilters(
     },
   );
 
-  if (apply != true) return;
+  if (apply != true || !context.mounted) return;
 
   await viewModel.updateFilters(
     statusFilter: statusFilter,
-    enrollmentFilter: enrollmentFilter,
+    enrollmentFilter: erpEnabled
+        ? enrollmentFilter
+        : StudentsEnrollmentFilter.all,
     archiveFilter: archiveFilter,
   );
 }

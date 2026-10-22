@@ -4,12 +4,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
-import 'package:provider/provider.dart';
 import 'package:avelri_gestao/core/network/api_client.dart';
 import 'package:avelri_gestao/features/reports/data/reports_service.dart';
 import 'package:avelri_gestao/features/reports/presentation/report_presentation.dart';
 import 'package:avelri_gestao/features/reports/presentation/reports_page.dart';
 import 'package:avelri_gestao/features/reports/presentation/report_table.dart';
+
+import '../../support/management_test_scope.dart';
 
 Map<String, dynamic> response() => {
   'title': 'Alunos',
@@ -81,8 +82,8 @@ void main() {
         ),
       );
       await tester.pumpWidget(
-        Provider<ApiClient>.value(
-          value: api,
+        ManagementTestScope(
+          api: api,
           child: MaterialApp(
             builder: (context, child) => MediaQuery(
               data: MediaQuery.of(context)
@@ -192,8 +193,8 @@ void main() {
       }),
     );
     await tester.pumpWidget(
-      Provider<ApiClient>.value(
-        value: api,
+      ManagementTestScope(
+        api: api,
         child: const MaterialApp(home: Scaffold(body: ReportsPage())),
       ),
     );

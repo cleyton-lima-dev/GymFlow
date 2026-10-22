@@ -11,6 +11,15 @@ class StudentsService {
 
   final ApiClient _apiClient;
 
+  Future<String?> setAppAccess(String studentId, bool enabled) async {
+    final response = await _apiClient.post(
+      'api/students/$studentId/app-access',
+      body: {'enabled': enabled},
+    );
+    if (response is! Map) throw const FormatException('Invalid app access response.');
+    return response['token'] as String?;
+  }
+
   Future<PagedStudentsResponse> getStudents({
     String? search,
     bool? isActive,
@@ -47,7 +56,6 @@ class StudentsService {
   Future<void> createStudent({
     required String name,
     required String email,
-    required String password,
     String? phone,
     DateTime? birthDate,
   }) async {
@@ -57,8 +65,7 @@ class StudentsService {
       'api/students',
       body: {
         'name': name.trim(),
-        'email': email.trim(),
-        'password': password,
+        'email': email.trim().isEmpty ? null : email.trim(),
         'phone': normalizedPhone == null || normalizedPhone.isEmpty
             ? null
             : normalizedPhone,
@@ -250,7 +257,7 @@ class StudentsService {
       'api/students/$studentId',
       body: {
         'name': name.trim(),
-        'email': email.trim(),
+        'email': email.trim().isEmpty ? null : email.trim(),
         'phone': normalizedPhone == null || normalizedPhone.isEmpty
             ? null
             : normalizedPhone,

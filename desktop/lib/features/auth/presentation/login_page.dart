@@ -12,9 +12,7 @@ class LoginPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ChangeNotifierProvider(
-      create: (context) => LoginViewModel(
-        context.read<SessionController>(),
-      ),
+      create: (context) => LoginViewModel(context.read<SessionController>()),
       child: const _LoginView(),
     );
   }
@@ -67,18 +65,12 @@ class _LoginViewState extends State<_LoginView> {
           const Positioned(
             top: -170,
             right: -120,
-            child: _AmbientGlow(
-              size: 440,
-              color: Color(0xFF6C3CE7),
-            ),
+            child: _AmbientGlow(size: 440, color: Color(0xFF6C3CE7)),
           ),
           const Positioned(
             bottom: -210,
             left: -160,
-            child: _AmbientGlow(
-              size: 500,
-              color: Color(0xFF9D7AF2),
-            ),
+            child: _AmbientGlow(size: 500, color: Color(0xFF9D7AF2)),
           ),
           SafeArea(
             child: LayoutBuilder(
@@ -91,9 +83,7 @@ class _LoginViewState extends State<_LoginView> {
                     ),
                     child: Center(
                       child: ConstrainedBox(
-                        constraints: const BoxConstraints(
-                          maxWidth: 460,
-                        ),
+                        constraints: const BoxConstraints(maxWidth: 460),
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
@@ -149,9 +139,7 @@ class _BrandHeader extends StatelessWidget {
             ],
           ),
           child: const CustomPaint(
-            painter: _AvelriMarkPainter(
-              color: Colors.white,
-            ),
+            painter: _AvelriMarkPainter(color: Colors.white),
           ),
         ),
         const SizedBox(height: 20),
@@ -199,6 +187,7 @@ class _LoginCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final viewModel = context.watch<LoginViewModel>();
+    final session = context.watch<SessionController>();
 
     return Container(
       width: double.infinity,
@@ -206,9 +195,7 @@ class _LoginCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(
-          color: const Color(0xFFE4E6EF),
-        ),
+        border: Border.all(color: const Color(0xFFE4E6EF)),
         boxShadow: const [
           BoxShadow(
             color: Color(0x10071028),
@@ -264,9 +251,8 @@ class _LoginCard extends StatelessWidget {
                   return 'Informe seu e-mail.';
                 }
 
-                final isValid = RegExp(
-                  r'^[^@\s]+@[^@\s]+\.[^@\s]+$',
-                ).hasMatch(email);
+                final isValid = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$')
+                    .hasMatch(email);
 
                 if (!isValid) {
                   return 'Informe um e-mail válido.';
@@ -286,9 +272,7 @@ class _LoginCard extends StatelessWidget {
               controller: passwordController,
               obscureText: obscurePassword,
               textInputAction: TextInputAction.done,
-              autofillHints: const [
-                AutofillHints.password,
-              ],
+              autofillHints: const [AutofillHints.password],
               autocorrect: false,
               enableSuggestions: false,
               onChanged: (_) {
@@ -310,9 +294,7 @@ class _LoginCard extends StatelessWidget {
                 hintText: 'Digite sua senha',
                 prefixIcon: Icons.lock_outline_rounded,
                 suffix: IconButton(
-                  tooltip: obscurePassword
-                      ? 'Mostrar senha'
-                      : 'Ocultar senha',
+                  tooltip: obscurePassword ? 'Mostrar senha' : 'Ocultar senha',
                   onPressed: onTogglePassword,
                   icon: Icon(
                     obscurePassword
@@ -329,9 +311,7 @@ class _LoginCard extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: const Color(0xFFFFF0F1),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: const Color(0xFFFFD8DB),
-                  ),
+                  border: Border.all(color: const Color(0xFFFFD8DB)),
                 ),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -356,6 +336,17 @@ class _LoginCard extends StatelessWidget {
                 ),
               ),
             ],
+            if (session.persistenceWarning != null) ...[
+              const SizedBox(height: 18),
+              Text(
+                session.persistenceWarning!,
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
+              ),
+              TextButton(
+                onPressed: session.logout,
+                child: const Text('Tentar encerrar a sessão novamente'),
+              ),
+            ],
             const SizedBox(height: 26),
             SizedBox(
               height: 52,
@@ -363,8 +354,8 @@ class _LoginCard extends StatelessWidget {
                 style: FilledButton.styleFrom(
                   backgroundColor: const Color(0xFF3F17AB),
                   foregroundColor: Colors.white,
-                  disabledBackgroundColor:
-                  const Color(0xFF3F17AB).withAlpha(140),
+                  disabledBackgroundColor: const Color(0xFF3F17AB)
+                      .withAlpha(140),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(13),
                   ),
@@ -372,30 +363,27 @@ class _LoginCard extends StatelessWidget {
                 onPressed: viewModel.isLoading ? null : onSubmit,
                 child: viewModel.isLoading
                     ? const SizedBox(
-                  width: 22,
-                  height: 22,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2.3,
-                    color: Colors.white,
-                  ),
-                )
+                        width: 22,
+                        height: 22,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2.3,
+                          color: Colors.white,
+                        ),
+                      )
                     : const Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      'Entrar',
-                      style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w800,
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(
+                            'Entrar',
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                          SizedBox(width: 8),
+                          Icon(Icons.arrow_forward_rounded, size: 19),
+                        ],
                       ),
-                    ),
-                    SizedBox(width: 8),
-                    Icon(
-                      Icons.arrow_forward_rounded,
-                      size: 19,
-                    ),
-                  ],
-                ),
               ),
             ),
           ],
@@ -413,50 +401,30 @@ class _LoginCard extends StatelessWidget {
 
     final border = OutlineInputBorder(
       borderRadius: BorderRadius.circular(12),
-      borderSide: const BorderSide(
-        color: borderColor,
-      ),
+      borderSide: const BorderSide(color: borderColor),
     );
 
     return InputDecoration(
       hintText: hintText,
-      hintStyle: const TextStyle(
-        color: Color(0xFFA0A5B7),
-        fontSize: 14,
-      ),
-      prefixIcon: Icon(
-        prefixIcon,
-        size: 20,
-        color: const Color(0xFF777D93),
-      ),
+      hintStyle: const TextStyle(color: Color(0xFFA0A5B7), fontSize: 14),
+      prefixIcon: Icon(prefixIcon, size: 20, color: const Color(0xFF777D93)),
       suffixIcon: suffix,
       filled: true,
       fillColor: const Color(0xFFF9FAFC),
-      contentPadding: const EdgeInsets.symmetric(
-        horizontal: 16,
-        vertical: 17,
-      ),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 17),
       border: border,
       enabledBorder: border,
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(
-          color: Color(0xFF3F17AB),
-          width: 1.5,
-        ),
+        borderSide: const BorderSide(color: Color(0xFF3F17AB), width: 1.5),
       ),
       errorBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(
-          color: Color(0xFFBE3441),
-        ),
+        borderSide: const BorderSide(color: Color(0xFFBE3441)),
       ),
       focusedErrorBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(
-          color: Color(0xFFBE3441),
-          width: 1.5,
-        ),
+        borderSide: const BorderSide(color: Color(0xFFBE3441), width: 1.5),
       ),
     );
   }
@@ -481,10 +449,7 @@ class _FieldLabel extends StatelessWidget {
 }
 
 class _AmbientGlow extends StatelessWidget {
-  const _AmbientGlow({
-    required this.size,
-    required this.color,
-  });
+  const _AmbientGlow({required this.size, required this.color});
 
   final double size;
   final Color color;
@@ -511,18 +476,13 @@ class _AmbientGlow extends StatelessWidget {
 }
 
 class _AvelriMarkPainter extends CustomPainter {
-  const _AvelriMarkPainter({
-    required this.color,
-  });
+  const _AvelriMarkPainter({required this.color});
 
   final Color color;
 
   @override
   void paint(Canvas canvas, Size size) {
-    final center = Offset(
-      size.width / 2,
-      size.height / 2,
-    );
+    final center = Offset(size.width / 2, size.height / 2);
 
     final radius = size.shortestSide * 0.43;
 
@@ -552,10 +512,7 @@ class _AvelriMarkPainter extends CustomPainter {
       ..strokeJoin = StrokeJoin.round
       ..strokeCap = StrokeCap.round;
 
-    canvas.drawPath(
-      hexagon,
-      outlinePaint,
-    );
+    canvas.drawPath(hexagon, outlinePaint);
 
     final barPaint = Paint()
       ..color = color
@@ -575,18 +532,11 @@ class _AvelriMarkPainter extends CustomPainter {
       barPaint,
     );
 
-    void drawPlate(
-        double x,
-        double width,
-        double height,
-        ) {
+    void drawPlate(double x, double width, double height) {
       canvas.drawRRect(
         RRect.fromRectAndRadius(
           Rect.fromCenter(
-            center: Offset(
-              x,
-              center.dy,
-            ),
+            center: Offset(x, center.dy),
             width: width,
             height: height,
           ),
@@ -596,35 +546,17 @@ class _AvelriMarkPainter extends CustomPainter {
       );
     }
 
-    drawPlate(
-      center.dx - scale * 0.22,
-      scale * 0.10,
-      scale * 0.34,
-    );
+    drawPlate(center.dx - scale * 0.22, scale * 0.10, scale * 0.34);
 
-    drawPlate(
-      center.dx + scale * 0.22,
-      scale * 0.10,
-      scale * 0.34,
-    );
+    drawPlate(center.dx + scale * 0.22, scale * 0.10, scale * 0.34);
 
-    drawPlate(
-      center.dx - scale * 0.31,
-      scale * 0.065,
-      scale * 0.21,
-    );
+    drawPlate(center.dx - scale * 0.31, scale * 0.065, scale * 0.21);
 
-    drawPlate(
-      center.dx + scale * 0.31,
-      scale * 0.065,
-      scale * 0.21,
-    );
+    drawPlate(center.dx + scale * 0.31, scale * 0.065, scale * 0.21);
   }
 
   @override
-  bool shouldRepaint(
-      covariant _AvelriMarkPainter oldDelegate,
-      ) {
+  bool shouldRepaint(covariant _AvelriMarkPainter oldDelegate) {
     return oldDelegate.color != color;
   }
 }

@@ -3,8 +3,9 @@ import 'package:avelri_gestao/features/dashboard/data/dashboard_service.dart';
 import 'package:avelri_gestao/features/dashboard/models/dashboard_summary.dart';
 
 class DashboardViewModel extends ChangeNotifier {
-  DashboardViewModel(this._service);
+  DashboardViewModel(this._service, {this.includeFinancial = true});
   final DashboardService _service;
+  final bool includeFinancial;
   DashboardSummary? summary;
   bool isLoading = false;
   String? error;
@@ -16,7 +17,7 @@ class DashboardViewModel extends ChangeNotifier {
     error = null;
     notifyListeners();
     try {
-      final result = await _service.load();
+      final result = await _service.load(includeFinancial: includeFinancial);
       if (!_disposed) summary = result;
     } catch (_) {
       if (!_disposed) {
