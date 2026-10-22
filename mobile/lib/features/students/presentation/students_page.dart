@@ -493,7 +493,9 @@ class _StudentCard extends StatelessWidget {
 
                     _StudentInfoLine(
                       icon: Icons.mail_outline_rounded,
-                      text: student.email,
+                      text: student.email?.trim().isNotEmpty == true
+                          ? student.email!
+                          : 'E-mail não informado',
                     ),
 
                     const SizedBox(height: 5),

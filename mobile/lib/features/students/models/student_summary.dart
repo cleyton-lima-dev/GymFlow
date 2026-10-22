@@ -2,7 +2,7 @@ class StudentSummary {
   const StudentSummary({
     required this.id,
     required this.name,
-    required this.email,
+    this.email,
     required this.phone,
     required this.birthDate,
     required this.isActive,
@@ -11,7 +11,7 @@ class StudentSummary {
 
   final String id;
   final String name;
-  final String email;
+  final String? email;
   final String? phone;
   final DateTime? birthDate;
   final bool isActive;
@@ -23,7 +23,7 @@ class StudentSummary {
     return StudentSummary(
       id: json['id'] as String,
       name: json['name'] as String,
-      email: json['email'] as String,
+      email: json['email'] as String?,
       phone: json['phone'] as String?,
       birthDate: birthDateValue == null
           ? null

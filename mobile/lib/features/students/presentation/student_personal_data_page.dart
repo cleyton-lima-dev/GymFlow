@@ -185,7 +185,7 @@ class _StudentDataContent extends StatelessWidget {
         _DataRow(
           icon: Icons.email_outlined,
           label: 'E-mail',
-          value: student.email,
+          value: _optionalText(student.email),
         ),
 
         _DataRow(
@@ -323,7 +323,9 @@ class _ProfileHeader extends StatelessWidget {
                     const SizedBox(width: 6),
                     Expanded(
                       child: Text(
-                        student.email,
+                        student.email?.trim().isNotEmpty == true
+                            ? student.email!
+                            : 'E-mail não informado',
                         overflow: TextOverflow.ellipsis,
                         style: Theme.of(context).textTheme.bodyMedium
                             ?.copyWith(color: colorScheme.onSurfaceVariant),

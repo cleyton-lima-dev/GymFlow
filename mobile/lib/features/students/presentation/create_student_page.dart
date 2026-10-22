@@ -34,22 +34,16 @@ class _CreateStudentViewState extends State<_CreateStudentView> {
 
   final _nameController = TextEditingController();
   final _emailController = TextEditingController();
-  final _passwordController = TextEditingController();
-  final _confirmPasswordController = TextEditingController();
   final _phoneController = TextEditingController();
   final _birthDateController = TextEditingController();
 
   DateTime? _birthDate;
 
-  bool _obscurePassword = true;
-  bool _obscureConfirmPassword = true;
 
   @override
   void dispose() {
     _nameController.dispose();
     _emailController.dispose();
-    _passwordController.dispose();
-    _confirmPasswordController.dispose();
     _phoneController.dispose();
     _birthDateController.dispose();
 
@@ -102,8 +96,6 @@ class _CreateStudentViewState extends State<_CreateStudentView> {
     final created = await viewModel.createStudent(
       name: _nameController.text,
       email: _emailController.text,
-      password: _passwordController.text,
-      confirmPassword: _confirmPasswordController.text,
       phone: _phoneController.text,
       birthDate: _birthDate,
     );
@@ -170,8 +162,8 @@ class _CreateStudentViewState extends State<_CreateStudentView> {
                     const SizedBox(height: 8),
 
                     Text(
-                      'Preencha os dados do aluno para criar o acesso '
-                          'e o cadastro no app.',
+                      'Cadastre o aluno no Avelri Gestão. O acesso ao '
+                          'aplicativo é ativado separadamente por convite.',
                       style: theme.textTheme.bodyLarge?.copyWith(
                         color: colorScheme.onSurfaceVariant,
                         height: 1.45,
@@ -243,7 +235,7 @@ class _CreateStudentViewState extends State<_CreateStudentView> {
 
                           const _FieldLabel(
                             text: 'E-mail',
-                            requiredField: true,
+                            suffix: ' (opcional)',
                           ),
 
                           const SizedBox(height: 8),
@@ -264,9 +256,7 @@ class _CreateStudentViewState extends State<_CreateStudentView> {
                             validator: (value) {
                               final email = value?.trim() ?? '';
 
-                              if (email.isEmpty) {
-                                return 'Informe o e-mail.';
-                              }
+                              if (email.isEmpty) return null;
 
                               final valid = RegExp(
                                 r'^[^@\s]+@[^@\s]+\.[^@\s]+$',
@@ -282,106 +272,6 @@ class _CreateStudentViewState extends State<_CreateStudentView> {
                               context,
                               hintText: 'Digite o e-mail do aluno',
                               prefixIcon: Icons.mail_outline_rounded,
-                            ),
-                          ),
-
-                          const SizedBox(height: 20),
-
-                          const _FieldLabel(
-                            text: 'Senha',
-                            requiredField: true,
-                          ),
-
-                          const SizedBox(height: 8),
-
-                          TextFormField(
-                            controller: _passwordController,
-                            obscureText: _obscurePassword,
-                            textInputAction: TextInputAction.next,
-                            autocorrect: false,
-                            enableSuggestions: false,
-                            onChanged: (_) {
-                              viewModel.clearError();
-                            },
-                            validator: (value) {
-                              if (value == null || value.isEmpty) {
-                                return 'Informe uma senha.';
-                              }
-
-                              return null;
-                            },
-                            decoration: _inputDecoration(
-                              context,
-                              hintText: 'Digite uma senha',
-                              prefixIcon: Icons.lock_outline_rounded,
-                              suffixIcon: IconButton(
-                                tooltip: _obscurePassword
-                                    ? 'Mostrar senha'
-                                    : 'Ocultar senha',
-                                onPressed: () {
-                                  setState(() {
-                                    _obscurePassword =
-                                    !_obscurePassword;
-                                  });
-                                },
-                                icon: Icon(
-                                  _obscurePassword
-                                      ? Icons.visibility_outlined
-                                      : Icons.visibility_off_outlined,
-                                ),
-                              ),
-                            ),
-                          ),
-
-                          const SizedBox(height: 20),
-
-                          const _FieldLabel(
-                            text: 'Confirmar senha',
-                            requiredField: true,
-                          ),
-
-                          const SizedBox(height: 8),
-
-                          TextFormField(
-                            controller: _confirmPasswordController,
-                            obscureText: _obscureConfirmPassword,
-                            textInputAction: TextInputAction.next,
-                            autocorrect: false,
-                            enableSuggestions: false,
-                            onChanged: (_) {
-                              viewModel.clearError();
-                            },
-                            validator: (value) {
-                              if (value == null || value.isEmpty) {
-                                return 'Confirme a senha.';
-                              }
-
-                              if (value != _passwordController.text) {
-                                return 'As senhas não coincidem.';
-                              }
-
-                              return null;
-                            },
-                            decoration: _inputDecoration(
-                              context,
-                              hintText: 'Confirme a senha',
-                              prefixIcon: Icons.lock_outline_rounded,
-                              suffixIcon: IconButton(
-                                tooltip: _obscureConfirmPassword
-                                    ? 'Mostrar senha'
-                                    : 'Ocultar senha',
-                                onPressed: () {
-                                  setState(() {
-                                    _obscureConfirmPassword =
-                                    !_obscureConfirmPassword;
-                                  });
-                                },
-                                icon: Icon(
-                                  _obscureConfirmPassword
-                                      ? Icons.visibility_outlined
-                                      : Icons.visibility_off_outlined,
-                                ),
-                              ),
                             ),
                           ),
 
@@ -415,7 +305,7 @@ class _CreateStudentViewState extends State<_CreateStudentView> {
 
                           const _FieldLabel(
                             text: 'Data de nascimento',
-                            requiredField: true,
+                            suffix: ' (opcional)',
                           ),
 
                           const SizedBox(height: 8),
@@ -424,13 +314,6 @@ class _CreateStudentViewState extends State<_CreateStudentView> {
                             controller: _birthDateController,
                             readOnly: true,
                             onTap: _selectBirthDate,
-                            validator: (_) {
-                              if (_birthDate == null) {
-                                return 'Informe a data de nascimento.';
-                              }
-
-                              return null;
-                            },
                             decoration: _inputDecoration(
                               context,
                               hintText: 'dd/mm/aaaa',

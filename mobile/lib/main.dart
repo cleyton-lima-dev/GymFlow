@@ -14,8 +14,10 @@ import 'package:gymflow/app/session/session_status.dart';
 import 'package:gymflow/app/theme/ac_power_gym_branding.dart';
 import 'package:gymflow/app/theme/space_branding.dart';
 import 'package:gymflow/app/config/app_config.dart';
+import 'package:gymflow/core/web/clear_activation_token.dart';
 
 void main() {
+  prepareDirectActivationRoute();
   final config = AppConfig.fromEnvironment();
 
   const secureStorage = FlutterSecureStorage();

@@ -61,7 +61,7 @@ class EditStudentViewModel extends ChangeNotifier {
 
   Future<bool> save({
     required String name,
-    required String email,
+    String? email,
     String? phone,
     DateTime? birthDate,
   }) async {

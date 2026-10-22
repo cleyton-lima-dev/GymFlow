@@ -1,11 +1,15 @@
 import 'package:go_router/go_router.dart';
 import 'package:gymflow/features/home/presentation/student_home_page.dart';
 import 'package:gymflow/features/auth/presentation/login_page.dart';
+import 'package:gymflow/features/auth/presentation/activate_invite_page.dart';
+import 'package:gymflow/features/auth/data/auth_service.dart';
+import 'package:gymflow/core/network/api_client.dart';
 import 'package:gymflow/app/router/session_loading_page.dart';
 import 'package:gymflow/app/session/session_controller.dart';
 import 'package:gymflow/app/session/app_role.dart';
 import 'package:gymflow/app/session/session_status.dart';
 import 'package:flutter/foundation.dart';
+import 'package:provider/provider.dart';
 import 'package:gymflow/app/theme/branding_controller.dart';
 import 'package:gymflow/features/home/presentation/professor_admin_home_page.dart';
 import 'package:gymflow/features/students/presentation/students_page.dart';
@@ -43,10 +47,7 @@ import 'package:gymflow/features/auth/presentation/create_professor_page.dart';
 import 'package:gymflow/features/auth/presentation/professors_page.dart';
 
 class AppRouter {
-  AppRouter(
-      this._sessionController,
-      this._brandingController,
-      );
+  AppRouter(this._sessionController, this._brandingController);
 
   final SessionController _sessionController;
   final BrandingController _brandingController;
@@ -59,14 +60,10 @@ class AppRouter {
     };
   }
 
-  bool _isAllowedLocationForRole(
-      AppRole role,
-      String location,
-      ) {
+  bool _isAllowedLocationForRole(AppRole role, String location) {
     final basePath = _destinationForRole(role);
 
-    return location == basePath ||
-        location.startsWith('$basePath/');
+    return location == basePath || location.startsWith('$basePath/');
   }
 
   late final GoRouter router = GoRouter(
@@ -78,6 +75,8 @@ class AppRouter {
     redirect: (context, state) {
       final status = _sessionController.status;
       final location = state.matchedLocation;
+
+      if (location == '/ativar') return null;
 
       if (status == SessionStatus.unknown) {
         return location == '/bootstrap' ? null : '/bootstrap';
@@ -104,16 +103,19 @@ class AppRouter {
       }
 
       return destination;
-
     },
     routes: [
       GoRoute(
         path: '/bootstrap',
         builder: (context, state) => const SessionLoadingPage(),
       ),
+      GoRoute(path: '/login', builder: (context, state) => const LoginPage()),
       GoRoute(
-        path: '/login',
-        builder: (context, state) => const LoginPage(),
+        path: '/ativar',
+        builder: (context, state) => ActivateInvitePage(
+          authService: AuthService(context.read<ApiClient>()),
+          token: state.uri.queryParameters['token'] ?? '',
+        ),
       ),
       GoRoute(
         path: '/admin',
@@ -141,22 +143,18 @@ class AppRouter {
       ),
       GoRoute(
         path: '/admin/exercises/new',
-        builder: (context, state) =>
-        const CreateExercisePage(),
+        builder: (context, state) => const CreateExercisePage(),
       ),
       GoRoute(
         path: '/admin/exercises/:exerciseId/edit',
-        builder: (context, state) => EditExercisePage(
-          exercise: state.extra as ExerciseSummary,
-        ),
+        builder: (context, state) =>
+            EditExercisePage(exercise: state.extra as ExerciseSummary),
       ),
       GoRoute(
         path: '/admin/exercises',
         builder: (context, state) => ExercisesPage(
           onNewExerciseTap: () {
-            return context.push<bool>(
-              '/admin/exercises/new',
-            );
+            return context.push<bool>('/admin/exercises/new');
           },
           onExerciseTap: (exercise) {
             return context.push<bool>(
@@ -168,22 +166,18 @@ class AppRouter {
       ),
       GoRoute(
         path: '/professor/exercises/new',
-        builder: (context, state) =>
-        const CreateExercisePage(),
+        builder: (context, state) => const CreateExercisePage(),
       ),
       GoRoute(
         path: '/professor/exercises/:exerciseId/edit',
-        builder: (context, state) => EditExercisePage(
-          exercise: state.extra as ExerciseSummary,
-        ),
+        builder: (context, state) =>
+            EditExercisePage(exercise: state.extra as ExerciseSummary),
       ),
       GoRoute(
         path: '/professor/exercises',
         builder: (context, state) => ExercisesPage(
           onNewExerciseTap: () {
-            return context.push<bool>(
-              '/professor/exercises/new',
-            );
+            return context.push<bool>('/professor/exercises/new');
           },
           onExerciseTap: (exercise) {
             return context.push<bool>(
@@ -195,18 +189,16 @@ class AppRouter {
       ),
       GoRoute(
         path: '/admin/templates/new',
-        builder: (context, state) =>
-            CreateWorkoutTemplatePage(
-              onCreated: () {
-                context.pop(true);
-              },
-            ),
+        builder: (context, state) => CreateWorkoutTemplatePage(
+          onCreated: () {
+            context.pop(true);
+          },
+        ),
       ),
       GoRoute(
         path: '/admin/templates/:templateId/edit',
         builder: (context, state) {
-          final templateId =
-          state.pathParameters['templateId']!;
+          final templateId = state.pathParameters['templateId']!;
 
           return EditWorkoutTemplatePage(
             templateId: templateId,
@@ -219,8 +211,7 @@ class AppRouter {
       GoRoute(
         path: '/admin/templates/:templateId',
         builder: (context, state) {
-          final templateId =
-          state.pathParameters['templateId']!;
+          final templateId = state.pathParameters['templateId']!;
 
           return WorkoutTemplateDetailsPage(
             templateId: templateId,
@@ -236,36 +227,29 @@ class AppRouter {
       ),
       GoRoute(
         path: '/admin/templates',
-        builder: (context, state) =>
-            WorkoutTemplatesPage(
-              onNewTemplateTap: () async {
-                final created = await context.push<bool>(
-                  '/admin/templates/new',
-                );
+        builder: (context, state) => WorkoutTemplatesPage(
+          onNewTemplateTap: () async {
+            final created = await context.push<bool>('/admin/templates/new');
 
-                return created ?? false;
-              },
-              onTemplateTap: (template) async {
-                await context.push(
-                  '/admin/templates/${template.id}',
-                );
-              },
-            ),
+            return created ?? false;
+          },
+          onTemplateTap: (template) async {
+            await context.push('/admin/templates/${template.id}');
+          },
+        ),
       ),
       GoRoute(
         path: '/professor/templates/new',
-        builder: (context, state) =>
-            CreateWorkoutTemplatePage(
-              onCreated: () {
-                context.pop(true);
-              },
-            ),
+        builder: (context, state) => CreateWorkoutTemplatePage(
+          onCreated: () {
+            context.pop(true);
+          },
+        ),
       ),
       GoRoute(
         path: '/professor/templates/:templateId/edit',
         builder: (context, state) {
-          final templateId =
-          state.pathParameters['templateId']!;
+          final templateId = state.pathParameters['templateId']!;
 
           return EditWorkoutTemplatePage(
             templateId: templateId,
@@ -278,8 +262,7 @@ class AppRouter {
       GoRoute(
         path: '/professor/templates/:templateId',
         builder: (context, state) {
-          final templateId =
-          state.pathParameters['templateId']!;
+          final templateId = state.pathParameters['templateId']!;
 
           return WorkoutTemplateDetailsPage(
             templateId: templateId,
@@ -295,21 +278,18 @@ class AppRouter {
       ),
       GoRoute(
         path: '/professor/templates',
-        builder: (context, state) =>
-            WorkoutTemplatesPage(
-              onNewTemplateTap: () async {
-                final created = await context.push<bool>(
-                  '/professor/templates/new',
-                );
+        builder: (context, state) => WorkoutTemplatesPage(
+          onNewTemplateTap: () async {
+            final created = await context.push<bool>(
+              '/professor/templates/new',
+            );
 
-                return created ?? false;
-              },
-              onTemplateTap: (template) async {
-                await context.push(
-                  '/professor/templates/${template.id}',
-                );
-              },
-            ),
+            return created ?? false;
+          },
+          onTemplateTap: (template) async {
+            await context.push('/professor/templates/${template.id}');
+          },
+        ),
       ),
       GoRoute(
         path: '/student',
@@ -324,46 +304,37 @@ class AppRouter {
             return const StudentHomePage();
           }
 
-          return StudentWorkoutDayPage(
-            arguments: arguments,
-          );
+          return StudentWorkoutDayPage(arguments: arguments);
         },
       ),
       GoRoute(
         path: '/student/history',
-        builder: (context, state) =>
-        const StudentWorkoutHistoryPage(),
+        builder: (context, state) => const StudentWorkoutHistoryPage(),
       ),
       GoRoute(
         path: '/student/more',
-        builder: (context, state) =>
-        const StudentMorePage(),
+        builder: (context, state) => const StudentMorePage(),
       ),
       GoRoute(
         path: '/student/profile',
-        builder: (context, state) =>
-        const StudentPersonalDataPage(),
+        builder: (context, state) => const StudentPersonalDataPage(),
       ),
       GoRoute(
         path: '/student/physical-assessment',
-        builder: (context, state) =>
-        const StudentPhysicalAssessmentPage(),
+        builder: (context, state) => const StudentPhysicalAssessmentPage(),
       ),
       GoRoute(
         path: '/student/physical-assessment/history',
         builder: (context, state) =>
-        const StudentPhysicalAssessmentHistoryPage(),
+            const StudentPhysicalAssessmentHistoryPage(),
       ),
 
       GoRoute(
-        path:
-        '/student/physical-assessment/:assessmentId',
+        path: '/student/physical-assessment/:assessmentId',
         builder: (context, state) {
-          final assessmentId =
-          state.pathParameters['assessmentId'];
+          final assessmentId = state.pathParameters['assessmentId'];
 
-          if (assessmentId == null ||
-              assessmentId.isEmpty) {
+          if (assessmentId == null || assessmentId.isEmpty) {
             return const StudentPhysicalAssessmentPage();
           }
 
@@ -385,34 +356,25 @@ class AppRouter {
         builder: (context, state) => const StudentsPage(),
       ),
       GoRoute(
-        path:
-        '/admin/students/:studentId/physical-assessments/new',
-        builder: (context, state) =>
-            CreatePhysicalAssessmentPage(
-              studentId: state.pathParameters['studentId']!,
-              studentName:
-              state.extra as String? ?? 'Aluno',
-            ),
+        path: '/admin/students/:studentId/physical-assessments/new',
+        builder: (context, state) => CreatePhysicalAssessmentPage(
+          studentId: state.pathParameters['studentId']!,
+          studentName: state.extra as String? ?? 'Aluno',
+        ),
       ),
       GoRoute(
-        path:
-        '/admin/students/:studentId/physical-assessments/:assessmentId',
-        builder: (context, state) =>
-            PhysicalAssessmentDetailsPage(
-              studentId: state.pathParameters['studentId']!,
-              assessmentId:
-              state.pathParameters['assessmentId']!,
-              studentName:
-              state.extra as String? ?? 'Aluno',
-              routeBase: 'admin',
-            ),
+        path: '/admin/students/:studentId/physical-assessments/:assessmentId',
+        builder: (context, state) => PhysicalAssessmentDetailsPage(
+          studentId: state.pathParameters['studentId']!,
+          assessmentId: state.pathParameters['assessmentId']!,
+          studentName: state.extra as String? ?? 'Aluno',
+          routeBase: 'admin',
+        ),
       ),
       GoRoute(
-        path:
-        '/admin/students/:studentId/physical-assessments/:assessmentId/edit',
+        path: '/admin/students/:studentId/physical-assessments/:assessmentId/edit',
         builder: (context, state) {
-          final arguments =
-          state.extra as EditPhysicalAssessmentArguments;
+          final arguments = state.extra as EditPhysicalAssessmentArguments;
 
           return CreatePhysicalAssessmentPage(
             studentId: state.pathParameters['studentId']!,
@@ -422,34 +384,26 @@ class AppRouter {
         },
       ),
       GoRoute(
-        path:
-        '/professor/students/:studentId/physical-assessments/new',
-        builder: (context, state) =>
-            CreatePhysicalAssessmentPage(
-              studentId: state.pathParameters['studentId']!,
-              studentName:
-              state.extra as String? ?? 'Aluno',
-            ),
+        path: '/professor/students/:studentId/physical-assessments/new',
+        builder: (context, state) => CreatePhysicalAssessmentPage(
+          studentId: state.pathParameters['studentId']!,
+          studentName: state.extra as String? ?? 'Aluno',
+        ),
       ),
       GoRoute(
         path:
-        '/professor/students/:studentId/physical-assessments/:assessmentId',
-        builder: (context, state) =>
-            PhysicalAssessmentDetailsPage(
-              studentId: state.pathParameters['studentId']!,
-              assessmentId:
-              state.pathParameters['assessmentId']!,
-              studentName:
-              state.extra as String? ?? 'Aluno',
-              routeBase: 'professor',
-            ),
+            '/professor/students/:studentId/physical-assessments/:assessmentId',
+        builder: (context, state) => PhysicalAssessmentDetailsPage(
+          studentId: state.pathParameters['studentId']!,
+          assessmentId: state.pathParameters['assessmentId']!,
+          studentName: state.extra as String? ?? 'Aluno',
+          routeBase: 'professor',
+        ),
       ),
       GoRoute(
-        path:
-        '/professor/students/:studentId/physical-assessments/:assessmentId/edit',
+        path: '/professor/students/:studentId/physical-assessments/:assessmentId/edit',
         builder: (context, state) {
-          final arguments =
-          state.extra as EditPhysicalAssessmentArguments;
+          final arguments = state.extra as EditPhysicalAssessmentArguments;
 
           return CreatePhysicalAssessmentPage(
             studentId: state.pathParameters['studentId']!,
@@ -464,22 +418,20 @@ class AppRouter {
           studentId: state.pathParameters['studentId']!,
           studentName: state.extra as String? ?? 'Aluno',
           onNewAssessmentTap: () {
-            final studentId =
-            state.pathParameters['studentId']!;
+            final studentId = state.pathParameters['studentId']!;
 
             return context.push<bool>(
               '/admin/students/$studentId/'
-                  'physical-assessments/new',
+              'physical-assessments/new',
               extra: state.extra,
             );
           },
           onAssessmentTap: (assessmentId) {
-            final studentId =
-            state.pathParameters['studentId']!;
+            final studentId = state.pathParameters['studentId']!;
 
             context.push(
               '/admin/students/$studentId/'
-                  'physical-assessments/$assessmentId',
+              'physical-assessments/$assessmentId',
               extra: state.extra,
             );
           },
@@ -491,22 +443,20 @@ class AppRouter {
           studentId: state.pathParameters['studentId']!,
           studentName: state.extra as String? ?? 'Aluno',
           onNewAssessmentTap: () {
-            final studentId =
-            state.pathParameters['studentId']!;
+            final studentId = state.pathParameters['studentId']!;
 
             return context.push<bool>(
               '/professor/students/$studentId/'
-                  'physical-assessments/new',
+              'physical-assessments/new',
               extra: state.extra,
             );
           },
           onAssessmentTap: (assessmentId) {
-            final studentId =
-            state.pathParameters['studentId']!;
+            final studentId = state.pathParameters['studentId']!;
 
             context.push(
               '/professor/students/$studentId/'
-                  'physical-assessments/$assessmentId',
+              'physical-assessments/$assessmentId',
               extra: state.extra,
             );
           },
@@ -515,40 +465,33 @@ class AppRouter {
       GoRoute(
         path: '/admin/students/:studentId/workouts/select-template',
         builder: (context, state) {
-          final studentId =
-          state.pathParameters['studentId']!;
+          final studentId = state.pathParameters['studentId']!;
 
           return SelectWorkoutTemplatePage(
             studentId: studentId,
-            studentName:
-            state.extra as String? ?? 'Aluno',
+            studentName: state.extra as String? ?? 'Aluno',
           );
         },
       ),
       GoRoute(
         path: '/admin/students/:studentId/workouts/manual',
         builder: (context, state) {
-          final studentId =
-          state.pathParameters['studentId']!;
+          final studentId = state.pathParameters['studentId']!;
 
           final extra = state.extra;
 
           if (extra is Map<String, dynamic>) {
-            final studentName =
-                extra['studentName'] as String? ?? 'Aluno';
+            final studentName = extra['studentName'] as String? ?? 'Aluno';
 
-            final template =
-            extra['template'] as WorkoutTemplateDetails?;
+            final template = extra['template'] as WorkoutTemplateDetails?;
 
             return CreateWorkoutPage(
               studentId: studentId,
               studentName: studentName,
               sourceTemplateId: template?.id,
               initialName: template?.name ?? '',
-              initialDescription:
-              template?.description ?? '',
-              initialDays:
-              template?.toWorkoutDraftDays(),
+              initialDescription: template?.description ?? '',
+              initialDays: template?.toWorkoutDraftDays(),
               onCreated: () {
                 context.pop(true);
               },
@@ -557,8 +500,7 @@ class AppRouter {
 
           return CreateWorkoutPage(
             studentId: studentId,
-            studentName:
-            extra as String? ?? 'Aluno',
+            studentName: extra as String? ?? 'Aluno',
             onCreated: () {
               context.pop(true);
             },
@@ -568,19 +510,16 @@ class AppRouter {
       GoRoute(
         path: '/admin/students/:studentId/workouts/create',
         builder: (context, state) {
-          final studentId =
-          state.pathParameters['studentId']!;
+          final studentId = state.pathParameters['studentId']!;
 
-          final studentName =
-              state.extra as String? ?? 'Aluno';
+          final studentName = state.extra as String? ?? 'Aluno';
 
           return CreateOrAssignWorkoutPage(
             studentName: studentName,
             onUseTemplateTap: () async {
-              final template =
-              await context.push<WorkoutTemplateDetails>(
+              final template = await context.push<WorkoutTemplateDetails>(
                 '/admin/students/$studentId/'
-                    'workouts/select-template',
+                'workouts/select-template',
                 extra: studentName,
               );
 
@@ -590,11 +529,8 @@ class AppRouter {
 
               final created = await context.push<bool>(
                 '/admin/students/$studentId/'
-                    'workouts/manual',
-                extra: {
-                  'studentName': studentName,
-                  'template': template,
-                },
+                'workouts/manual',
+                extra: {'studentName': studentName, 'template': template},
               );
 
               return created ?? false;
@@ -602,7 +538,7 @@ class AppRouter {
             onCreateManualTap: () async {
               final created = await context.push<bool>(
                 '/admin/students/$studentId/'
-                    'workouts/manual',
+                'workouts/manual',
                 extra: studentName,
               );
 
@@ -612,45 +548,35 @@ class AppRouter {
         },
       ),
       GoRoute(
-        path:
-        '/professor/students/:studentId/workouts/select-template',
+        path: '/professor/students/:studentId/workouts/select-template',
         builder: (context, state) {
-          final studentId =
-          state.pathParameters['studentId']!;
+          final studentId = state.pathParameters['studentId']!;
 
           return SelectWorkoutTemplatePage(
             studentId: studentId,
-            studentName:
-            state.extra as String? ?? 'Aluno',
+            studentName: state.extra as String? ?? 'Aluno',
           );
         },
       ),
       GoRoute(
-        path:
-        '/professor/students/:studentId/workouts/manual',
+        path: '/professor/students/:studentId/workouts/manual',
         builder: (context, state) {
-          final studentId =
-          state.pathParameters['studentId']!;
+          final studentId = state.pathParameters['studentId']!;
 
           final extra = state.extra;
 
           if (extra is Map<String, dynamic>) {
-            final studentName =
-                extra['studentName'] as String? ?? 'Aluno';
+            final studentName = extra['studentName'] as String? ?? 'Aluno';
 
-            final template =
-            extra['template']
-            as WorkoutTemplateDetails?;
+            final template = extra['template'] as WorkoutTemplateDetails?;
 
             return CreateWorkoutPage(
               studentId: studentId,
               studentName: studentName,
               sourceTemplateId: template?.id,
               initialName: template?.name ?? '',
-              initialDescription:
-              template?.description ?? '',
-              initialDays:
-              template?.toWorkoutDraftDays(),
+              initialDescription: template?.description ?? '',
+              initialDays: template?.toWorkoutDraftDays(),
               onCreated: () {
                 context.pop(true);
               },
@@ -659,8 +585,7 @@ class AppRouter {
 
           return CreateWorkoutPage(
             studentId: studentId,
-            studentName:
-            extra as String? ?? 'Aluno',
+            studentName: extra as String? ?? 'Aluno',
             onCreated: () {
               context.pop(true);
             },
@@ -668,38 +593,29 @@ class AppRouter {
         },
       ),
       GoRoute(
-        path:
-        '/professor/students/:studentId/workouts/create',
+        path: '/professor/students/:studentId/workouts/create',
         builder: (context, state) {
-          final studentId =
-          state.pathParameters['studentId']!;
+          final studentId = state.pathParameters['studentId']!;
 
-          final studentName =
-              state.extra as String? ?? 'Aluno';
+          final studentName = state.extra as String? ?? 'Aluno';
 
           return CreateOrAssignWorkoutPage(
             studentName: studentName,
             onUseTemplateTap: () async {
-              final template =
-              await context
-                  .push<WorkoutTemplateDetails>(
+              final template = await context.push<WorkoutTemplateDetails>(
                 '/professor/students/$studentId/'
-                    'workouts/select-template',
+                'workouts/select-template',
                 extra: studentName,
               );
 
-              if (!context.mounted ||
-                  template == null) {
+              if (!context.mounted || template == null) {
                 return false;
               }
 
               final created = await context.push<bool>(
                 '/professor/students/$studentId/'
-                    'workouts/manual',
-                extra: {
-                  'studentName': studentName,
-                  'template': template,
-                },
+                'workouts/manual',
+                extra: {'studentName': studentName, 'template': template},
               );
 
               return created ?? false;
@@ -707,7 +623,7 @@ class AppRouter {
             onCreateManualTap: () async {
               final created = await context.push<bool>(
                 '/professor/students/$studentId/'
-                    'workouts/manual',
+                'workouts/manual',
                 extra: studentName,
               );
 
@@ -715,23 +631,20 @@ class AppRouter {
             },
           );
         },
-      ),GoRoute(
+      ),
+      GoRoute(
         path: '/admin/students/:studentId/workouts/edit',
         builder: (context, state) {
           final extra = state.extra;
           final studentId = state.pathParameters['studentId']!;
 
           if (extra is! Map<String, dynamic>) {
-            throw StateError(
-              'Dados do treino não informados.',
-            );
+            throw StateError('Dados do treino não informados.');
           }
 
-          final workout =
-          extra['workout'] as WorkoutDetails;
+          final workout = extra['workout'] as WorkoutDetails;
 
-          final studentName =
-              extra['studentName'] as String? ?? 'Aluno';
+          final studentName = extra['studentName'] as String? ?? 'Aluno';
 
           return EditWorkoutPage(
             workout: workout,
@@ -748,10 +661,7 @@ class AppRouter {
 
               final replaced = await context.push<bool>(
                 '/admin/students/$studentId/workouts/manual',
-                extra: {
-                  'studentName': studentName,
-                  'template': template,
-                },
+                extra: {'studentName': studentName, 'template': template},
               );
 
               return replaced ?? false;
@@ -765,46 +675,37 @@ class AppRouter {
       GoRoute(
         path: '/admin/students/:studentId/workouts/history',
         builder: (context, state) {
-          final studentId =
-          state.pathParameters['studentId']!;
+          final studentId = state.pathParameters['studentId']!;
 
           return WorkoutHistoryPage(
             studentId: studentId,
-            studentName:
-            state.extra as String? ?? 'Aluno',
+            studentName: state.extra as String? ?? 'Aluno',
           );
         },
       ),
       GoRoute(
         path: '/admin/students/:studentId',
-        builder: (context, state) => StudentDetailsPage(
-          studentId: state.pathParameters['studentId']!,
-        ),
+        builder: (context, state) =>
+            StudentDetailsPage(studentId: state.pathParameters['studentId']!),
       ),
       GoRoute(
         path: '/admin/students/:studentId/edit',
-        builder: (context, state) => EditStudentPage(
-          studentId: state.pathParameters['studentId']!,
-        ),
+        builder: (context, state) =>
+            EditStudentPage(studentId: state.pathParameters['studentId']!),
       ),
       GoRoute(
-        path:
-        '/professor/students/:studentId/workouts/edit',
+        path: '/professor/students/:studentId/workouts/edit',
         builder: (context, state) {
           final studentId = state.pathParameters['studentId']!;
           final extra = state.extra;
 
           if (extra is! Map<String, dynamic>) {
-            throw StateError(
-              'Dados do treino não informados.',
-            );
+            throw StateError('Dados do treino não informados.');
           }
 
-          final workout =
-          extra['workout'] as WorkoutDetails;
+          final workout = extra['workout'] as WorkoutDetails;
 
-          final studentName =
-              extra['studentName'] as String? ?? 'Aluno';
+          final studentName = extra['studentName'] as String? ?? 'Aluno';
 
           return EditWorkoutPage(
             workout: workout,
@@ -821,10 +722,7 @@ class AppRouter {
 
               final replaced = await context.push<bool>(
                 '/professor/students/$studentId/workouts/manual',
-                extra: {
-                  'studentName': studentName,
-                  'template': template,
-                },
+                extra: {'studentName': studentName, 'template': template},
               );
 
               return replaced ?? false;
@@ -836,24 +734,20 @@ class AppRouter {
         },
       ),
       GoRoute(
-        path:
-        '/professor/students/:studentId/workouts/history',
+        path: '/professor/students/:studentId/workouts/history',
         builder: (context, state) {
-          final studentId =
-          state.pathParameters['studentId']!;
+          final studentId = state.pathParameters['studentId']!;
 
           return WorkoutHistoryPage(
             studentId: studentId,
-            studentName:
-            state.extra as String? ?? 'Aluno',
+            studentName: state.extra as String? ?? 'Aluno',
           );
         },
       ),
       GoRoute(
         path: '/professor/students/:studentId',
-        builder: (context, state) => StudentDetailsPage(
-          studentId: state.pathParameters['studentId']!,
-        ),
+        builder: (context, state) =>
+            StudentDetailsPage(studentId: state.pathParameters['studentId']!),
       ),
     ],
   );
