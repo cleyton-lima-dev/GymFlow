@@ -190,23 +190,55 @@ public partial class TenantEnrollmentAccessTests
     public async Task PostgreSql_GymSettings_MigrationIsAdditive(bool postgres)
     {
         await using var factory = new TestApi(postgres);
-        using (var scope = factory.Services.CreateScope())
-            await scope.ServiceProvider.GetRequiredService<AppDbContext>().GetService<IMigrator>().MigrateAsync("20261011034816_AddCheckIns");
-        var user = factory.AddUser(factory.LegacyGym);
-        var enrollment = factory.AddEnrollment(user, factory.LegacyGym, EnrollmentStatus.Active, -1, 20);
-        DateOnly originalEnd = default;
-        factory.WithDb(db => originalEnd = db.Enrollments.Single(e => e.Id == enrollment).EndDate);
+        var userId = Guid.NewGuid();
+        var studentId = Guid.NewGuid();
+        var planId = Guid.NewGuid();
+        var enrollmentId = Guid.NewGuid();
+        var createdAt = DateTime.UtcNow;
+        var legacyName = "Synthetic legacy user";
+        var legacyEmail = $"{userId:N}@example.invalid";
+        var passwordHash = "synthetic-hash";
+        var planName = "Synthetic legacy plan";
+        const decimal price = 100m;
+        const int durationMonths = 1;
+        var billingCycle = (int)PlanBillingCycle.Monthly;
+        var role = (int)UserRole.Student;
+        var enrollmentStatus = (int)EnrollmentStatus.Active;
+        var start = DateOnly.FromDateTime(createdAt).AddDays(-1);
+        var originalEnd = start.AddDays(21);
         using (var scope = factory.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var migrator = db.GetService<IMigrator>();
+            await migrator.MigrateAsync("20261011034816_AddCheckIns");
+
+            // This is a historical schema from before SeparateStudentIdentity. Seed its
+            // real legacy shape directly; the current EF model includes columns that did
+            // not exist at this migration and cannot safely be used to write into it.
+            await db.Database.ExecuteSqlInterpolatedAsync($"""
+                INSERT INTO "Users" ("Id", "GymId", "Name", "Email", "PasswordHash", "Role", "IsActive", "CreatedAt")
+                VALUES ({userId}, {factory.LegacyGym}, {legacyName}, {legacyEmail}, {passwordHash}, {role}, {true}, {createdAt});
+                """);
+            await db.Database.ExecuteSqlInterpolatedAsync($"""
+                INSERT INTO "Students" ("Id", "UserId", "CreatedAt")
+                VALUES ({studentId}, {userId}, {createdAt});
+                """);
+            await db.Database.ExecuteSqlInterpolatedAsync($"""
+                INSERT INTO "Plans" ("Id", "GymId", "Name", "Price", "DurationMonths", "BillingCycle", "IsActive", "CreatedAt")
+                VALUES ({planId}, {factory.LegacyGym}, {planName}, {price}, {durationMonths}, {billingCycle}, {true}, {createdAt});
+                """);
+            await db.Database.ExecuteSqlInterpolatedAsync($"""
+                INSERT INTO "Enrollments" ("Id", "StudentId", "PlanId", "StartDate", "EndDate", "Status", "PlanName", "PlanPrice", "PlanDurationMonths", "PlanBillingCycle", "CreatedAt")
+                VALUES ({enrollmentId}, {studentId}, {planId}, {start}, {originalEnd}, {enrollmentStatus}, {planName}, {price}, {durationMonths}, {billingCycle}, {createdAt});
+                """);
             await db.Database.MigrateAsync();
             Assert.Empty(await db.Database.GetPendingMigrationsAsync());
             Assert.Contains("20261012203545_AddGymSettingsAndAudit", await db.Database.GetAppliedMigrationsAsync());
         }
         factory.WithDb(db =>
         {
-            Assert.True(db.Users.Single(u => u.Id == user.Id).IsActive);
-            Assert.Equal(originalEnd, db.Enrollments.Single(e => e.Id == enrollment).EndDate);
+            Assert.True(db.Users.Single(u => u.Id == userId).IsActive);
+            Assert.Equal(originalEnd, db.Enrollments.Single(e => e.Id == enrollmentId).EndDate);
             Assert.Empty(db.GymSettings);
             Assert.Empty(db.GymSettingsAuditLogs);
         });

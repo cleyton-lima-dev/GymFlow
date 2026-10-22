@@ -27,5 +27,9 @@ public class StudentConcurrencyModelTests
             .FindProperty("IsActive")!.IsConcurrencyToken);
         Assert.True(current.FindEntityType(typeof(GymFlow.Domain.Entities.Student))!
             .FindProperty("InactivationReason")!.IsConcurrencyToken);
+        Assert.True(current.FindEntityType(typeof(GymFlow.Domain.Entities.Student))!
+            .FindProperty("ArchivedAt")!.IsConcurrencyToken);
+        Assert.True(current.FindEntityType(typeof(GymFlow.Domain.Entities.Student))!
+            .FindProperty("UpdatedAt")!.IsConcurrencyToken);
     }
 }

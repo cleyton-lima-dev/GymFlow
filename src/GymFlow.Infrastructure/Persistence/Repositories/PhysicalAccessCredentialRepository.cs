@@ -1,4 +1,4 @@
-﻿using GymFlow.Application.Interfaces.Repositories;
+using GymFlow.Application.Interfaces.Repositories;
 using GymFlow.Domain.Entities;
 using GymFlow.Domain.Enums;
 using GymFlow.Infrastructure.Data;
@@ -29,7 +29,7 @@ public class PhysicalAccessCredentialRepository
                 .ThenInclude(student => student.User)
             .FirstOrDefaultAsync(credential =>
                 credential.GymId == gymId &&
-                credential.Student.User.GymId == gymId &&
+                credential.Student.GymId == gymId &&
                 credential.ProviderKey == providerKey &&
                 credential.Type == type &&
                 credential.ExternalIdentifier ==
@@ -47,7 +47,7 @@ public class PhysicalAccessCredentialRepository
             .FirstOrDefaultAsync(credential =>
                 credential.Id == credentialId &&
                 credential.GymId == gymId &&
-                credential.Student.User.GymId == gymId);
+                credential.Student.GymId == gymId);
     }
 
     public async Task<List<PhysicalAccessCredential>>
@@ -62,7 +62,7 @@ public class PhysicalAccessCredentialRepository
             .Where(credential =>
                 credential.StudentId == studentId &&
                 credential.GymId == gymId &&
-                credential.Student.User.GymId == gymId)
+                credential.Student.GymId == gymId)
             .OrderBy(credential => credential.ProviderKey)
             .ThenBy(credential => credential.Type)
             .ToListAsync();

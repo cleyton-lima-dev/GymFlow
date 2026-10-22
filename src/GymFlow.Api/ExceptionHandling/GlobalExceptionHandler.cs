@@ -1,6 +1,7 @@
 ﻿using Microsoft.AspNetCore.Diagnostics;
 
 using Microsoft.EntityFrameworkCore;
+using GymFlow.Application.Services;
 
 namespace GymFlow.Api.ExceptionHandling;
 
@@ -13,7 +14,7 @@ public sealed class GlobalExceptionHandler(
         Exception exception,
         CancellationToken cancellationToken)
     {
-        if (exception is DbUpdateConcurrencyException)
+        if (exception is DbUpdateConcurrencyException or StudentIdentityConflictException)
         {
             logger.LogWarning("Conflito de concorrência na requisição. TraceId: {TraceId}", httpContext.TraceIdentifier);
             httpContext.Response.StatusCode = StatusCodes.Status409Conflict;

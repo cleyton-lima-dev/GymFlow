@@ -7,6 +7,13 @@ namespace GymFlow.Application.Services;
 public sealed class DashboardService(
     IDashboardRepository repository, IGymTimeZoneProvider timeZones, TimeProvider clock)
 {
+    public Task<OperationalDashboardSummary> GetOperationalAsync(Guid gymId, CancellationToken cancellationToken = default)
+    {
+        var zone = timeZones.GetTimeZone(gymId);
+        var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(clock.GetUtcNow(), zone).DateTime);
+        return repository.GetOperationalAsync(gymId, today, cancellationToken);
+    }
+
     public Task<DashboardSummary> GetAsync(Guid gymId, CancellationToken cancellationToken = default)
     {
         var zone = timeZones.GetTimeZone(gymId);

@@ -1,4 +1,4 @@
-﻿using GymFlow.Application.Interfaces.Repositories;
+using GymFlow.Application.Interfaces.Repositories;
 using GymFlow.Domain.Entities;
 using GymFlow.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
@@ -26,7 +26,7 @@ public class WorkoutDayProgressRepository
                 .ThenInclude(x => x.Workout)
             .FirstOrDefaultAsync(x =>
                 x.StudentId == studentId &&
-                x.Student.User.GymId == gymId);
+                x.Student.GymId == gymId);
     }
 
     public async Task<bool> IsWorkoutExerciseInActiveDayAsync(

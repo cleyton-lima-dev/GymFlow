@@ -44,6 +44,10 @@ public class PhysicalAccessEventRepositoryTests
         {
             Id = studentBId,
             UserId = userB.Id,
+            GymId = userB.GymId,
+            Name = userB.Name,
+            Email = userB.Email,
+            AppAccessEnabled = true,
             User = userB
         };
 

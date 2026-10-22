@@ -20,13 +20,15 @@ public sealed class ReportService(IReportRepository repository, IGymTimeZoneProv
     };
 
     public Task<ReportResult> GetAsync(Guid gymId, string kind, ReportQuery query, bool export = false,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default, bool includeEnrollmentMetadata = true)
     {
         if (gymId == Guid.Empty || !Statuses.TryGetValue(kind, out var statuses))
             throw new ArgumentException("Relatório inválido.");
         query.Status = string.IsNullOrWhiteSpace(query.Status) ? null : query.Status;
         query.Search = string.IsNullOrWhiteSpace(query.Search) ? null : query.Search.Trim();
         query.EnrollmentStatus = string.IsNullOrWhiteSpace(query.EnrollmentStatus) ? null : query.EnrollmentStatus;
+        if (kind == "students" && !includeEnrollmentMetadata && query.EnrollmentStatus != null)
+            throw new ArgumentException("O filtro de matrícula exige acesso ao ERP.");
         if ((query.Status != null && !statuses.Contains(query.Status)) ||
             (query.EnrollmentStatus != null && (kind != "students" ||
                 !new[] { "valid", "none" }.Contains(query.EnrollmentStatus))) ||
@@ -58,13 +60,14 @@ public sealed class ReportService(IReportRepository repository, IGymTimeZoneProv
         if (zone.IsInvalidTime(from) || zone.IsInvalidTime(until))
             throw new ArgumentException("Limite de data inválido no fuso da academia.");
         return repository.GetAsync(gymId, kind, query,
-            new(today, zone, TimeZoneInfo.ConvertTimeToUtc(from, zone), TimeZoneInfo.ConvertTimeToUtc(until, zone)),
+            new(today, zone, TimeZoneInfo.ConvertTimeToUtc(from, zone), TimeZoneInfo.ConvertTimeToUtc(until, zone), includeEnrollmentMetadata),
             export, cancellationToken);
     }
 
-    public async Task<byte[]> ExportAsync(Guid gymId, string kind, ReportQuery query, CancellationToken token)
+    public async Task<byte[]> ExportAsync(Guid gymId, string kind, ReportQuery query, CancellationToken token,
+        bool includeEnrollmentMetadata = true)
     {
-        var result = await GetAsync(gymId, kind, query, true, token);
+        var result = await GetAsync(gymId, kind, query, true, token, includeEnrollmentMetadata);
         return EncodeCsv(result);
     }
 

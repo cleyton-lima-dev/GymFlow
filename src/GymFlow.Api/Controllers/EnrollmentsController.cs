@@ -1,5 +1,6 @@
 ﻿using GymFlow.Application.DTOs.Enrollments;
 using GymFlow.Application.Services;
+using GymFlow.Api.Authorization;
 using GymFlow.Domain.Enums;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -10,6 +11,7 @@ namespace GymFlow.Api.Controllers;
 [ApiController]
 [Route("api/enrollments")]
 [Authorize(Roles = "Admin")]
+[ServiceFilter(typeof(ErpEnabledFilter))]
 public class EnrollmentsController : ControllerBase
 {
     private readonly EnrollmentService _enrollmentService;

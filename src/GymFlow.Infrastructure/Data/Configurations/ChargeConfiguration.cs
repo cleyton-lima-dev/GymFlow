@@ -2,10 +2,13 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
+using GymFlow.Domain.Enums;
+
 namespace GymFlow.Infrastructure.Data.Configurations;
 
 public class ChargeConfiguration : IEntityTypeConfiguration<Charge>
 {
+    // Charge origin and verification enums are persisted as integers.
     public void Configure(EntityTypeBuilder<Charge> builder)
     {
         builder.ToTable("Charges");
@@ -33,6 +36,10 @@ public class ChargeConfiguration : IEntityTypeConfiguration<Charge>
 
         builder.Property(charge => charge.Status)
             .IsRequired();
+
+        builder.Property(charge => charge.Origin).IsRequired().HasDefaultValue(ChargeOrigin.Avelri);
+        builder.Property(charge => charge.PaymentOrigin).IsRequired().HasDefaultValue(PaymentOrigin.Avelri);
+        builder.Property(charge => charge.VerificationStatus).IsRequired().HasDefaultValue(ChargeVerificationStatus.Verified);
 
         builder.Property(charge => charge.CreatedAt)
             .IsRequired();

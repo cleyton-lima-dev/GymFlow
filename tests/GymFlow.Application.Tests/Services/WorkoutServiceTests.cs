@@ -249,6 +249,8 @@ public class WorkoutServiceTests
 
         var student =
             CreateStudent(gymId, false);
+        student.IsActive = false;
+        student.User.IsActive = true;
 
         var request =
             CreateValidManualRequest(
@@ -861,6 +863,8 @@ public class WorkoutServiceTests
 
         var student =
             CreateStudent(gymId, false);
+        student.IsActive = false;
+        student.User.IsActive = true;
 
         var request =
             CreateValidTemplateRequest(
@@ -1384,6 +1388,8 @@ public class WorkoutServiceTests
     {
         var gymId = Guid.NewGuid();
         var student = CreateStudent(gymId, false);
+        student.IsActive = false;
+        student.User.IsActive = true;
         var workoutDayId = Guid.NewGuid();
 
         _studentRepository

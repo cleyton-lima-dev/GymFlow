@@ -20,6 +20,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Npgsql;
 using System.Data.Common;
+using System.Collections.Concurrent;
 
 namespace GymFlow.IntegrationTests.Security;
 
@@ -196,7 +197,7 @@ public partial class TenantEnrollmentAccessTests
             Assert.Equal(fail ? 0 : 1, db.Charges.Count());
             Assert.Equal(fail ? 0 : 1, db.FinancialAuditLogs.Count());
             var student = db.Students.Include(s => s.User).Single(s => s.Id == studentId);
-            Assert.Equal(!fail, student.User.IsActive);
+            Assert.False(student.User!.IsActive); // Financial success never enables digital access.
             Assert.Equal(fail ? StudentInactivationReason.NoValidEnrollment : (StudentInactivationReason?)null, student.InactivationReason);
             if (!fail)
             {
@@ -220,9 +221,21 @@ public partial class TenantEnrollmentAccessTests
     [InlineData("disabled", true, 10)]
     [InlineData("missing", true, 0)]
     [InlineData("missing", true, 10)]
-    public async Task Reactivation_UsesTenantPolicyAndPreservesManualBlock(string mode, bool manual, int start)
+    public Task Reactivation_UsesTenantPolicyAndPreservesManualBlock(string mode, bool manual, int start) =>
+        CheckReactivation(false, mode, manual, start);
+
+    [PostgresTheory]
+    [InlineData("enabled", false, 0)]
+    [InlineData("missing", false, 0)]
+    [InlineData("disabled", false, 0)]
+    [InlineData("missing", false, 10)]
+    [InlineData("disabled", false, 10)]
+    public Task PostgreSql_Reactivation_UsesTenantPolicyAndPreservesManualBlock(string mode, bool manual, int start) =>
+        CheckReactivation(true, mode, manual, start);
+
+    private static async Task CheckReactivation(bool postgres, string mode, bool manual, int start)
     {
-        await using var factory = new TestApi();
+        await using var factory = new TestApi(postgres, migrateSchema: postgres);
         var gym = mode == "enabled" ? factory.EnabledGym : mode == "disabled" ? factory.DisabledGym : factory.LegacyGym;
         var user = factory.AddUser(gym, active: false);
         var planId = Guid.NewGuid();
@@ -248,7 +261,8 @@ public partial class TenantEnrollmentAccessTests
         {
             var student = db.Students.Include(s => s.User).Single(s => s.Id == studentId);
             Assert.Null(student.ArchivedAt);
-            Assert.Equal(allowed, student.User.IsActive);
+            Assert.Equal(allowed, student.IsActive);
+            Assert.False(student.User!.IsActive); // Enrollment reactivation does not restore digital access.
             Assert.Equal(manual ? StudentInactivationReason.Manual : allowed ? (StudentInactivationReason?)null : StudentInactivationReason.NoValidEnrollment,
                 student.InactivationReason);
             if (allowed) Assert.Null(student.NoValidEnrollmentSince);
@@ -259,19 +273,28 @@ public partial class TenantEnrollmentAccessTests
             Assert.Empty(db.Charges);
         });
         using var client = factory.CreateClient();
-        Assert.Equal(allowed ? HttpStatusCode.OK : HttpStatusCode.Unauthorized,
+        Assert.Equal(HttpStatusCode.Unauthorized,
             (await client.PostAsJsonAsync("/api/auth/login", new { user.Email, Password = TestApi.Password })).StatusCode);
         client.DefaultRequestHeaders.Authorization = new("Bearer", factory.Token(user));
-        Assert.Equal(allowed ? HttpStatusCode.OK : HttpStatusCode.Unauthorized, (await client.GetAsync("/api/auth/me")).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync("/api/auth/me")).StatusCode);
     }
 
     [Theory]
     [InlineData("reactivate")]
     [InlineData("archive")]
     [InlineData("other-tenant")]
-    public async Task Lifecycle_ConcurrentManualBlockIsPreservedWithIndependentContexts(string scenario)
+    public Task Lifecycle_ConcurrentManualBlockIsPreservedWithIndependentContexts(string scenario) =>
+        CheckConcurrentManualBlock(false, scenario);
+
+    [PostgresTheory]
+    [InlineData("archive")]
+    [InlineData("other-tenant")]
+    public Task PostgreSql_Lifecycle_ConcurrentManualBlockIsPreservedWithIndependentContexts(string scenario) =>
+        CheckConcurrentManualBlock(true, scenario);
+
+    private static async Task CheckConcurrentManualBlock(bool postgres, string scenario)
     {
-        await using var factory = new TestApi();
+        await using var factory = new TestApi(postgres, migrateSchema: postgres);
         var user = factory.AddUser(factory.EnabledGym, active: scenario == "archive");
         var other = factory.AddUser(factory.LegacyGym);
         var companion = factory.AddUser(factory.EnabledGym, active: false);
@@ -309,11 +332,14 @@ public partial class TenantEnrollmentAccessTests
             var student = db.Students.Include(s => s.User).Single(s => s.Id == studentId);
             var otherStudent = db.Students.Include(s => s.User).Single(s => s.Id == otherId);
             Assert.Null(student.ArchivedAt); // A conflicting archive batch must roll back too.
-            Assert.Equal(scenario == "other-tenant", student.User.IsActive);
+            Assert.Equal(scenario == "other-tenant", student.IsActive);
+            Assert.Equal(scenario == "archive", student.User!.IsActive); // Lifecycle does not rewrite account identity.
             Assert.Equal(scenario == "other-tenant" ? (StudentInactivationReason?)null : StudentInactivationReason.Manual, student.InactivationReason);
-            Assert.Equal(scenario != "other-tenant", otherStudent.User.IsActive);
+            Assert.Equal(scenario != "other-tenant", otherStudent.IsActive);
+            Assert.True(otherStudent.User!.IsActive);
             if (scenario == "other-tenant") Assert.Equal(StudentInactivationReason.Manual, otherStudent.InactivationReason);
-            Assert.Equal(scenario == "other-tenant", db.Users.Single(u => u.Id == companion.Id).IsActive);
+            Assert.Equal(scenario == "other-tenant", db.Students.Single(s => s.UserId == companion.Id).IsActive);
+            Assert.False(db.Users.Single(u => u.Id == companion.Id).IsActive);
         });
         // A fresh pass must also respect the manual reason.
         if (scenario == "reactivate")
@@ -386,9 +412,15 @@ public partial class TenantEnrollmentAccessTests
     }
 
     [Fact]
-    public async Task EnrollmentWithAnotherTenantsPlan_DoesNotGrantAccess()
+    public Task EnrollmentWithAnotherTenantsPlan_DoesNotGrantAccess() => CheckForeignPlan(false);
+
+    [PostgresTheory]
+    [InlineData(true)]
+    public Task PostgreSql_EnrollmentWithAnotherTenantsPlan_DoesNotGrantAccess(bool postgres) => CheckForeignPlan(postgres);
+
+    private static async Task CheckForeignPlan(bool postgres)
     {
-        await using var factory = new TestApi();
+        await using var factory = new TestApi(postgres, migrateSchema: postgres);
         var user = factory.AddUser(factory.EnabledGym);
         factory.AddEnrollment(user, factory.LegacyGym, EnrollmentStatus.Active, -1, 1);
         using var client = factory.CreateClient();
@@ -401,9 +433,16 @@ public partial class TenantEnrollmentAccessTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task AnotherStudentsEnrollment_DoesNotGrantAccess(bool anotherTenant)
+    public Task AnotherStudentsEnrollment_DoesNotGrantAccess(bool anotherTenant) => CheckForeignStudent(false, anotherTenant);
+
+    [PostgresTheory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task PostgreSql_AnotherStudentsEnrollment_DoesNotGrantAccess(bool anotherTenant) => CheckForeignStudent(true, anotherTenant);
+
+    private static async Task CheckForeignStudent(bool postgres, bool anotherTenant)
     {
-        await using var factory = new TestApi();
+        await using var factory = new TestApi(postgres, migrateSchema: postgres);
         var withoutEnrollment = factory.AddUser(factory.EnabledGym);
         var enrolledGym = anotherTenant ? factory.LegacyGym : factory.EnabledGym;
         var enrolled = factory.AddUser(enrolledGym);
@@ -515,9 +554,16 @@ public partial class TenantEnrollmentAccessTests
     }
 
     [Fact]
-    public async Task Lifecycle_ProcessesOnlyEnabledTenant()
+    public Task Lifecycle_ProcessesOnlyEnabledTenant() => CheckLifecycleProcessesOnlyEnabledTenant(false);
+
+    [PostgresTheory]
+    [InlineData(true)]
+    public Task PostgreSql_Lifecycle_ProcessesOnlyEnabledTenant(bool postgres) =>
+        CheckLifecycleProcessesOnlyEnabledTenant(postgres);
+
+    private static async Task CheckLifecycleProcessesOnlyEnabledTenant(bool postgres)
     {
-        await using var factory = new TestApi();
+        await using var factory = new TestApi(postgres, migrateSchema: postgres);
         var enabled = factory.AddUser(factory.EnabledGym);
         var legacy = factory.AddUser(factory.LegacyGym);
         var disabled = factory.AddUser(factory.DisabledGym);
@@ -535,29 +581,39 @@ public partial class TenantEnrollmentAccessTests
         }
         factory.WithDb(db =>
         {
-            Assert.False(db.Users.Single(u => u.Id == enabled.Id).IsActive);
+            Assert.True(db.Users.Single(u => u.Id == enabled.Id).IsActive);
             Assert.True(db.Users.Single(u => u.Id == legacy.Id).IsActive);
             Assert.True(db.Users.Single(u => u.Id == disabled.Id).IsActive);
-            Assert.NotNull(db.Students.Single(s => s.UserId == enabled.Id).ArchivedAt);
+            var enabledStudent = db.Students.Single(s => s.UserId == enabled.Id);
+            Assert.False(enabledStudent.IsActive);
+            Assert.NotNull(enabledStudent.ArchivedAt);
             Assert.Null(db.Students.Single(s => s.UserId == legacy.Id).ArchivedAt);
             Assert.Null(db.Students.Single(s => s.UserId == disabled.Id).ArchivedAt);
         });
+        using var client = factory.CreateClient();
+        Assert.Equal(HttpStatusCode.Unauthorized,
+            (await client.PostAsJsonAsync("/api/auth/login", new { enabled.Email, Password = TestApi.Password })).StatusCode);
     }
 
     private sealed class TestApi(bool usePostgres = false, bool migrateSchema = false) : WebApplicationFactory<Program>
     {
         public const string Password = "synthetic-password-123";
         public Guid EnabledGym { get; } = Guid.NewGuid();
+        public Guid OtherEnabledGym { get; } = Guid.NewGuid();
         public Guid DisabledGym { get; } = Guid.NewGuid();
         public Guid LegacyGym { get; } = Guid.NewGuid();
         public string EnabledFlag { get; init; } = "true";
+        public IGymErpPolicy? ErpPolicyOverride { get; init; }
         public Func<AppDbContext, Task>? BeforeNextAsyncSave { get; set; }
         public Func<AppDbContext, Task>? BeforeNextTransaction { get; set; }
         public Action<AppDbContext>? AfterNextAsyncSave { get; set; }
-        private readonly SqliteConnection _connection = new("Data Source=:memory:");
+        private const string SqliteConnectionString = "Data Source=TenantEnrollmentAccessTests;Mode=Memory;Cache=Shared";
+        private readonly SqliteConnection _connection = new(SqliteConnectionString);
         private string? _postgresAdmin;
         private string? _postgresDatabase;
         private bool _initialized;
+        private readonly ConcurrentQueue<string> _capturedExceptions = new();
+        public string CapturedExceptions => string.Join(Environment.NewLine, _capturedExceptions);
 
         protected override IHost CreateHost(IHostBuilder builder)
         {
@@ -574,10 +630,12 @@ public partial class TenantEnrollmentAccessTests
                 // Even a legacy global true must have no effect.
                 ["EnrollmentAccess:EnforceStudentEnrollment"] = "true",
                 [$"GymFeatures:{EnabledGym:D}:ErpEnabled"] = EnabledFlag,
+                [$"GymFeatures:{OtherEnabledGym:D}:ErpEnabled"] = "true",
                 [$"GymFeatures:{DisabledGym:D}:ErpEnabled"] = "false",
                 [$"GymTimeZones:{DisabledGym:D}"] = "UTC",
                 [$"GymTimeZones:{LegacyGym:D}"] = "UTC",
-                [$"GymTimeZones:{EnabledGym:D}"] = "UTC"
+                [$"GymTimeZones:{EnabledGym:D}"] = "UTC",
+                [$"GymTimeZones:{OtherEnabledGym:D}"] = "UTC"
             }));
             return base.CreateHost(builder);
         }
@@ -585,10 +643,19 @@ public partial class TenantEnrollmentAccessTests
         protected override void ConfigureWebHost(IWebHostBuilder builder)
         {
             builder.UseEnvironment("Testing");
-            builder.ConfigureLogging(logging => logging.ClearProviders());
+            builder.ConfigureLogging(logging =>
+            {
+                logging.ClearProviders();
+                logging.AddProvider(new CapturingExceptionLoggerProvider(this));
+            });
             builder.ConfigureServices(services =>
             {
                 services.AddDataProtection().UseEphemeralDataProtectionProvider();
+                if (ErpPolicyOverride is not null)
+                {
+                    services.RemoveAll<IGymErpPolicy>();
+                    services.AddSingleton(ErpPolicyOverride);
+                }
                 // Replace all provider configuration; never open the application connection.
                 services.RemoveAll<AppDbContext>();
                 services.RemoveAll<DbContextOptions<AppDbContext>>();
@@ -601,10 +668,22 @@ public partial class TenantEnrollmentAccessTests
                         isolated.Database != "gymflow_codex_test_base" || isolated.Username != "gymflow_test")
                         throw new InvalidOperationException("Only the explicitly isolated local test cluster is allowed.");
                     isolated.Pooling = false;
+                    var expectedDataDirectory = Environment.GetEnvironmentVariable("GYMFLOW_ISOLATED_POSTGRES_DATA_DIRECTORY");
+                    if (string.IsNullOrWhiteSpace(expectedDataDirectory) ||
+                        !Path.IsPathFullyQualified(expectedDataDirectory) ||
+                        !File.Exists(Path.Combine(expectedDataDirectory, "PG_VERSION")))
+                        throw new InvalidOperationException("The verified disposable cluster data directory is required.");
                     _postgresAdmin = isolated.ConnectionString;
-                    _postgresDatabase = $"gymflow_codex_test_{Guid.NewGuid():N}";
                     using var admin = new NpgsqlConnection(_postgresAdmin);
                     admin.Open();
+                    using (var verify = new NpgsqlCommand("SELECT current_setting('data_directory')", admin))
+                    {
+                        var actualDataDirectory = (string)verify.ExecuteScalar()!;
+                        if (!string.Equals(Path.GetFullPath(actualDataDirectory).TrimEnd(Path.DirectorySeparatorChar),
+                            Path.GetFullPath(expectedDataDirectory).TrimEnd(Path.DirectorySeparatorChar), StringComparison.OrdinalIgnoreCase))
+                            throw new InvalidOperationException("PostgreSQL is not the verified disposable cluster. No test database was created.");
+                    }
+                    _postgresDatabase = $"gymflow_codex_test_{Guid.NewGuid():N}";
                     using var create = new NpgsqlCommand($"CREATE DATABASE \"{_postgresDatabase}\"", admin);
                     create.ExecuteNonQuery();
                     isolated.Database = _postgresDatabase;
@@ -614,7 +693,7 @@ public partial class TenantEnrollmentAccessTests
                 else
                 {
                     _connection.Open();
-                    services.AddDbContext<AppDbContext>(options => options.UseSqlite(_connection)
+                    services.AddDbContext<AppDbContext>(options => options.UseSqlite(SqliteConnectionString)
                         .AddInterceptors(new BeforeSaveInterceptor(this), new BeforeTransactionInterceptor(this)));
                 }
             });
@@ -654,6 +733,8 @@ public partial class TenantEnrollmentAccessTests
                     db.Students.Add(new Student
                     {
                         Id = Guid.NewGuid(), UserId = user.Id,
+                        GymId = gymId, Name = user.Name, Email = user.Email,
+                        IsActive = active, AppAccessEnabled = true,
                         InactivationReason = active ? null : StudentInactivationReason.Manual
                     });
             });
@@ -732,6 +813,23 @@ public partial class TenantEnrollmentAccessTests
                 factory.BeforeNextTransaction = null;
                 if (callback is not null) await callback((AppDbContext)eventData.Context!);
                 return result;
+            }
+        }
+
+        private sealed class CapturingExceptionLoggerProvider(TestApi factory) : ILoggerProvider
+        {
+            public ILogger CreateLogger(string categoryName) => new CapturingExceptionLogger(categoryName, factory);
+            public void Dispose() { }
+        }
+
+        private sealed class CapturingExceptionLogger(string categoryName, TestApi factory) : ILogger
+        {
+            public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+            public bool IsEnabled(LogLevel logLevel) => logLevel >= LogLevel.Error;
+            public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception,
+                Func<TState, Exception?, string> formatter)
+            {
+                if (exception is not null) factory._capturedExceptions.Enqueue($"{categoryName}: {exception}");
             }
         }
     }

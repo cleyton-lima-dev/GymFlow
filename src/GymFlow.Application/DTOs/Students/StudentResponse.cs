@@ -8,7 +8,9 @@ public class StudentResponse
 
     public string Name { get; set; } = string.Empty;
 
-    public string Email { get; set; } = string.Empty;
+    public string? Email { get; set; }
+    public Guid? UserId { get; set; }
+    public bool AppAccessEnabled { get; set; }
 
     public string? Phone { get; set; }
 

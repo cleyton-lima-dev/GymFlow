@@ -1,4 +1,5 @@
 using GymFlow.Application.Interfaces.Repositories;
+using GymFlow.Application.Interfaces.Security;
 using GymFlow.Application.Interfaces.Time;
 using GymFlow.Application.Services;
 using GymFlow.Domain.Enums;
@@ -25,7 +26,8 @@ public class PhysicalAccessEventHistoryTests
             _eventRepository,
             Substitute.For<IEnrollmentRepository>(),
             Substitute.For<IChargeRepository>(),
-            timeZoneProvider);
+            timeZoneProvider,
+            Substitute.For<IGymErpPolicy>());
     }
 
     [Fact]
@@ -50,7 +52,8 @@ public class PhysicalAccessEventHistoryTests
             _eventRepository,
             Substitute.For<IEnrollmentRepository>(),
             Substitute.For<IChargeRepository>(),
-            timeZoneProvider);
+            timeZoneProvider,
+            Substitute.For<IGymErpPolicy>());
 
         var fromUtc = new DateTime(
             2026, 10, 10, 3, 0, 0, DateTimeKind.Utc);
@@ -114,7 +117,8 @@ public class PhysicalAccessEventHistoryTests
             _eventRepository,
             Substitute.For<IEnrollmentRepository>(),
             Substitute.For<IChargeRepository>(),
-            timeZoneProvider);
+            timeZoneProvider,
+            Substitute.For<IGymErpPolicy>());
 
         var occurredAt = new DateTime(
             2026, 10, 11, 12, 0, 0, DateTimeKind.Utc);

@@ -4,6 +4,9 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
 using GymFlow.Api.Controllers;
+using GymFlow.Api.Authorization;
+using GymFlow.Application.Interfaces.Security;
+using GymFlow.Infrastructure.Security;
 using GymFlow.Application.DTOs.Dashboard;
 using GymFlow.Application.Interfaces.Repositories;
 using GymFlow.Application.Interfaces.Time;
@@ -22,6 +25,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using System.Data.Common;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Configuration;
 using Microsoft.IdentityModel.Tokens;
 
 namespace GymFlow.IntegrationTests.Dashboard;
@@ -208,6 +212,7 @@ public sealed class DashboardTests
     public async Task HttpEndpoint_RequiresSignedAdminAndUsesAuthenticatedGym(string? role, int status)
     {
         const string key = "synthetic-dashboard-test-signing-key-only-123456789";
+        var gym = Guid.NewGuid();
         var builder = WebApplication.CreateBuilder(new WebApplicationOptions { EnvironmentName = "Testing" });
         builder.WebHost.UseUrls("http://127.0.0.1:0");
         var capture = new CaptureRepository();
@@ -215,6 +220,12 @@ public sealed class DashboardTests
         builder.Services.AddSingleton<IGymTimeZoneProvider>(new Zone());
         builder.Services.AddSingleton<TimeProvider>(new Clock());
         builder.Services.AddScoped<DashboardService>();
+        builder.Services.AddScoped<ErpEnabledFilter>();
+        builder.Services.AddSingleton<IGymErpPolicy>(new ConfigurationGymErpPolicy(
+            new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                [$"GymFeatures:{gym:D}:ErpEnabled"] = "true"
+            }).Build()));
         builder.Services.AddControllers().AddApplicationPart(typeof(DashboardController).Assembly);
         builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer(o =>
             o.TokenValidationParameters = new TokenValidationParameters
@@ -230,7 +241,6 @@ public sealed class DashboardTests
         app.MapControllers();
         await app.StartAsync();
         using var client = new HttpClient { BaseAddress = new Uri(app.Services.GetRequiredService<IServer>().Features.Get<IServerAddressesFeature>()!.Addresses.Single()) };
-        var gym = Guid.NewGuid();
         if (role != null)
         {
             var tokenRole = role.StartsWith("Admin") ? "Admin" : role;
@@ -251,7 +261,9 @@ public sealed class DashboardTests
 
     private static Student AddStudent(AppDbContext db, Guid gym, bool active = true)
     {
-        var student = new Student { Id = Guid.NewGuid(), User = new User { Id = Guid.NewGuid(), GymId = gym, Name = "Synthetic", Email = $"{Guid.NewGuid()}@example.test", PasswordHash = "not-a-password", Role = UserRole.Student, IsActive = active } };
+        var student = new Student { Id = Guid.NewGuid(), GymId = gym, Name = "Synthetic",
+            IsActive = active, AppAccessEnabled = true,
+            User = new User { Id = Guid.NewGuid(), GymId = gym, Name = "Synthetic", Email = $"{Guid.NewGuid()}@example.test", PasswordHash = "not-a-password", Role = UserRole.Student, IsActive = active } };
         db.Students.Add(student);
         return student;
     }
@@ -281,6 +293,11 @@ public sealed class DashboardTests
     private sealed class CaptureRepository : IDashboardRepository
     {
         public Guid Gym; public DateOnly Today; public DateTime From, Until;
+        public Task<OperationalDashboardSummary> GetOperationalAsync(Guid gymId, DateOnly today, CancellationToken cancellationToken)
+        {
+            Gym = gymId; Today = today;
+            return Task.FromResult(new OperationalDashboardSummary(today, 0, 0, 0));
+        }
         public Task<DashboardSummary> GetAsync(Guid gymId, DateOnly today, DateTime paidFromUtc, DateTime paidUntilUtc, CancellationToken cancellationToken)
         {
             Gym = gymId; Today = today; From = paidFromUtc; Until = paidUntilUtc;

@@ -18,6 +18,10 @@ public class AppDbContext : DbContext
     public DbSet<GymSettings> GymSettings { get; set; }
     public DbSet<GymSettingsAuditLog> GymSettingsAuditLogs { get; set; }
     public DbSet<Student> Students { get; set; }
+    public DbSet<StudentImportBatch> StudentImportBatches => Set<StudentImportBatch>();
+    public DbSet<MigrationSession> MigrationSessions => Set<MigrationSession>();
+    public DbSet<MigrationBatch> MigrationBatches => Set<MigrationBatch>();
+    public DbSet<MigrationExternalReference> MigrationExternalReferences => Set<MigrationExternalReference>();
     public DbSet<Exercise> Exercises { get; set; }
 
 

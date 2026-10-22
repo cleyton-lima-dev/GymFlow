@@ -5,7 +5,7 @@ namespace GymFlow.Application.Interfaces.Repositories;
 
 public interface IStudentRepository
 {
-    Task AddAsync(User user, Student student);
+    Task AddAsync(Student student);
 
     Task<(List<Student> Items, int TotalCount)> GetPagedByGymIdAsync(
     Guid gymId,
@@ -28,6 +28,8 @@ public interface IStudentRepository
     Task<Student?> GetByUserIdAndGymIdAsync(
          Guid userId,
          Guid gymId);
+    Task<Student?> GetByInviteHashAsync(string tokenHash);
+    Task AddUserAndSaveAsync(User user, Student student);
 
     Task SaveChangesAsync();
 

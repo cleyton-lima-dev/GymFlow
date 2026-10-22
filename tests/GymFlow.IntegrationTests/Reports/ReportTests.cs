@@ -165,7 +165,9 @@ public sealed class ReportTests
     private static Student Student(AppDbContext db, Guid gym, string name)
     {
         var user = new User { Id = Guid.NewGuid(), GymId = gym, Name = name, Email = $"{Guid.NewGuid()}@example.invalid", PasswordHash = "synthetic", Role = UserRole.Student };
-        var student = new Student { Id = Guid.NewGuid(), User = user, UserId = user.Id };
+        var student = new Student { Id = Guid.NewGuid(), User = user, UserId = user.Id,
+            GymId = gym, Name = user.Name, Email = user.Email,
+            IsActive = user.IsActive, AppAccessEnabled = true };
         db.Students.Add(student); return student;
     }
     private static Enrollment Enrollment(AppDbContext db, Student student, Guid gym)

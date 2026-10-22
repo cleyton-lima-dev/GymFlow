@@ -1,4 +1,4 @@
-﻿using GymFlow.Application.Interfaces.Repositories;
+using GymFlow.Application.Interfaces.Repositories;
 using GymFlow.Domain.Entities;
 using GymFlow.Domain.Enums;
 using GymFlow.Infrastructure.Data;
@@ -32,7 +32,7 @@ public class EnrollmentRepository : IEnrollmentRepository
             .Include(enrollment => enrollment.Charge)
             .FirstOrDefaultAsync(enrollment =>
                 enrollment.Id == enrollmentId &&
-                enrollment.Student.User.GymId == gymId &&
+                enrollment.Student.GymId == gymId &&
                 enrollment.Plan.GymId == gymId);
     }
 
@@ -46,7 +46,7 @@ public class EnrollmentRepository : IEnrollmentRepository
                 .ThenInclude(student => student.User)
             .FirstOrDefaultAsync(enrollment =>
                 enrollment.StudentId == studentId &&
-                enrollment.Student.User.GymId == gymId &&
+                enrollment.Student.GymId == gymId &&
                 enrollment.Plan.GymId == gymId &&
                 enrollment.Status == EnrollmentStatus.Active &&
                 enrollment.StartDate <= referenceDate &&
@@ -63,7 +63,7 @@ public class EnrollmentRepository : IEnrollmentRepository
                 .ThenInclude(student => student.User)
             .Include(enrollment => enrollment.Plan)
             .Where(enrollment =>
-                enrollment.Student.User.GymId == gymId &&
+                enrollment.Student.GymId == gymId &&
                 enrollment.Plan.GymId == gymId);
 
         if (status.HasValue)
@@ -93,7 +93,7 @@ public class EnrollmentRepository : IEnrollmentRepository
         return await _context.Enrollments
             .AnyAsync(enrollment =>
                 enrollment.StudentId == studentId &&
-                enrollment.Student.User.GymId == gymId &&
+                enrollment.Student.GymId == gymId &&
                 enrollment.Plan.GymId == gymId &&
                 (enrollment.Status == EnrollmentStatus.Active ||
                 enrollment.Status == EnrollmentStatus.PendingPayment) &&
@@ -116,7 +116,7 @@ public class EnrollmentRepository : IEnrollmentRepository
                 .ThenInclude(student => student.User)
             .Where(enrollment =>
                 studentIds.Contains(enrollment.StudentId) &&
-                enrollment.Student.User.GymId == gymId &&
+                enrollment.Student.GymId == gymId &&
                 enrollment.Plan.GymId == gymId)
             .OrderByDescending(enrollment => enrollment.StartDate)
             .ThenByDescending(enrollment => enrollment.CreatedAt)
@@ -135,7 +135,7 @@ public class EnrollmentRepository : IEnrollmentRepository
             .Include(enrollment => enrollment.Charge)
             .Where(enrollment =>
                 enrollment.StudentId == studentId &&
-                enrollment.Student.User.GymId == gymId &&
+                enrollment.Student.GymId == gymId &&
                 enrollment.Plan.GymId == gymId)
             .OrderByDescending(enrollment => enrollment.StartDate)
             .ThenByDescending(enrollment => enrollment.CreatedAt)

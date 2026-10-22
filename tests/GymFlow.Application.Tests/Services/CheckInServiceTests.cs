@@ -752,7 +752,9 @@ public class CheckInServiceTests
         return new Student
         {
             Id = Guid.NewGuid(),
+            Name = name,
             UserId = user.Id,
+            IsActive = true,
             CreatedAt =
                 DateTime.UtcNow,
             User = user

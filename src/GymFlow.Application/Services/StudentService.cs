@@ -7,6 +7,9 @@ using GymFlow.Application.Validation;
 using GymFlow.Domain.Entities;
 using GymFlow.Domain.Enums;
 using GymFlow.Application.Interfaces.Time;
+using System.Security.Cryptography;
+using System.Text;
+using System.ComponentModel.DataAnnotations;
 
 
 namespace GymFlow.Application.Services;
@@ -37,11 +40,14 @@ public class StudentService
         Guid gymId,
         CreateStudentRequest request)
     {
-        PasswordPolicy.Validate(request.Password);
-
-        var normalizedEmail = request.Email
-            .Trim()
-            .ToLowerInvariant();
+        if (!string.IsNullOrEmpty(request.Password))
+            throw new ArgumentException("A senha do aplicativo deve ser definida pelo aluno no convite.");
+        var normalizedEmail = string.IsNullOrWhiteSpace(request.Email)
+            ? null : request.Email.Trim().ToLowerInvariant();
+        if (string.IsNullOrWhiteSpace(request.Name))
+            throw new ArgumentException("O nome é obrigatório.");
+        if (normalizedEmail is not null && !new EmailAddressAttribute().IsValid(normalizedEmail))
+            throw new ArgumentException("O e-mail é inválido.");
 
         PersistenceTextPolicy.ValidateMaxLength(
             request.Name,
@@ -58,8 +64,7 @@ public class StudentService
             PersistenceTextPolicy.PhoneMaxLength,
             "O telefone");
 
-        var existingUser =
-            await _userRepository.GetByEmailAsync(normalizedEmail);
+        // The administrative record never creates a login or accepts a password.
         var timeZone = _gymTimeZoneProvider.GetTimeZone(gymId);
 
         var localNow = TimeZoneInfo.ConvertTimeFromUtc(
@@ -68,33 +73,20 @@ public class StudentService
 
         var today = DateOnly.FromDateTime(localNow);
 
-        if (existingUser is not null)
-            return false;
-
-        var user = new User
+        var student = new Student
         {
             Id = Guid.NewGuid(),
             GymId = gymId,
             Name = request.Name.Trim(),
             Email = normalizedEmail,
-            PasswordHash = _passwordHasher.Hash(request.Password),
-            Role = UserRole.Student,
             IsActive = true,
-            CreatedAt = DateTime.UtcNow
-        };
-
-        var student = new Student
-        {
-            Id = Guid.NewGuid(),
-            UserId = user.Id,
             Phone = request.Phone?.Trim(),
             BirthDate = request.BirthDate,
             NoValidEnrollmentSince = today,
-            CreatedAt = DateTime.UtcNow,
-            User = user
+            CreatedAt = DateTime.UtcNow
         };
 
-        await _studentRepository.AddAsync(user, student);
+        await _studentRepository.AddAsync(student);
 
         return true;
     }
@@ -106,7 +98,8 @@ public class StudentService
     StudentEnrollmentFilter? enrollmentFilter,
     StudentArchiveFilter archiveFilter,
     int page,
-    int pageSize)
+    int pageSize,
+    bool includeEnrollmentMetadata = true)
     {
         if (page < 1)
         {
@@ -119,6 +112,9 @@ public class StudentService
             throw new ArgumentException(
                 "O tamanho da página deve estar entre 1 e 100.");
         }
+
+        if (!includeEnrollmentMetadata && enrollmentFilter.HasValue)
+            throw new ArgumentException("O filtro de matrícula exige acesso ao ERP.");
 
         var timeZone =
             _gymTimeZoneProvider.GetTimeZone(gymId);
@@ -148,10 +144,11 @@ public class StudentService
             .Select(student => student.Id)
             .ToArray();
 
-        var enrollments =
-            await _enrollmentRepository.GetByStudentIdsAsync(
+        var enrollments = includeEnrollmentMetadata
+            ? await _enrollmentRepository.GetByStudentIdsAsync(
                 studentIds,
-                gymId);
+                gymId)
+            : new List<Enrollment>();
 
         var enrollmentByStudentId = enrollments
             .GroupBy(enrollment => enrollment.StudentId)
@@ -196,11 +193,13 @@ public class StudentService
                 return new StudentResponse
                 {
                     Id = student.Id,
-                    Name = student.User.Name,
-                    Email = student.User.Email,
+                    Name = student.Name,
+                    Email = student.Email,
+                    UserId = student.UserId,
+                    AppAccessEnabled = student.AppAccessEnabled,
                     Phone = student.Phone,
                     BirthDate = student.BirthDate,
-                    IsActive = student.User.IsActive,
+                    IsActive = student.IsActive,
                     EnrollmentStatus = enrollmentStatus,
                     PlanName = enrollment?.PlanName,
                     EnrollmentEndDate = enrollment?.EndDate,
@@ -232,11 +231,13 @@ public class StudentService
         return new StudentResponse
         {
             Id = student.Id,
-            Name = student.User.Name,
-            Email = student.User.Email,
+            Name = student.Name,
+            Email = student.Email,
+            UserId = student.UserId,
+            AppAccessEnabled = student.AppAccessEnabled,
             Phone = student.Phone,
             BirthDate = student.BirthDate,
-            IsActive = student.User.IsActive,
+            IsActive = student.IsActive,
             ArchivedAt = student.ArchivedAt,
             CreatedAt = student.CreatedAt
         };
@@ -253,9 +254,12 @@ public class StudentService
         if (student is null)
             return UpdateStudentResult.NotFound;
 
-        var normalizedEmail = request.Email
-            .Trim()
-            .ToLowerInvariant();
+        var normalizedEmail = string.IsNullOrWhiteSpace(request.Email)
+            ? null : request.Email.Trim().ToLowerInvariant();
+        if (string.IsNullOrWhiteSpace(request.Name))
+            throw new ArgumentException("O nome é obrigatório.");
+        if (normalizedEmail is not null && !new EmailAddressAttribute().IsValid(normalizedEmail))
+            throw new ArgumentException("O e-mail é inválido.");
 
         PersistenceTextPolicy.ValidateMaxLength(
             request.Name,
@@ -272,25 +276,40 @@ public class StudentService
             PersistenceTextPolicy.PhoneMaxLength,
             "O telefone");
 
-        var existingUser =
-            await _userRepository.GetByEmailAsync(normalizedEmail);
-
-        if (existingUser is not null &&
-            existingUser.Id != student.UserId)
+        var now = DateTime.UtcNow;
+        var emailChanged = !string.Equals(
+            NormalizeEmail(student.Email),
+            normalizedEmail,
+            StringComparison.Ordinal);
+        if (student.User is not null)
         {
-            return UpdateStudentResult.EmailAlreadyInUse;
+            if (normalizedEmail is null)
+                throw new ArgumentException("Uma conta existente exige e-mail para login.");
+            var existingUser = await _userRepository.GetByEmailAsync(normalizedEmail);
+            if (existingUser is not null && existingUser.Id != student.UserId)
+                return UpdateStudentResult.EmailAlreadyInUse;
+            student.User.Name = request.Name.Trim();
+            student.User.Email = normalizedEmail;
+            student.User.UpdatedAt = now;
         }
+        student.Name = request.Name.Trim();
+        student.Email = normalizedEmail;
 
-        student.User.Name = request.Name.Trim();
-        student.User.Email = normalizedEmail;
+        // A pending invitation is bound to the address that was current when
+        // it was issued. Revoke it in the same save as an effective email
+        // change, after validation has succeeded. Activated accounts keep
+        // their existing access state; editing a profile never enables access.
+        if (student.User is null && emailChanged &&
+            student.AppInviteTokenHash is not null)
+        {
+            student.AppInviteTokenHash = null;
+            student.AppInviteExpiresAt = null;
+        }
 
         student.Phone = request.Phone?.Trim();
         student.BirthDate = request.BirthDate;
 
-        var now = DateTime.UtcNow;
-
         student.UpdatedAt = now;
-        student.User.UpdatedAt = now;
 
         await _studentRepository.UpdateAsync(student);
 
@@ -313,7 +332,7 @@ public class StudentService
 
         var now = DateTime.UtcNow;
 
-        student.User.IsActive = isActive;
+        student.IsActive = isActive;
 
         if (isActive)
         {
@@ -328,7 +347,6 @@ public class StudentService
             student.InactivatedAt = now;
         }
 
-        student.User.UpdatedAt = now;
         student.UpdatedAt = now;
 
         await _studentRepository.UpdateAsync(student);
@@ -349,13 +367,108 @@ public class StudentService
         return new StudentResponse
         {
             Id = student.Id,
-            Name = student.User.Name,
-            Email = student.User.Email,
+            Name = student.Name,
+            Email = student.Email,
+            UserId = student.UserId,
+            AppAccessEnabled = student.AppAccessEnabled,
             Phone = student.Phone,
             BirthDate = student.BirthDate,
-            IsActive = student.User.IsActive,
+            IsActive = student.IsActive,
             ArchivedAt = student.ArchivedAt,
             CreatedAt = student.CreatedAt
         };
     }
+
+    public async Task<(bool Enabled, string? Token, DateTime? ExpiresAt)?> SetAppAccessAsync(
+        Guid studentId, Guid gymId, bool enabled)
+    {
+        var student = await _studentRepository.GetByIdAndGymIdAsync(studentId, gymId);
+        if (student is null || student.ArchivedAt is not null || !student.IsActive)
+            return null;
+
+        if (enabled && string.IsNullOrWhiteSpace(student.Email))
+            throw new ArgumentException("Informe o e-mail do aluno antes de habilitar o aplicativo.");
+        if (enabled && !new EmailAddressAttribute().IsValid(student.Email))
+            throw new ArgumentException("O e-mail do aluno é inválido.");
+
+        var now = DateTime.UtcNow;
+        string? token = null;
+        student.AppAccessEnabled = enabled;
+        student.AppInviteTokenHash = null;
+        student.AppInviteExpiresAt = null;
+        if (enabled && student.UserId is null)
+        {
+            if (await _userRepository.GetByEmailAsync(student.Email!) is not null)
+                throw new ArgumentException("Já existe uma conta com este e-mail.");
+            token = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
+            student.AppInviteTokenHash = HashToken(token);
+            student.AppInviteExpiresAt = now.AddHours(24);
+        }
+        else if (enabled && student.User is not null)
+        {
+            // Only an explicit Admin operation may restore an existing digital account.
+            student.User.IsActive = true;
+            student.User.UpdatedAt = now;
+        }
+        student.UpdatedAt = now;
+        await _studentRepository.UpdateAsync(student);
+        return (enabled, token, student.AppInviteExpiresAt);
+    }
+
+    public async Task<bool> ActivateAppAsync(string token, string password)
+    {
+        PasswordPolicy.Validate(password);
+        if (string.IsNullOrWhiteSpace(token) || token.Length != 64)
+            return false;
+        var student = await _studentRepository.GetByInviteHashAsync(HashToken(token));
+        if (student is null || student.UserId is not null ||
+            !student.AppAccessEnabled || !student.IsActive ||
+            student.ArchivedAt is not null ||
+            student.AppInviteExpiresAt is null ||
+            student.AppInviteExpiresAt.Value <= DateTime.UtcNow ||
+            string.IsNullOrWhiteSpace(student.Email))
+            return false;
+        if (await _userRepository.GetByEmailAsync(student.Email) is not null)
+            return false;
+
+        var now = DateTime.UtcNow;
+        var user = new User
+        {
+            Id = Guid.NewGuid(), GymId = student.GymId, Name = student.Name,
+            Email = student.Email, PasswordHash = _passwordHasher.Hash(password),
+            Role = UserRole.Student, IsActive = true, CreatedAt = now
+        };
+        student.UserId = user.Id;
+        student.User = user;
+        student.AppInviteTokenHash = null;
+        student.AppInviteExpiresAt = null;
+        student.UpdatedAt = now;
+        await _studentRepository.AddUserAndSaveAsync(user, student);
+        return true;
+    }
+
+    public async Task<string?> ValidateAppInviteAsync(string token)
+    {
+        const string unavailableMessage =
+            "Este convite é inválido, já foi utilizado ou revogado. Solicite um novo convite ao Admin.";
+        if (string.IsNullOrWhiteSpace(token) || token.Length != 64)
+            return unavailableMessage;
+
+        var student = await _studentRepository.GetByInviteHashAsync(HashToken(token));
+        if (student is null || student.UserId is not null ||
+            !student.AppAccessEnabled || !student.IsActive ||
+            student.ArchivedAt is not null || string.IsNullOrWhiteSpace(student.Email))
+            return unavailableMessage;
+
+        if (student.AppInviteExpiresAt is null || student.AppInviteExpiresAt <= DateTime.UtcNow)
+            return "Este convite expirou. Solicite um novo convite ao Admin.";
+
+        return null;
+    }
+
+    private static string HashToken(string token) =>
+        Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(token)));
+
+    private static string? NormalizeEmail(string? email) =>
+        string.IsNullOrWhiteSpace(email) ? null : email.Trim().ToLowerInvariant();
 }

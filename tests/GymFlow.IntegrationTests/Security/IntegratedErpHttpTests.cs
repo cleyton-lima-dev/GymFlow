@@ -12,6 +12,61 @@ namespace GymFlow.IntegrationTests.Security;
 public partial class TenantEnrollmentAccessTests
 {
     [Fact]
+    public Task ErpEndpoints_RequireExplicitTenantEntitlement_AndLegacyOperationsRemainAvailable() =>
+        CheckErpEndpointEntitlement(false);
+
+    [PostgresTheory]
+    [InlineData(true)]
+    public Task PostgreSql_ErpEndpoints_RequireExplicitTenantEntitlement_AndLegacyOperationsRemainAvailable(bool postgres) =>
+        CheckErpEndpointEntitlement(postgres);
+
+    private static async Task CheckErpEndpointEntitlement(bool postgres)
+    {
+        await using var factory = new TestApi(postgres);
+        var disabledAdmin = factory.AddUser(factory.DisabledGym, UserRole.Admin);
+        var legacyAdmin = factory.AddUser(factory.LegacyGym, UserRole.Admin);
+        var enabledAdmin = factory.AddUser(factory.EnabledGym, UserRole.Admin);
+        using var client = factory.CreateClient();
+
+        foreach (var (admin, expectedEnabled) in new[]
+        {
+            (disabledAdmin, false),
+            (legacyAdmin, false),
+            (enabledAdmin, true)
+        })
+        {
+            client.DefaultRequestHeaders.Authorization = new("Bearer", factory.Token(admin));
+            var features = await client.GetFromJsonAsync<JsonElement>("/api/gym-features");
+            Assert.Equal(expectedEnabled, features.GetProperty("erpEnabled").GetBoolean());
+
+            var migrationResponse = await client.GetAsync("/api/migrations");
+            Assert.Equal(expectedEnabled ? HttpStatusCode.OK : HttpStatusCode.Forbidden,
+                migrationResponse.StatusCode);
+
+            var importResponse = await client.PostAsJsonAsync("/api/students/imports/preview", new { rows = Array.Empty<object>() });
+            if (expectedEnabled)
+                Assert.NotEqual(HttpStatusCode.Forbidden, importResponse.StatusCode);
+            else
+                Assert.Equal(HttpStatusCode.Forbidden, importResponse.StatusCode);
+        }
+
+        client.DefaultRequestHeaders.Authorization = new("Bearer", factory.Token(legacyAdmin));
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/api/dashboard/operational")).StatusCode);
+
+        var legacyStudent = factory.AddUser(factory.LegacyGym);
+        var login = await client.PostAsJsonAsync("/api/auth/login", new
+        {
+            legacyStudent.Email,
+            Password = TestApi.Password
+        });
+        Assert.Equal(HttpStatusCode.OK, login.StatusCode);
+        var studentToken = (await login.Content.ReadFromJsonAsync<JsonElement>())
+            .GetProperty("token").GetString();
+        client.DefaultRequestHeaders.Authorization = new("Bearer", studentToken);
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/api/auth/me")).StatusCode);
+    }
+
+    [Fact]
     public async Task IntegratedEndpoints_WithoutJwt_Return401()
     {
         await using var factory = new TestApi();
@@ -106,10 +161,10 @@ public partial class TenantEnrollmentAccessTests
         var history = await client.GetFromJsonAsync<JsonElement>("/api/check-ins");
         Assert.Equal(1, history.GetProperty("totalCount").GetInt32());
         Assert.Equal(studentId, history.GetProperty("items")[0].GetProperty("studentId").GetGuid());
-        var dashboard = await client.GetFromJsonAsync<JsonElement>("/api/dashboard");
+        var dashboard = await client.GetFromJsonAsync<JsonElement>("/api/dashboard/operational");
         Assert.Equal(1, dashboard.GetProperty("activeStudents").GetInt32());
-        Assert.Equal(0, dashboard.GetProperty("activeEnrollments").GetInt32());
-        Assert.Equal(0m, dashboard.GetProperty("receivedRevenue").GetDecimal());
+        Assert.False(dashboard.TryGetProperty("activeEnrollments", out _));
+        Assert.False(dashboard.TryGetProperty("receivedRevenue", out _));
         Assert.Equal(HttpStatusCode.Forbidden, (await client.PostAsJsonAsync(
             "/api/access-agent/check-ins/physical-passage", new { })).StatusCode);
 

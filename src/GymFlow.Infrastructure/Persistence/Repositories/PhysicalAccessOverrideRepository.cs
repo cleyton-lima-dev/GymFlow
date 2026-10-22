@@ -1,4 +1,4 @@
-﻿using GymFlow.Application.Interfaces.Repositories;
+using GymFlow.Application.Interfaces.Repositories;
 using GymFlow.Domain.Entities;
 using GymFlow.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
@@ -28,7 +28,7 @@ public class PhysicalAccessOverrideRepository
             .FirstOrDefaultAsync(accessOverride =>
                 accessOverride.StudentId == studentId &&
                 accessOverride.GymId == gymId &&
-                accessOverride.Student.User.GymId == gymId &&
+                accessOverride.Student.GymId == gymId &&
                 accessOverride.ActorUser.GymId == gymId);
     }
 

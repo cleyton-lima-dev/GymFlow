@@ -594,7 +594,7 @@ public class EnrollmentServiceTests
 
         Assert.NotNull(result);
 
-        Assert.True(student.User.IsActive);
+        Assert.False(student.User.IsActive); // Enrollment cannot enable the app account.
         Assert.Null(student.NoValidEnrollmentSince);
         Assert.Null(student.InactivationReason);
         Assert.Null(student.InactivatedAt);
@@ -993,7 +993,7 @@ public class EnrollmentServiceTests
         Assert.NotNull(result);
 
         Assert.Null(student.ArchivedAt);
-        Assert.True(student.User.IsActive);
+        Assert.False(student.User.IsActive); // Reactivation preserves the digital block.
         Assert.Null(student.NoValidEnrollmentSince);
         Assert.Null(student.InactivationReason);
         Assert.Null(student.InactivatedAt);

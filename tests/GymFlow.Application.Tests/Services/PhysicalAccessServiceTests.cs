@@ -1,5 +1,6 @@
 ﻿using GymFlow.Application.DTOs.PhysicalAccess;
 using GymFlow.Application.Interfaces.Repositories;
+using GymFlow.Application.Interfaces.Security;
 using GymFlow.Application.Interfaces.Time;
 using GymFlow.Application.Services;
 using GymFlow.Domain.Entities;
@@ -28,6 +29,8 @@ public class PhysicalAccessServiceTests
     private readonly IGymTimeZoneProvider
         _gymTimeZoneProvider;
 
+    private readonly IGymErpPolicy _erpPolicy;
+
     private readonly PhysicalAccessService _service;
 
     public PhysicalAccessServiceTests()
@@ -50,6 +53,10 @@ public class PhysicalAccessServiceTests
         _gymTimeZoneProvider =
             Substitute.For<IGymTimeZoneProvider>();
 
+        // Existing enrollment/payment cases explicitly represent an ERP tenant.
+        _erpPolicy = Substitute.For<IGymErpPolicy>();
+        _erpPolicy.IsEnabled(Arg.Any<Guid>()).Returns(true);
+
         _eventRepository
             .AddAsync(
              Arg.Any<PhysicalAccessEvent>())
@@ -62,7 +69,95 @@ public class PhysicalAccessServiceTests
             _eventRepository,
             _enrollmentRepository,
             _chargeRepository,
-            _gymTimeZoneProvider);
+            _gymTimeZoneProvider,
+            _erpPolicy);
+    }
+
+    [Fact]
+    public async Task G6_DecideAsync_AppOnlyNeedsNoFinancialSetupOrDigitalAccount()
+    {
+        var gymId = Guid.NewGuid();
+        _erpPolicy.IsEnabled(gymId).Returns(false);
+        var (request, credential) = ConfigureG6PhysicalCredential(gymId);
+
+        var result = await _service.DecideAsync(gymId, request);
+
+        Assert.Equal(PhysicalAccessDecision.Allowed, result.Decision);
+        Assert.Equal(PhysicalAccessDecisionReason.Eligible, result.Reason);
+        Assert.Equal(credential.StudentId, result.StudentId);
+        _erpPolicy.Received(1).IsEnabled(gymId);
+        _gymTimeZoneProvider.DidNotReceiveWithAnyArgs().GetTimeZone(default);
+        await _enrollmentRepository.DidNotReceiveWithAnyArgs().GetActiveByStudentAsync(default, default, default);
+        await _chargeRepository.DidNotReceiveWithAnyArgs().GetByEnrollmentIdAsync(default, default);
+    }
+
+    [Theory]
+    [InlineData("missing-credential", PhysicalAccessDecisionReason.CredentialNotFound)]
+    [InlineData("inactive-credential", PhysicalAccessDecisionReason.CredentialInactive)]
+    [InlineData("inactive-student", PhysicalAccessDecisionReason.StudentInactive)]
+    [InlineData("archived-student", PhysicalAccessDecisionReason.StudentArchived)]
+    [InlineData("manual-block", PhysicalAccessDecisionReason.ManualBlock)]
+    public async Task G6_DecideAsync_AppOnlyPreservesPhysicalRestrictions(
+        string restriction, PhysicalAccessDecisionReason expectedReason)
+    {
+        var gymId = Guid.NewGuid();
+        _erpPolicy.IsEnabled(gymId).Returns(false);
+        var (request, credential) = ConfigureG6PhysicalCredential(gymId);
+        if (restriction == "missing-credential")
+            _credentialRepository.GetByExternalIdentifierAsync(gymId, request.ProviderKey,
+                request.CredentialType, request.ExternalIdentifier).Returns((PhysicalAccessCredential?)null);
+        if (restriction == "inactive-credential") credential.IsActive = false;
+        if (restriction == "inactive-student") credential.Student.IsActive = false;
+        if (restriction == "archived-student") credential.Student.ArchivedAt = DateTime.UtcNow;
+        if (restriction == "manual-block")
+            _overrideRepository.GetByStudentAsync(credential.StudentId, gymId).Returns(new PhysicalAccessOverride
+            {
+                Id = Guid.NewGuid(), GymId = gymId, StudentId = credential.StudentId,
+                Type = PhysicalAccessOverrideType.Block, ActorUserId = Guid.NewGuid()
+            });
+
+        var result = await _service.DecideAsync(gymId, request);
+
+        Assert.Equal(PhysicalAccessDecision.Denied, result.Decision);
+        Assert.Equal(expectedReason, result.Reason);
+        await _enrollmentRepository.DidNotReceiveWithAnyArgs().GetActiveByStudentAsync(default, default, default);
+        await _chargeRepository.DidNotReceiveWithAnyArgs().GetByEnrollmentIdAsync(default, default);
+    }
+
+    [Fact]
+    public async Task G6_DecideAsync_PolicyFailureCannotGrantOrPersistAccess()
+    {
+        var gymId = Guid.NewGuid();
+        var (request, _) = ConfigureG6PhysicalCredential(gymId);
+        _erpPolicy.IsEnabled(gymId).Returns(_ => throw new InvalidOperationException("synthetic-policy-failure"));
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => _service.DecideAsync(gymId, request));
+
+        await _eventRepository.DidNotReceiveWithAnyArgs().AddAsync(default!);
+        await _enrollmentRepository.DidNotReceiveWithAnyArgs().GetActiveByStudentAsync(default, default, default);
+        await _chargeRepository.DidNotReceiveWithAnyArgs().GetByEnrollmentIdAsync(default, default);
+    }
+
+    private (PhysicalAccessDecisionRequest Request, PhysicalAccessCredential Credential)
+        ConfigureG6PhysicalCredential(Guid gymId)
+    {
+        // Administrative students may have no digital account or app access.
+        var student = new Student { Id = Guid.NewGuid(), GymId = gymId, IsActive = true };
+        var credential = new PhysicalAccessCredential
+        {
+            Id = Guid.NewGuid(), GymId = gymId, StudentId = student.Id, Student = student,
+            Type = PhysicalAccessCredentialType.Card, ProviderKey = "synthetic",
+            ExternalIdentifier = "g6-synthetic-card", IsActive = true
+        };
+        var request = new PhysicalAccessDecisionRequest
+        {
+            RequestId = Guid.NewGuid(), ProviderKey = credential.ProviderKey,
+            CredentialType = credential.Type, ExternalIdentifier = credential.ExternalIdentifier,
+            OccurredAt = DateTime.UtcNow
+        };
+        _credentialRepository.GetByExternalIdentifierAsync(gymId, request.ProviderKey,
+            request.CredentialType, request.ExternalIdentifier).Returns(credential);
+        return (request, credential);
     }
 
     [Fact]
@@ -254,6 +349,28 @@ public class PhysicalAccessServiceTests
                 ActorUserId = Guid.NewGuid()
             });
 
+        var otherwiseEligibleEnrollment = new Enrollment
+        {
+            Id = Guid.NewGuid(),
+            StudentId = studentId,
+            Status = EnrollmentStatus.Active,
+            StartDate = DateOnly.FromDateTime(DateTime.UtcNow).AddDays(-1),
+            EndDate = DateOnly.FromDateTime(DateTime.UtcNow).AddDays(1)
+        };
+        _enrollmentRepository
+            .GetActiveByStudentAsync(studentId, gymId, Arg.Any<DateOnly>())
+            .Returns(otherwiseEligibleEnrollment);
+        _chargeRepository
+            .GetByEnrollmentIdAsync(otherwiseEligibleEnrollment.Id, gymId)
+            .Returns(new Charge
+            {
+                Id = Guid.NewGuid(),
+                EnrollmentId = otherwiseEligibleEnrollment.Id,
+                Status = ChargeStatus.Paid,
+                PaidAmount = 150m,
+                PaidAt = DateTime.UtcNow
+            });
+
         var result =
             await _service.DecideAsync(
                 gymId,
@@ -273,6 +390,10 @@ public class PhysicalAccessServiceTests
                 default,
                 default,
                 default);
+
+        await _chargeRepository
+            .DidNotReceiveWithAnyArgs()
+            .GetByEnrollmentIdAsync(default, default);
     }
 
     [Fact]
@@ -533,7 +654,10 @@ public class PhysicalAccessServiceTests
                 DueDate =
                     DateOnly.FromDateTime(
                         DateTime.UtcNow),
-                Status = ChargeStatus.Pending
+                Status = ChargeStatus.Pending,
+                Origin = ChargeOrigin.Migration,
+                PaymentOrigin = PaymentOrigin.None,
+                VerificationStatus = ChargeVerificationStatus.Unverified
             });
 
         var result =
@@ -739,6 +863,8 @@ public class PhysicalAccessServiceTests
         var student = new Student
         {
             Id = studentId,
+            GymId = gymId,
+            IsActive = false,
             User = new User
             {
                 Id = Guid.NewGuid(),
@@ -800,8 +926,10 @@ public class PhysicalAccessServiceTests
                 default);
     }
 
-    [Fact]
-    public async Task DecideAsync_WhenStudentIsArchived_ShouldDenyAccess()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task DecideAsync_WhenStudentIsArchived_ShouldDenyAccess(bool userActive)
     {
         var gymId = Guid.NewGuid();
         var studentId = Guid.NewGuid();
@@ -815,7 +943,7 @@ public class PhysicalAccessServiceTests
                 Id = Guid.NewGuid(),
                 GymId = gymId,
                 Name = "Aluno Arquivado",
-                IsActive = false,
+                IsActive = userActive,
                 Role = UserRole.Student
             }
         };

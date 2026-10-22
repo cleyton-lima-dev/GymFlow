@@ -16,14 +16,14 @@ public sealed class DashboardRepository(AppDbContext context) : IDashboardReposi
         var end = start.AddMonths(1);
         var expiring = today.AddDays(15);
         var charges = context.Charges.AsNoTracking().Where(c =>
-            c.Enrollment.Student.User.GymId == gymId && c.Enrollment.Plan.GymId == gymId);
+            c.Enrollment.Student.GymId == gymId && c.Enrollment.Plan.GymId == gymId);
         // Expected: non-cancelled charges due this month, net of recorded discounts.
         // Received: actual PaidAmount paid this local month, independently of due date.
         var money = await charges.GroupBy(_ => 1).Select(g => new
         {
             Expected = g.Sum(c => c.Status != ChargeStatus.Cancelled && c.DueDate >= start && c.DueDate < end
                 ? c.Amount - c.DiscountAmount : 0m),
-            Received = g.Sum(c => c.Status == ChargeStatus.Paid && c.PaidAt >= paidFromUtc && c.PaidAt < paidUntilUtc
+            Received = g.Sum(c => c.Status == ChargeStatus.Paid && c.PaymentOrigin == PaymentOrigin.Avelri && c.PaidAt >= paidFromUtc && c.PaidAt < paidUntilUtc
                 ? c.PaidAmount ?? 0m : 0m),
             Overdue = g.Count(c => c.Status == ChargeStatus.Overdue ||
                 (c.Status == ChargeStatus.Pending && c.DueDate < today)),
@@ -32,7 +32,7 @@ public sealed class DashboardRepository(AppDbContext context) : IDashboardReposi
         }).SingleOrDefaultAsync(cancellationToken);
 
         var enrollments = await context.Enrollments.AsNoTracking().Where(e =>
-                e.Student.User.GymId == gymId && e.Plan.GymId == gymId &&
+                e.Student.GymId == gymId && e.Plan.GymId == gymId &&
                 e.Status == EnrollmentStatus.Active && e.StartDate <= today && e.EndDate > today)
             .GroupBy(_ => 1).Select(g => new
             {
@@ -40,6 +40,16 @@ public sealed class DashboardRepository(AppDbContext context) : IDashboardReposi
                 Expiring = g.Count(e => e.EndDate <= expiring)
             }).SingleOrDefaultAsync(cancellationToken);
 
+        var operational = await GetOperationalAsync(gymId, today, cancellationToken);
+        return new(today, start, end, 15, money?.Expected ?? 0, money?.Received ?? 0,
+            money?.Overdue ?? 0, money?.OverdueAmount ?? 0, enrollments?.Active ?? 0,
+            enrollments?.Expiring ?? 0, operational.ActiveStudents, operational.StudentsWithoutAssessment,
+            operational.ReassessmentsDue);
+    }
+
+    public async Task<OperationalDashboardSummary> GetOperationalAsync(Guid gymId, DateOnly today,
+        CancellationToken cancellationToken)
+    {
         // Inverse of AssessmentDate.AddMonths(2) <= today, including month-end clamping.
         var assessmentCutoff = today.AddMonths(-2);
         if (today.Day == DateTime.DaysInMonth(today.Year, today.Month))
@@ -47,7 +57,7 @@ public sealed class DashboardRepository(AppDbContext context) : IDashboardReposi
                 DateTime.DaysInMonth(assessmentCutoff.Year, assessmentCutoff.Month));
         var assessments = context.PhysicalAssessments;
         var students = await context.Students.AsNoTracking().Where(s =>
-                s.User.GymId == gymId && s.User.IsActive && s.ArchivedAt == null)
+                s.GymId == gymId && s.IsActive && s.ArchivedAt == null)
             .Select(s => new
             {
                 Latest = assessments.Where(a => a.StudentId == s.Id)
@@ -59,8 +69,6 @@ public sealed class DashboardRepository(AppDbContext context) : IDashboardReposi
                 Due = g.Count(s => s.Latest != null && s.Latest <= assessmentCutoff)
             }).SingleOrDefaultAsync(cancellationToken);
 
-        return new(today, start, end, 15, money?.Expected ?? 0, money?.Received ?? 0,
-            money?.Overdue ?? 0, money?.OverdueAmount ?? 0, enrollments?.Active ?? 0,
-            enrollments?.Expiring ?? 0, students?.Active ?? 0, students?.Missing ?? 0, students?.Due ?? 0);
+        return new(today, students?.Active ?? 0, students?.Missing ?? 0, students?.Due ?? 0);
     }
 }

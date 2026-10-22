@@ -14,3 +14,10 @@ public sealed record DashboardSummary(
     int ActiveStudents,
     int StudentsWithoutAssessment,
     int ReassessmentsDue);
+
+// Shared technical read model: no financial placeholders or enrollment dependency.
+public sealed record OperationalDashboardSummary(
+    DateOnly Today,
+    int ActiveStudents,
+    int StudentsWithoutAssessment,
+    int ReassessmentsDue);

@@ -1,6 +1,7 @@
 using GymFlow.Application.DTOs.Common;
 using GymFlow.Application.DTOs.PhysicalAccess;
 using GymFlow.Application.Interfaces.Repositories;
+using GymFlow.Application.Interfaces.Security;
 using GymFlow.Application.Interfaces.Time;
 using GymFlow.Domain.Entities;
 using GymFlow.Domain.Enums;
@@ -27,13 +28,16 @@ public class PhysicalAccessService
     private readonly IGymTimeZoneProvider
         _gymTimeZoneProvider;
 
+    private readonly IGymErpPolicy _erpPolicy;
+
     public PhysicalAccessService(
         IPhysicalAccessCredentialRepository credentialRepository,
         IPhysicalAccessOverrideRepository overrideRepository,
         IPhysicalAccessEventRepository eventRepository,
         IEnrollmentRepository enrollmentRepository,
         IChargeRepository chargeRepository,
-        IGymTimeZoneProvider gymTimeZoneProvider)
+        IGymTimeZoneProvider gymTimeZoneProvider,
+        IGymErpPolicy erpPolicy)
     {
         _credentialRepository = credentialRepository;
         _overrideRepository = overrideRepository;
@@ -41,6 +45,7 @@ public class PhysicalAccessService
         _enrollmentRepository = enrollmentRepository;
         _chargeRepository = chargeRepository;
         _gymTimeZoneProvider = gymTimeZoneProvider;
+        _erpPolicy = erpPolicy;
     }
 
     public async Task<PhysicalAccessDecisionResponse> DecideAsync(
@@ -130,7 +135,7 @@ public class PhysicalAccessService
                 PhysicalAccessDecisionReason.StudentArchived);
         }
 
-        if (!student.User.IsActive)
+        if (!student.IsActive)
         {
             return await RegisterDecisionAsync(
                 gymId,
@@ -168,6 +173,19 @@ public class PhysicalAccessService
                 credential.Id,
                 PhysicalAccessDecision.Allowed,
                 PhysicalAccessDecisionReason.ManualOverride);
+        }
+
+        // Shared physical access does not require ERP enrollment or payment.
+        // Resolve the authenticated tenant policy before granting this exception.
+        if (!_erpPolicy.IsEnabled(gymId))
+        {
+            return await RegisterDecisionAsync(
+                gymId,
+                request,
+                student.Id,
+                credential.Id,
+                PhysicalAccessDecision.Allowed,
+                PhysicalAccessDecisionReason.Eligible);
         }
 
         var today = GetToday(gymId);
@@ -401,7 +419,7 @@ public class PhysicalAccessService
                     Id = accessEvent.Id,
                     RequestId = accessEvent.RequestId,
                     StudentId = accessEvent.StudentId,
-                    StudentName = accessEvent.Student?.User?.Name,
+                    StudentName = accessEvent.Student?.Name,
                     Decision = accessEvent.Decision,
                     Reason = accessEvent.Reason,
                     Source = accessEvent.Source,
