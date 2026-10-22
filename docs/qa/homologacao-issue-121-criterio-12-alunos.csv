@@ -1,0 +1,5 @@
+externalId,name,email,phone,birthDate
+C12-20261020-7F3A-001,Pessoa Ficticia Alfa,c12.7f3a.alfa@example.invalid,,1994-03-12
+C12-20261020-7F3A-002,Pessoa Ficticia Beta,c12.7f3a.duplicado@example.invalid,,1989-06-04
+C12-20261020-7F3A-003,Pessoa Ficticia Beta Duplicada,c12.7f3a.duplicado@example.invalid,,1989-06-04
+C12-20261020-7F3A-004,Pessoa Ficticia Gama,email-invalido,,1997-11-20
