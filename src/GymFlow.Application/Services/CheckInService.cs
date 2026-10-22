@@ -343,7 +343,7 @@ public class CheckInService
                             StudentId =
                                 checkIn.StudentId,
                             StudentName =
-                                checkIn.Student.User.Name,
+                                checkIn.Student.Name,
                             Source =
                                 checkIn.Source,
                             PhysicalAccessEventId =
@@ -388,7 +388,7 @@ public class CheckInService
         {
             Id = checkIn.Id,
             StudentId = checkIn.StudentId,
-            StudentName = student.User.Name,
+            StudentName = student.Name,
             RequestId = checkIn.RequestId,
             Source = checkIn.Source,
             PhysicalAccessEventId =

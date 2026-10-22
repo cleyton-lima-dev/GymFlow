@@ -5,7 +5,10 @@ class DashboardService {
   DashboardService(this._api);
   final ApiClient _api;
 
-  Future<DashboardSummary> load() async => DashboardSummary.fromJson(
-    await _api.get('/api/dashboard') as Map<String, dynamic>,
-  );
+  Future<DashboardSummary> load({bool includeFinancial = true}) async =>
+      DashboardSummary.fromJson(
+        await _api.get(
+          includeFinancial ? '/api/dashboard' : '/api/dashboard/operational',
+        ) as Map<String, dynamic>,
+      );
 }

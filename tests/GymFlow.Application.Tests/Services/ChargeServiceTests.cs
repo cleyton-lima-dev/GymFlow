@@ -129,7 +129,7 @@ public class ChargeServiceTests
             EnrollmentStatus.Active,
             enrollment.Status);
 
-        Assert.True(student.User.IsActive);
+        Assert.False(student.User.IsActive); // Payment cannot enable the app account.
         Assert.Null(student.NoValidEnrollmentSince);
         Assert.Null(student.InactivationReason);
         Assert.Null(student.InactivatedAt);
@@ -298,6 +298,8 @@ public class ChargeServiceTests
         var student = new Student
         {
             Id = Guid.NewGuid(),
+            GymId = gymId,
+            Name = "Aluno Teste",
             User = new User
             {
                 Id = Guid.NewGuid(),

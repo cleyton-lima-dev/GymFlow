@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+import 'package:avelri_gestao/app/session/session_controller.dart';
+import 'package:avelri_gestao/app/session/erp_feature_controller.dart';
 import 'package:avelri_gestao/features/plans/data/plans_service.dart';
 import 'package:avelri_gestao/features/plans/models/plan_summary.dart';
 import 'package:avelri_gestao/app/theme/branding_controller.dart';
@@ -10,6 +13,11 @@ import 'package:avelri_gestao/features/students/presentation/student_details_vie
 import 'package:avelri_gestao/features/students/presentation/student_financial_history_section.dart';
 import 'package:avelri_gestao/features/students/presentation/student_physical_access_section.dart';
 
+const _studentAppBaseUrl = String.fromEnvironment(
+  'STUDENT_APP_URL',
+  defaultValue: 'https://avelri.pages.dev',
+);
+
 class StudentDetailsPage extends StatelessWidget {
   const StudentDetailsPage({required this.studentId, super.key});
 
@@ -17,10 +25,16 @@ class StudentDetailsPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final gymId = context.watch<SessionController>().user?.gymId;
+    final erpEnabled =
+        gymId != null &&
+        context.watch<ErpFeatureController>().isEnabledForGym(gymId);
     return ChangeNotifierProvider(
+      key: ValueKey('$studentId-$erpEnabled'),
       create: (context) => StudentDetailsViewModel(
         StudentsService(context.read<ApiClient>()),
         studentId,
+        erpEnabled: erpEnabled,
       )..load(),
       child: const _StudentDetailsView(),
     );
@@ -56,6 +70,7 @@ class _StudentDetailsView extends StatelessWidget {
     if (student == null) {
       return const SizedBox.shrink();
     }
+    final hasPendingInvite = student.appAccessEnabled && student.userId == null;
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(30),
@@ -99,127 +114,127 @@ class _StudentDetailsView extends StatelessWidget {
                 Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    student.archivedAt != null
-                        ? FilledButton.icon(
-                      onPressed: viewModel.isReactivating
-                          ? null
-                          : () => _showReactivateArchivedStudentDialog(
-                        context,
-                        viewModel,
-                      ),
-                      icon: viewModel.isReactivating
-                          ? const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                        ),
-                      )
-                          : const Icon(Icons.restore_rounded),
-                      label: const Text('Reativar aluno'),
-                    )
-                        : OutlinedButton.icon(
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: student.isActive
-                            ? const Color(0xFFB54752)
-                            : primaryColor,
-                        side: BorderSide(
-                          color: student.isActive
-                              ? const Color(0xFFB54752)
-                              : primaryColor,
-                        ),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 18,
-                          vertical: 14,
-                        ),
-                      ),
-                      onPressed: viewModel.isUpdatingStatus
-                          ? null
-                          : () async {
-                        final newStatus = !student.isActive;
-
-                        final confirmed = await showDialog<bool>(
-                          context: context,
-                          builder: (dialogContext) {
-                            return AlertDialog(
-                              title: Text(
-                                newStatus
-                                    ? 'Ativar aluno?'
-                                    : 'Inativar aluno?',
-                              ),
-                              content: Text(
-                                newStatus
-                                    ? 'O aluno voltará a ficar ativo no Avelri.'
-                                    : 'O aluno ficará inativo até ser reativado.',
-                              ),
-                              actions: [
-                                TextButton(
-                                  onPressed: () {
-                                    Navigator.of(dialogContext)
-                                        .pop(false);
-                                  },
-                                  child: const Text('Cancelar'),
+                    if (student.archivedAt == null || viewModel.erpEnabled)
+                      student.archivedAt != null
+                          ? FilledButton.icon(
+                              onPressed: viewModel.isReactivating
+                                  ? null
+                                  : () => _showReactivateArchivedStudentDialog(
+                                      context,
+                                      viewModel,
+                                    ),
+                              icon: viewModel.isReactivating
+                                  ? const SizedBox(
+                                      width: 16,
+                                      height: 16,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                      ),
+                                    )
+                                  : const Icon(Icons.restore_rounded),
+                              label: const Text('Reativar aluno'),
+                            )
+                          : OutlinedButton.icon(
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: student.isActive
+                                    ? const Color(0xFFB54752)
+                                    : primaryColor,
+                                side: BorderSide(
+                                  color: student.isActive
+                                      ? const Color(0xFFB54752)
+                                      : primaryColor,
                                 ),
-                                FilledButton(
-                                  onPressed: () {
-                                    Navigator.of(dialogContext)
-                                        .pop(true);
-                                  },
-                                  child: Text(
-                                    newStatus
-                                        ? 'Ativar'
-                                        : 'Inativar',
-                                  ),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 18,
+                                  vertical: 14,
                                 ),
-                              ],
-                            );
-                          },
-                        );
+                              ),
+                              onPressed: viewModel.isUpdatingStatus
+                                  ? null
+                                  : () async {
+                                      final newStatus = !student.isActive;
 
-                        if (confirmed != true ||
-                            !context.mounted) {
-                          return;
-                        }
+                                      final confirmed = await showDialog<bool>(
+                                        context: context,
+                                        builder: (dialogContext) {
+                                          return AlertDialog(
+                                            title: Text(
+                                              newStatus
+                                                  ? 'Ativar aluno?'
+                                                  : 'Inativar aluno?',
+                                            ),
+                                            content: Text(
+                                              newStatus
+                                                  ? 'O aluno voltará a ficar ativo no Avelri.'
+                                                  : 'O aluno ficará inativo até ser reativado.',
+                                            ),
+                                            actions: [
+                                              TextButton(
+                                                onPressed: () {
+                                                  Navigator.of(dialogContext)
+                                                      .pop(false);
+                                                },
+                                                child: const Text('Cancelar'),
+                                              ),
+                                              FilledButton(
+                                                onPressed: () {
+                                                  Navigator.of(dialogContext)
+                                                      .pop(true);
+                                                },
+                                                child: Text(
+                                                  newStatus
+                                                      ? 'Ativar'
+                                                      : 'Inativar',
+                                                ),
+                                              ),
+                                            ],
+                                          );
+                                        },
+                                      );
 
-                        final success =
-                        await viewModel.updateStatus(
-                          newStatus,
-                        );
+                                      if (confirmed != true ||
+                                          !context.mounted) {
+                                        return;
+                                      }
 
-                        if (!context.mounted || !success) {
-                          return;
-                        }
+                                      final success = await viewModel
+                                          .updateStatus(newStatus);
 
-                        ScaffoldMessenger.of(context)
-                            .showSnackBar(
-                          SnackBar(
-                            content: Text(
-                              newStatus
-                                  ? 'Aluno ativado com sucesso.'
-                                  : 'Aluno inativado com sucesso.',
+                                      if (!context.mounted || !success) {
+                                        return;
+                                      }
+
+                                      ScaffoldMessenger.of(
+                                        context,
+                                      ).showSnackBar(
+                                        SnackBar(
+                                          content: Text(
+                                            newStatus
+                                                ? 'Aluno ativado com sucesso.'
+                                                : 'Aluno inativado com sucesso.',
+                                          ),
+                                        ),
+                                      );
+                                    },
+                              icon: viewModel.isUpdatingStatus
+                                  ? const SizedBox(
+                                      width: 16,
+                                      height: 16,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                      ),
+                                    )
+                                  : Icon(
+                                      student.isActive
+                                          ? Icons.block_outlined
+                                          : Icons.check_circle_outline,
+                                    ),
+                              label: Text(
+                                student.isActive
+                                    ? 'Inativar aluno'
+                                    : 'Ativar aluno',
+                              ),
                             ),
-                          ),
-                        );
-                      },
-                      icon: viewModel.isUpdatingStatus
-                          ? const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                        ),
-                      )
-                          : Icon(
-                        student.isActive
-                            ? Icons.block_outlined
-                            : Icons.check_circle_outline,
-                      ),
-                      label: Text(
-                        student.isActive
-                            ? 'Inativar aluno'
-                            : 'Ativar aluno',
-                      ),
-                    ),
                     const SizedBox(width: 12),
                     FilledButton.icon(
                       style: FilledButton.styleFrom(
@@ -374,33 +389,220 @@ class _StudentDetailsView extends StatelessWidget {
             ),
             const SizedBox(height: 22),
 
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Acesso ao aplicativo',
+                      style: TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'O aluno precisa de um e-mail válido. Após receber o convite, ele cria a própria senha. O Admin não define nem visualiza essa senha.',
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      student.appAccessEnabled
+                          ? (student.userId == null
+                                ? 'Convite pendente de ativação'
+                                : 'Acesso habilitado')
+                          : 'Acesso desabilitado',
+                    ),
+                    const SizedBox(height: 12),
+                    FilledButton(
+                      onPressed:
+                          viewModel.isUpdatingAppAccess ||
+                              student.archivedAt != null
+                          ? null
+                          : () async {
+                              final enabling =
+                                  !student.appAccessEnabled || hasPendingInvite;
+                              String? email;
+                              if (enabling &&
+                                  !_isValidStudentEmail(student.email)) {
+                                email = await _showAppAccessEmailDialog(
+                                  context,
+                                  initialEmail: student.email,
+                                );
+                                if (email == null || !context.mounted) return;
+                              }
+
+                              final result = await viewModel.setAppAccess(
+                                enabling,
+                                email: email,
+                              );
+                              if (!context.mounted) return;
+                              if (!result.succeeded) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text(
+                                      viewModel.appAccessErrorMessage ?? 'Não foi possível alterar o acesso ao aplicativo.',
+                                    ),
+                                    backgroundColor: colorScheme.error,
+                                  ),
+                                );
+                                return;
+                              }
+
+                              if (result.token != null) {
+                                final token = result.token!;
+                                final inviteLink = Uri.parse(_studentAppBaseUrl)
+                                    .replace(
+                                      path: '/ativar',
+                                      queryParameters: {'token': token},
+                                    )
+                                    .toString();
+                                await showDialog<void>(
+                                  context: context,
+                                  builder: (dialogContext) => AlertDialog(
+                                    title: const Text(
+                                      'Convite para o aplicativo',
+                                    ),
+                                    content: Column(
+                                      mainAxisSize: MainAxisSize.min,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        const Text(
+                                          'Envie este código ao aluno para que ele defina a própria senha.',
+                                        ),
+                                        const SizedBox(height: 12),
+                                        SelectableText(inviteLink),
+                                      ],
+                                    ),
+                                    actions: [
+                                      TextButton(
+                                        onPressed: () async {
+                                          await Clipboard.setData(
+                                            ClipboardData(text: inviteLink),
+                                          );
+                                          if (dialogContext.mounted) {
+                                            Navigator.pop(dialogContext);
+                                          }
+                                        },
+                                        child: const Text('Copiar convite'),
+                                      ),
+                                      TextButton(
+                                        onPressed: () =>
+                                            Navigator.pop(dialogContext),
+                                        child: const Text('Fechar'),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              }
+                              if (!context.mounted) return;
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(
+                                    enabling
+                                        ? result.token == null
+                                              ? 'Acesso ao aplicativo habilitado.'
+                                              : 'Convite emitido. O aluno deve definir a própria senha.'
+                                        : 'Acesso ao aplicativo desabilitado.',
+                                  ),
+                                ),
+                              );
+                            },
+                      child: viewModel.isUpdatingAppAccess
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : Text(
+                              hasPendingInvite
+                                  ? 'Reemitir convite'
+                                  : student.appAccessEnabled
+                                  ? 'Desabilitar acesso'
+                                  : 'Habilitar acesso',
+                            ),
+                    ),
+                    if (hasPendingInvite) ...[
+                      const SizedBox(height: 8),
+                      OutlinedButton.icon(
+                        onPressed:
+                            viewModel.isUpdatingAppAccess ||
+                                student.archivedAt != null
+                            ? null
+                            : () async {
+                                final confirmed = await showDialog<bool>(
+                                  context: context,
+                                  builder: (dialogContext) => AlertDialog(
+                                    title: const Text('Revogar convite?'),
+                                    content: const Text(
+                                      'O convite deixará de funcionar imediatamente. O cadastro do aluno será mantido e você poderá emitir outro convite depois.',
+                                    ),
+                                    actions: [
+                                      TextButton(
+                                        onPressed: () =>
+                                            Navigator.pop(dialogContext, false),
+                                        child: const Text('Manter convite'),
+                                      ),
+                                      FilledButton(
+                                        onPressed: () =>
+                                            Navigator.pop(dialogContext, true),
+                                        child: const Text('Revogar convite'),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                                if (!context.mounted || confirmed != true) {
+                                  return;
+                                }
+
+                                final result = await viewModel.setAppAccess(
+                                  false,
+                                );
+                                if (!context.mounted) return;
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text(
+                                      result.succeeded
+                                          ? 'Convite revogado. O cadastro do aluno foi mantido.'
+                                          : viewModel.appAccessErrorMessage ?? 'Não foi possível revogar o convite.',
+                                    ),
+                                    backgroundColor: result.succeeded
+                                        ? null
+                                        : colorScheme.error,
+                                  ),
+                                );
+                              },
+                        icon: const Icon(Icons.link_off_rounded),
+                        label: const Text('Revogar convite'),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 22),
+
             StudentPhysicalAccessSection(
-              credentials:
-              viewModel.physicalAccessCredentials,
-              accessOverride:
-              viewModel.physicalAccessOverride,
-              isLoading:
-              viewModel.isPhysicalAccessLoading,
-              errorMessage:
-              viewModel.physicalAccessErrorMessage,
+              credentials: viewModel.physicalAccessCredentials,
+              accessOverride: viewModel.physicalAccessOverride,
+              isLoading: viewModel.isPhysicalAccessLoading,
+              errorMessage: viewModel.physicalAccessErrorMessage,
               primaryColor: primaryColor,
 
-              onRefresh:
-              viewModel.loadPhysicalAccess,
+              onRefresh: viewModel.loadPhysicalAccess,
 
               onAddCredential: () {
-                _showAddPhysicalAccessCredentialDialog(
-                  context,
-                  viewModel,
-                );
+                _showAddPhysicalAccessCredentialDialog(context, viewModel);
               },
 
               onToggleCredential: (credential) async {
                 final success = await viewModel
                     .updatePhysicalAccessCredentialStatus(
-                  credentialId: credential.id,
-                  isActive: !credential.isActive,
-                );
+                      credentialId: credential.id,
+                      isActive: !credential.isActive,
+                    );
 
                 if (!context.mounted || !success) {
                   return;
@@ -418,50 +620,36 @@ class _StudentDetailsView extends StatelessWidget {
               },
 
               onAllowAccess: () {
-                _showPhysicalAccessOverrideDialog(
-                  context,
-                  viewModel,
-                  type: 1,
-                );
+                _showPhysicalAccessOverrideDialog(context, viewModel, type: 1);
               },
 
               onBlockAccess: () {
-                _showPhysicalAccessOverrideDialog(
-                  context,
-                  viewModel,
-                  type: 2,
-                );
+                _showPhysicalAccessOverrideDialog(context, viewModel, type: 2);
               },
 
               onRemoveOverride: () async {
-                final success =
-                await viewModel
-                    .removePhysicalAccessOverride();
+                final success = await viewModel.removePhysicalAccessOverride();
 
                 if (!context.mounted || !success) {
                   return;
                 }
 
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text(
-                      'Exceção manual removida.',
-                    ),
-                  ),
+                  const SnackBar(content: Text('Exceção manual removida.')),
                 );
               },
             ),
 
-            const SizedBox(height: 22),
-
-            StudentFinancialHistorySection(
-              history: viewModel.financialHistory,
-              isLoading: viewModel.isFinancialHistoryLoading,
-              errorMessage:
-              viewModel.financialHistoryErrorMessage,
-              onRetry: viewModel.loadFinancialHistory,
-              primaryColor: primaryColor,
-            ),
+            if (viewModel.erpEnabled) ...[
+              const SizedBox(height: 22),
+              StudentFinancialHistorySection(
+                history: viewModel.financialHistory,
+                isLoading: viewModel.isFinancialHistoryLoading,
+                errorMessage: viewModel.financialHistoryErrorMessage,
+                onRetry: viewModel.loadFinancialHistory,
+                primaryColor: primaryColor,
+              ),
+            ],
           ],
         ),
       ),
@@ -469,14 +657,12 @@ class _StudentDetailsView extends StatelessWidget {
   }
 
   Future<void> _showAddPhysicalAccessCredentialDialog(
-      BuildContext context,
-      StudentDetailsViewModel viewModel,
-      ) async {
-    final providerController =
-    TextEditingController(text: 'toletus');
+    BuildContext context,
+    StudentDetailsViewModel viewModel,
+  ) async {
+    final providerController = TextEditingController(text: 'toletus');
 
-    final identifierController =
-    TextEditingController();
+    final identifierController = TextEditingController();
 
     var credentialType = 3;
 
@@ -486,9 +672,7 @@ class _StudentDetailsView extends StatelessWidget {
         return StatefulBuilder(
           builder: (context, setState) {
             return AlertDialog(
-              title: const Text(
-                'Adicionar credencial',
-              ),
+              title: const Text('Adicionar credencial'),
               content: SizedBox(
                 width: 420,
                 child: Column(
@@ -500,32 +684,15 @@ class _StudentDetailsView extends StatelessWidget {
                         labelText: 'Tipo de credencial',
                       ),
                       items: const [
-                        DropdownMenuItem(
-                          value: 1,
-                          child: Text('Cartão'),
-                        ),
-                        DropdownMenuItem(
-                          value: 2,
-                          child: Text('QR Code'),
-                        ),
-                        DropdownMenuItem(
-                          value: 3,
-                          child: Text('Biometria'),
-                        ),
+                        DropdownMenuItem(value: 1, child: Text('Cartão')),
+                        DropdownMenuItem(value: 2, child: Text('QR Code')),
+                        DropdownMenuItem(value: 3, child: Text('Biometria')),
                         DropdownMenuItem(
                           value: 4,
-                          child: Text(
-                            'Reconhecimento facial',
-                          ),
+                          child: Text('Reconhecimento facial'),
                         ),
-                        DropdownMenuItem(
-                          value: 5,
-                          child: Text('PIN'),
-                        ),
-                        DropdownMenuItem(
-                          value: 99,
-                          child: Text('Outro'),
-                        ),
+                        DropdownMenuItem(value: 5, child: Text('PIN')),
+                        DropdownMenuItem(value: 99, child: Text('Outro')),
                       ],
                       onChanged: (value) {
                         if (value == null) {
@@ -549,10 +716,8 @@ class _StudentDetailsView extends StatelessWidget {
                     TextField(
                       controller: identifierController,
                       decoration: const InputDecoration(
-                        labelText:
-                        'Identificador externo',
-                        hintText:
-                        'ID informado pela catraca',
+                        labelText: 'Identificador externo',
+                        hintText: 'ID informado pela catraca',
                       ),
                     ),
                   ],
@@ -561,24 +726,18 @@ class _StudentDetailsView extends StatelessWidget {
               actions: [
                 TextButton(
                   onPressed: () {
-                    Navigator.of(dialogContext)
-                        .pop(false);
+                    Navigator.of(dialogContext).pop(false);
                   },
                   child: const Text('Cancelar'),
                 ),
                 FilledButton(
                   onPressed: () {
-                    if (providerController.text
-                        .trim()
-                        .isEmpty ||
-                        identifierController.text
-                            .trim()
-                            .isEmpty) {
+                    if (providerController.text.trim().isEmpty ||
+                        identifierController.text.trim().isEmpty) {
                       return;
                     }
 
-                    Navigator.of(dialogContext)
-                        .pop(true);
+                    Navigator.of(dialogContext).pop(true);
                   },
                   child: const Text('Adicionar'),
                 ),
@@ -595,13 +754,10 @@ class _StudentDetailsView extends StatelessWidget {
       return;
     }
 
-    final success =
-    await viewModel
-        .createPhysicalAccessCredential(
+    final success = await viewModel.createPhysicalAccessCredential(
       type: credentialType,
       providerKey: providerController.text,
-      externalIdentifier:
-      identifierController.text,
+      externalIdentifier: identifierController.text,
     );
 
     providerController.dispose();
@@ -612,21 +768,16 @@ class _StudentDetailsView extends StatelessWidget {
     }
 
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text(
-          'Credencial adicionada com sucesso.',
-        ),
-      ),
+      const SnackBar(content: Text('Credencial adicionada com sucesso.')),
     );
   }
 
   Future<void> _showPhysicalAccessOverrideDialog(
-      BuildContext context,
-      StudentDetailsViewModel viewModel, {
-        required int type,
-      }) async {
-    final reasonController =
-    TextEditingController();
+    BuildContext context,
+    StudentDetailsViewModel viewModel, {
+    required int type,
+  }) async {
+    final reasonController = TextEditingController();
 
     final isAllow = type == 1;
 
@@ -655,19 +806,15 @@ class _StudentDetailsView extends StatelessWidget {
           actions: [
             TextButton(
               onPressed: () {
-                Navigator.of(dialogContext)
-                    .pop(false);
+                Navigator.of(dialogContext).pop(false);
               },
               child: const Text('Cancelar'),
             ),
             FilledButton(
               onPressed: () {
-                Navigator.of(dialogContext)
-                    .pop(true);
+                Navigator.of(dialogContext).pop(true);
               },
-              child: Text(
-                isAllow ? 'Liberar' : 'Bloquear',
-              ),
+              child: Text(isAllow ? 'Liberar' : 'Bloquear'),
             ),
           ],
         );
@@ -679,8 +826,7 @@ class _StudentDetailsView extends StatelessWidget {
       return;
     }
 
-    final success =
-    await viewModel.setPhysicalAccessOverride(
+    final success = await viewModel.setPhysicalAccessOverride(
       type: type,
       reason: reasonController.text,
     );
@@ -748,11 +894,7 @@ class _InfoItem extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Icon(
-            icon,
-            size: 20,
-            color: colorScheme.onSurfaceVariant,
-          ),
+          Icon(icon, size: 20, color: colorScheme.onSurfaceVariant),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
@@ -795,7 +937,6 @@ class _SectionTitle extends StatelessWidget {
   final IconData icon;
   final String title;
   final Color color;
-
 
   @override
   Widget build(BuildContext context) {
@@ -890,27 +1031,20 @@ class _ErrorState extends StatelessWidget {
     );
   }
 }
-Future<void> _showReactivateArchivedStudentDialog(
-    BuildContext context,
-    StudentDetailsViewModel viewModel,
-    ) async {
-  final plansService = PlansService(
-    context.read<ApiClient>(),
-  );
 
-  final plans = await plansService.getPlans(
-    isActive: true,
-  );
+Future<void> _showReactivateArchivedStudentDialog(
+  BuildContext context,
+  StudentDetailsViewModel viewModel,
+) async {
+  final plansService = PlansService(context.read<ApiClient>());
+
+  final plans = await plansService.getPlans(isActive: true);
 
   if (!context.mounted) return;
 
   if (plans.isEmpty) {
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text(
-          'Nenhum plano ativo disponível.',
-        ),
-      ),
+      const SnackBar(content: Text('Nenhum plano ativo disponível.')),
     );
     return;
   }
@@ -924,9 +1058,7 @@ Future<void> _showReactivateArchivedStudentDialog(
       return StatefulBuilder(
         builder: (context, setState) {
           return AlertDialog(
-            title: const Text(
-              'Reativar aluno arquivado',
-            ),
+            title: const Text('Reativar aluno arquivado'),
             content: SizedBox(
               width: 380,
               child: Column(
@@ -934,16 +1066,14 @@ Future<void> _showReactivateArchivedStudentDialog(
                 children: [
                   DropdownButtonFormField<PlanSummary>(
                     initialValue: selectedPlan,
-                    decoration: const InputDecoration(
-                      labelText: 'Plano',
-                    ),
+                    decoration: const InputDecoration(labelText: 'Plano'),
                     items: plans
                         .map(
                           (plan) => DropdownMenuItem(
-                        value: plan,
-                        child: Text(plan.name),
-                      ),
-                    )
+                            value: plan,
+                            child: Text(plan.name),
+                          ),
+                        )
                         .toList(),
                     onChanged: (plan) {
                       if (plan == null) return;
@@ -956,24 +1086,15 @@ Future<void> _showReactivateArchivedStudentDialog(
                   const SizedBox(height: 18),
                   ListTile(
                     contentPadding: EdgeInsets.zero,
-                    title: const Text(
-                      'Data de início',
-                    ),
-                    subtitle: Text(
-                      _formatDialogDate(startDate),
-                    ),
-                    trailing: const Icon(
-                      Icons.calendar_month_outlined,
-                    ),
+                    title: const Text('Data de início'),
+                    subtitle: Text(_formatDialogDate(startDate)),
+                    trailing: const Icon(Icons.calendar_month_outlined),
                     onTap: () async {
-                      final selectedDate =
-                      await showDatePicker(
+                      final selectedDate = await showDatePicker(
                         context: context,
                         initialDate: startDate,
                         firstDate: DateTime.now(),
-                        lastDate: DateTime.now().add(
-                          const Duration(days: 365),
-                        ),
+                        lastDate: DateTime.now().add(const Duration(days: 365)),
                       );
 
                       if (selectedDate == null) return;
@@ -1010,8 +1131,7 @@ Future<void> _showReactivateArchivedStudentDialog(
     return;
   }
 
-  final success =
-  await viewModel.reactivateArchivedStudent(
+  final success = await viewModel.reactivateArchivedStudent(
     planId: selectedPlan.id,
     startDate: startDate,
   );
@@ -1034,4 +1154,85 @@ String _formatDialogDate(DateTime date) {
   final month = date.month.toString().padLeft(2, '0');
 
   return '$day/$month/${date.year}';
+}
+
+bool _isValidStudentEmail(String email) =>
+    RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(email.trim());
+
+Future<String?> _showAppAccessEmailDialog(
+  BuildContext context, {
+  String initialEmail = '',
+}) => showDialog<String>(
+  context: context,
+  builder: (_) => _AppAccessEmailDialog(initialEmail: initialEmail),
+);
+
+class _AppAccessEmailDialog extends StatefulWidget {
+  const _AppAccessEmailDialog({required this.initialEmail});
+
+  final String initialEmail;
+
+  @override
+  State<_AppAccessEmailDialog> createState() => _AppAccessEmailDialogState();
+}
+
+class _AppAccessEmailDialogState extends State<_AppAccessEmailDialog> {
+  final _formKey = GlobalKey<FormState>();
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.initialEmail);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _continue() {
+    if (_formKey.currentState!.validate()) {
+      Navigator.of(context).pop(_controller.text.trim());
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    title: const Text('E-mail para acesso ao aplicativo'),
+    content: SizedBox(
+      width: 380,
+      child: Form(
+        key: _formKey,
+        child: TextFormField(
+          controller: _controller,
+          autofocus: true,
+          keyboardType: TextInputType.emailAddress,
+          decoration: const InputDecoration(
+            labelText: 'E-mail do aluno',
+            hintText: 'aluno@exemplo.com',
+          ),
+          validator: (value) {
+            final candidate = value?.trim() ?? '';
+            if (candidate.isEmpty) {
+              return 'Informe o e-mail do aluno.';
+            }
+            if (!_isValidStudentEmail(candidate)) {
+              return 'Informe um e-mail válido.';
+            }
+            return null;
+          },
+          onFieldSubmitted: (_) => _continue(),
+        ),
+      ),
+    ),
+    actions: [
+      TextButton(
+        onPressed: () => Navigator.of(context).pop(),
+        child: const Text('Cancelar'),
+      ),
+      FilledButton(onPressed: _continue, child: const Text('Continuar')),
+    ],
+  );
 }

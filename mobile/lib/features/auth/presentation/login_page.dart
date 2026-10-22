@@ -3,6 +3,8 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:gymflow/app/session/session_controller.dart';
+import 'package:gymflow/core/network/api_client.dart';
+import 'package:gymflow/features/auth/data/auth_service.dart';
 import 'package:gymflow/features/auth/presentation/login_view_model.dart';
 import 'package:provider/provider.dart';
 
@@ -56,6 +58,62 @@ class _LoginViewState extends State<_LoginView> {
       email: _emailController.text,
       password: _passwordController.text,
     );
+  }
+
+  Future<void> _activateApp() async {
+    final token = TextEditingController();
+    final password = TextEditingController();
+    String? error;
+    var loading = false;
+    try {
+      await showDialog<void>(
+        context: context,
+        builder: (dialogContext) => StatefulBuilder(
+          builder: (dialogContext, setDialogState) => AlertDialog(
+            title: const Text('Ativar acesso ao aplicativo'),
+            content: Column(mainAxisSize: MainAxisSize.min, children: [
+              TextField(controller: token, autocorrect: false,
+                  decoration: const InputDecoration(labelText: 'Código do convite')),
+              TextField(controller: password, obscureText: true, autocorrect: false,
+                  decoration: const InputDecoration(labelText: 'Defina sua senha')),
+              if (error != null) Padding(padding: const EdgeInsets.only(top: 12), child: Text(error!)),
+            ]),
+            actions: [
+              TextButton(onPressed: loading ? null : () => Navigator.pop(dialogContext),
+                  child: const Text('Cancelar')),
+              FilledButton(onPressed: loading ? null : () async {
+                if (token.text.trim().isEmpty || password.text.length < 8) {
+                  setDialogState(() => error = 'Informe o convite e uma senha de pelo menos 8 caracteres.');
+                  return;
+                }
+                setDialogState(() { loading = true; error = null; });
+                try {
+                  await AuthService(context.read<ApiClient>())
+                      .activateStudentApp(token.text, password.text);
+                  if (dialogContext.mounted) {
+                    Navigator.pop(dialogContext);
+                  }
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                        content: Text('Acesso ativado. Entre com seu e-mail e senha.')));
+                  }
+                } catch (_) {
+                  if (dialogContext.mounted) {
+                    setDialogState(() {
+                      loading = false;
+                      error = 'Convite inválido ou expirado.';
+                    });
+                  }
+                }
+              }, child: const Text('Ativar')),
+            ],
+          ),
+        ),
+      );
+    } finally {
+      token.dispose();
+      password.dispose();
+    }
   }
 
   @override
@@ -357,6 +415,8 @@ class _LoginViewState extends State<_LoginView> {
                                     );
                                   },
                                 ),
+                                TextButton(onPressed: _activateApp,
+                                    child: const Text('Tenho um convite para ativar o app')),
 
                                 SizedBox(height: compact ? 100 : 160),
                               ],

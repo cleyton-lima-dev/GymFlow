@@ -64,7 +64,7 @@ class _EditStudentViewState extends State<_EditStudentView> {
     final student = viewModel.student!;
 
     _nameController.text = student.name;
-    _emailController.text = student.email;
+    _emailController.text = student.email ?? '';
     _phoneController.text = student.phone ?? '';
 
     _birthDate = student.birthDate;
@@ -303,7 +303,7 @@ class _EditStudentViewState extends State<_EditStudentView> {
 
                           const _FieldLabel(
                             text: 'E-mail',
-                            requiredField: true,
+                            suffix: ' (opcional)',
                           ),
 
                           const SizedBox(height: 8),
@@ -318,9 +318,7 @@ class _EditStudentViewState extends State<_EditStudentView> {
                             validator: (value) {
                               final email = value?.trim() ?? '';
 
-                              if (email.isEmpty) {
-                                return 'Informe o e-mail.';
-                              }
+                              if (email.isEmpty) return null;
 
                               final valid = RegExp(
                                 r'^[^@\s]+@[^@\s]+\.[^@\s]+$',
@@ -364,7 +362,7 @@ class _EditStudentViewState extends State<_EditStudentView> {
 
                           const _FieldLabel(
                             text: 'Data de nascimento',
-                            requiredField: true,
+                            suffix: ' (opcional)',
                           ),
 
                           const SizedBox(height: 8),
@@ -373,13 +371,6 @@ class _EditStudentViewState extends State<_EditStudentView> {
                             controller: _birthDateController,
                             readOnly: true,
                             onTap: _selectBirthDate,
-                            validator: (_) {
-                              if (_birthDate == null) {
-                                return 'Informe a data de nascimento.';
-                              }
-
-                              return null;
-                            },
                             decoration: _inputDecoration(
                               context,
                               hintText: 'dd/mm/aaaa',

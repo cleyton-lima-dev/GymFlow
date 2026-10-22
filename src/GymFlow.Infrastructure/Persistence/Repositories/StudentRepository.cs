@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using GymFlow.Application.DTOs.Students;
 using GymFlow.Domain.Enums;
 using Microsoft.Extensions.Logging;
+using GymFlow.Application.Services;
 
 namespace GymFlow.Infrastructure.Persistence.Repositories;
 
@@ -19,9 +20,8 @@ public class StudentRepository : IStudentRepository
         _logger = logger;
     }
 
-    public async Task AddAsync(User user, Student student)
+    public async Task AddAsync(Student student)
     {
-        await _context.Users.AddAsync(user);
         await _context.Students.AddAsync(student);
 
         await _context.SaveChangesAsync();
@@ -40,7 +40,7 @@ public class StudentRepository : IStudentRepository
         var query = _context.Students
             .AsNoTracking()
             .Include(student => student.User)
-            .Where(student => student.User.GymId == gymId)
+            .Where(student => student.GymId == gymId)
             .AsQueryable();
         query = archiveFilter switch
         {
@@ -65,11 +65,12 @@ public class StudentRepository : IStudentRepository
 
             query = query.Where(student =>
                 EF.Functions.ILike(
-                    student.User.Name,
+                    student.Name,
                     $"%{searchTerm}%") ||
-                EF.Functions.ILike(
-                    student.User.Email,
-                    $"%{searchTerm}%") ||
+                (student.Email != null &&
+                    EF.Functions.ILike(
+                        student.Email,
+                        $"%{searchTerm}%")) ||
                 (
                     student.Phone != null &&
                     EF.Functions.ILike(
@@ -81,7 +82,7 @@ public class StudentRepository : IStudentRepository
         if (isActive.HasValue)
         {
             query = query.Where(student =>
-                student.User.IsActive == isActive.Value);
+                student.IsActive == isActive.Value);
         }
         if (enrollmentFilter.HasValue)
         {
@@ -135,7 +136,7 @@ public class StudentRepository : IStudentRepository
         var totalCount = await query.CountAsync();
 
         var items = await query
-            .OrderBy(student => student.User.Name)
+            .OrderBy(student => student.Name)
             .ThenBy(student => student.Id)
             .Skip(skip)
             .Take(take)
@@ -150,7 +151,7 @@ public class StudentRepository : IStudentRepository
             .Include(student => student.User)
             .FirstOrDefaultAsync(student =>
                 student.Id == studentId &&
-                student.User.GymId == gymId);
+                student.GymId == gymId);
     }
 
     public async Task<List<Guid>> GetGymIdsForLifecycleAsync()
@@ -158,7 +159,7 @@ public class StudentRepository : IStudentRepository
         return await _context.Students
             .AsNoTracking()
             .Where(student => student.ArchivedAt == null)
-            .Select(student => student.User.GymId)
+            .Select(student => student.GymId)
             .Distinct()
             .ToListAsync();
     }
@@ -169,7 +170,7 @@ public class StudentRepository : IStudentRepository
         return await _context.Students
             .Include(student => student.User)
             .Where(student =>
-                student.User.GymId == gymId &&
+                student.GymId == gymId &&
                 student.ArchivedAt == null)
             .ToListAsync();
     }
@@ -188,8 +189,7 @@ public class StudentRepository : IStudentRepository
     {
         try
         {
-            // EF saves the Student and User changes in one transaction. A stale
-            // reason or activity rolls back the entire batch, including reactivation.
+            // A stale administrative or financial state defers the lifecycle batch.
             await _context.SaveChangesAsync();
             return true;
         }
@@ -211,6 +211,24 @@ public class StudentRepository : IStudentRepository
             .Include(x => x.User)
             .FirstOrDefaultAsync(x =>
                 x.UserId == userId &&
-                x.User.GymId == gymId);
+                x.GymId == gymId);
+    }
+
+    public Task<Student?> GetByInviteHashAsync(string tokenHash) =>
+        _context.Students.SingleOrDefaultAsync(x => x.AppInviteTokenHash == tokenHash);
+
+    public async Task AddUserAndSaveAsync(User user, Student student)
+    {
+        await _context.Users.AddAsync(user);
+        try
+        {
+            await _context.SaveChangesAsync();
+        }
+        catch (DbUpdateException)
+        {
+            if (await _context.Users.AsNoTracking().AnyAsync(x => x.Email == user.Email))
+                throw new StudentIdentityConflictException();
+            throw;
+        }
     }
 }

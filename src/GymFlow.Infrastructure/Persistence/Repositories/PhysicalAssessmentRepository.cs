@@ -1,4 +1,4 @@
-﻿using GymFlow.Application.Exceptions;
+using GymFlow.Application.Exceptions;
 using GymFlow.Application.Interfaces.Repositories;
 using GymFlow.Domain.Entities;
 using GymFlow.Infrastructure.Data;
@@ -34,7 +34,7 @@ public class PhysicalAssessmentRepository
             .FirstOrDefaultAsync(x =>
                 x.Id == assessmentId &&
                 x.StudentId == studentId &&
-                x.Student.User.GymId == gymId);
+                x.Student.GymId == gymId);
     }
 
     public async Task<PhysicalAssessment?> GetByIdForUpdateAsync(
@@ -48,7 +48,7 @@ public class PhysicalAssessmentRepository
             .FirstOrDefaultAsync(x =>
                 x.Id == assessmentId &&
                 x.StudentId == studentId &&
-                x.Student.User.GymId == gymId);
+                x.Student.GymId == gymId);
     }
 
     public async Task<PhysicalAssessment?> GetLatestByStudentAsync(
@@ -61,7 +61,7 @@ public class PhysicalAssessmentRepository
                 .ThenInclude(x => x.User)
             .Where(x =>
                 x.StudentId == studentId &&
-                x.Student.User.GymId == gymId)
+                x.Student.GymId == gymId)
             .OrderByDescending(x => x.AssessmentDate)
             .ThenByDescending(x => x.CreatedAt)
             .FirstOrDefaultAsync();
@@ -79,7 +79,7 @@ public class PhysicalAssessmentRepository
                 .ThenInclude(x => x.User)
             .Where(x =>
                 x.StudentId == studentId &&
-                x.Student.User.GymId == gymId)
+                x.Student.GymId == gymId)
             .OrderByDescending(x => x.AssessmentDate)
             .ThenByDescending(x => x.CreatedAt)
             .Skip((page - 1) * pageSize)
@@ -95,7 +95,7 @@ public class PhysicalAssessmentRepository
             .AsNoTracking()
             .CountAsync(x =>
                 x.StudentId == studentId &&
-                x.Student.User.GymId == gymId);
+                x.Student.GymId == gymId);
     }
 
     public async Task<bool> ExistsForDateAsync(
@@ -108,7 +108,7 @@ public class PhysicalAssessmentRepository
             .AnyAsync(x =>
                 x.StudentId == studentId &&
                 x.AssessmentDate == assessmentDate &&
-                x.Student.User.GymId == gymId);
+                x.Student.GymId == gymId);
     }
 
     public async Task SaveChangesAsync()

@@ -48,6 +48,10 @@ public class WorkoutReorderTests
         {
             Id = Guid.NewGuid(),
             UserId = user.Id,
+            GymId = gymId,
+            Name = user.Name,
+            Email = user.Email,
+            AppAccessEnabled = true,
             User = user,
             CreatedAt = DateTime.UtcNow
         };

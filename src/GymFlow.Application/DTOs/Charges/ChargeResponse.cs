@@ -26,6 +26,10 @@ public class ChargeResponse
 
     public ChargeStatus Status { get; set; }
 
+    public ChargeOrigin Origin { get; set; }
+
+    public ChargeVerificationStatus VerificationStatus { get; set; }
+
     public DateTime? PaidAt { get; set; }
 
     public DateTime CreatedAt { get; set; }

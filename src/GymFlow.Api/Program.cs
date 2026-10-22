@@ -13,12 +13,20 @@ using GymFlow.Application.Services;
 using GymFlow.Domain.Enums;
 using GymFlow.Api.BackgroundServices;
 using GymFlow.Api.Platform;
+using GymFlow.Api.Services;
+using GymFlow.Api.Authorization;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddHostedService<StudentLifecycleBackgroundService>();
+builder.Services.AddHostedService<StudentImportCleanupService>();
+builder.Services.AddScoped<StudentImportService>();
+builder.Services.AddScoped<MigrationService>();
+builder.Services.AddScoped<ErpEnabledFilter>();
+builder.Services.AddScoped<ErpReportFilter>();
+builder.Services.AddScoped<ErpMetadataAccess>();
 
 // Add services to the container.
 
@@ -127,9 +135,11 @@ builder.Services
                 if (!Guid.TryParse(
                         principalIdClaim,
                         out var principalId) ||
+                    principalId == Guid.Empty ||
                     !Guid.TryParse(
                         gymIdClaim,
-                        out var gymId))
+                        out var gymId) ||
+                    gymId == Guid.Empty)
                 {
                     logger.LogWarning(
                         "Token rejeitado por claims invÃ¡lidas. IP: {ClientIp}",
@@ -243,12 +253,12 @@ builder.Services
                     if (!canAccessApplication)
                     {
                         logger.LogWarning(
-                            "Token rejeitado por matrÃ­cula invÃ¡lida. UserId: {UserId}, GymId: {GymId}",
+                            "Token rejeitado pela política de acesso do aluno. UserId: {UserId}, GymId: {GymId}",
                             principalId,
                             gymId);
 
                         context.Fail(
-                            "MatrÃ­cula inexistente, vencida ou cancelada.");
+                            "Aluno sem permissão de acesso ao aplicativo.");
 
                         return;
                     }

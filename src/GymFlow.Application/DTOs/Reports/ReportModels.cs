@@ -17,4 +17,5 @@ public sealed record ReportResult(string Title, string PeriodBasis, string TimeZ
     DateOnly? FromDate, DateOnly? ToDate, string[] Columns, List<string[]> Rows,
     int TotalCount, int Page, int PageSize, Dictionary<string, string> Totals);
 
-public sealed record ReportContext(DateOnly Today, TimeZoneInfo Zone, DateTime FromUtc, DateTime UntilUtc);
+public sealed record ReportContext(DateOnly Today, TimeZoneInfo Zone, DateTime FromUtc, DateTime UntilUtc,
+    bool IncludeEnrollmentMetadata = true);

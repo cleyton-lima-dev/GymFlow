@@ -53,6 +53,10 @@ public class PhysicalAssessmentConcurrencyTests
                 {
                     Id = studentId,
                     UserId = userId,
+                    GymId = gymId,
+                    Name = "Aluno Teste",
+                    Email = "aluno-concorrencia@gymflow.dev",
+                    AppAccessEnabled = true,
                     CreatedAt = DateTime.UtcNow
                 });
 

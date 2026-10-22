@@ -83,7 +83,7 @@ public class StudentLifecycleServiceTests
 
         await service.ProcessAsync(gymId);
 
-        Assert.False(student.User.IsActive);
+        Assert.True(student.User.IsActive); // Financial state does not disable the app account.
 
         Assert.Equal(
             StudentInactivationReason.NoValidEnrollment,
@@ -290,7 +290,7 @@ public class StudentLifecycleServiceTests
 
         await service.ProcessAsync(gymId);
 
-        Assert.True(student.User.IsActive);
+        Assert.False(student.User.IsActive); // Financial eligibility does not restore the app account.
         Assert.Null(student.NoValidEnrollmentSince);
         Assert.Null(student.InactivationReason);
         Assert.Null(student.InactivatedAt);
@@ -507,7 +507,7 @@ public class StudentLifecycleServiceTests
 
         await service.ProcessAsync(gymId);
 
-        Assert.False(student.User.IsActive);
+        Assert.True(student.User.IsActive); // Financial state remains separate.
         Assert.Equal(
             StudentInactivationReason.NoValidEnrollment,
             student.InactivationReason);
@@ -577,7 +577,7 @@ public class StudentLifecycleServiceTests
 
         await service.ProcessAsync(gymId);
 
-        Assert.False(student.User.IsActive);
+        Assert.True(student.User.IsActive);
         Assert.NotNull(student.ArchivedAt);
 
         Assert.Equal(

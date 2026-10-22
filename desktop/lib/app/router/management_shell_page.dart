@@ -3,7 +3,9 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import 'package:avelri_gestao/app/session/session_controller.dart';
+import 'package:avelri_gestao/app/session/erp_feature_controller.dart';
 import 'package:avelri_gestao/app/theme/branding_controller.dart';
+import 'package:avelri_gestao/core/network/erp_access_policy.dart';
 
 class ManagementShellPage extends StatelessWidget {
   const ManagementShellPage({
@@ -77,6 +79,12 @@ class ManagementShellPage extends StatelessWidget {
   Widget build(BuildContext context) {
     final session = context.watch<SessionController>();
     final branding = context.watch<BrandingController>().branding;
+    final features = context.watch<ErpFeatureController>();
+    final gymId = session.user?.gymId;
+    final erpEnabled = gymId != null && features.isEnabledForGym(gymId);
+    final navigationItems = _navigationItems
+        .where((item) => erpEnabled || !ErpAccessPolicy.isErpRoute(item.path))
+        .toList();
 
     final primaryColor = branding.primaryColor;
     final theme = Theme.of(context);
@@ -145,10 +153,10 @@ class ManagementShellPage extends StatelessWidget {
                   Expanded(
                     child: ListView.separated(
                       padding: const EdgeInsets.symmetric(horizontal: 12),
-                      itemCount: _navigationItems.length,
+                      itemCount: navigationItems.length,
                       separatorBuilder: (_, _) => const SizedBox(height: 4),
                       itemBuilder: (context, index) {
-                        final item = _navigationItems[index];
+                        final item = navigationItems[index];
                         final selected = _isSelected(item.path);
 
                         return _SidebarItem(
@@ -351,12 +359,16 @@ class _SidebarItem extends StatelessWidget {
                 color: selected ? accentColor : const Color(0xFF8D93A8),
               ),
               const SizedBox(width: 13),
-              Text(
-                item.label,
-                style: TextStyle(
-                  color: selected ? Colors.white : const Color(0xFFB0B5C5),
-                  fontSize: 13,
-                  fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+              Expanded(
+                child: Text(
+                  item.label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: selected ? Colors.white : const Color(0xFFB0B5C5),
+                    fontSize: 13,
+                    fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                  ),
                 ),
               ),
             ],

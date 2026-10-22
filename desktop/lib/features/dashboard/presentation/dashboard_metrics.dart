@@ -7,12 +7,16 @@ import 'package:avelri_gestao/features/dashboard/data/dashboard_service.dart';
 import 'package:avelri_gestao/features/dashboard/presentation/dashboard_view_model.dart';
 
 class DashboardMetrics extends StatelessWidget {
-  const DashboardMetrics({super.key});
+  const DashboardMetrics({this.erpEnabled = false, super.key});
+  final bool erpEnabled;
 
   @override
   Widget build(BuildContext context) => ChangeNotifierProvider(
-    create: (context) =>
-        DashboardViewModel(DashboardService(context.read<ApiClient>()))..load(),
+    key: ValueKey(erpEnabled),
+    create: (context) => DashboardViewModel(
+      DashboardService(context.read<ApiClient>()),
+      includeFinancial: erpEnabled,
+    )..load(),
     child: const _Metrics(),
   );
 }
@@ -60,44 +64,46 @@ class _Metrics extends StatelessWidget {
         ],
         if (data != null) ...[
           Text(
-            'Mês ${DateFormat('MM/yyyy').format(data.periodStart)} • posição em ${DateFormat('dd/MM/yyyy').format(data.today)} (academia)',
+            '${data.hasFinancial ? 'Mês ${DateFormat('MM/yyyy').format(data.periodStart!)} • ' : ''}posição em ${DateFormat('dd/MM/yyyy').format(data.today)} (academia)',
           ),
           const SizedBox(height: 12),
           Wrap(
             spacing: 12,
             runSpacing: 12,
             children: [
-              _Metric(
-                title: 'Receita prevista no mês',
-                value: money.format(data.expectedRevenue),
-                description: 'Cobranças por vencimento, líquidas de descontos; exclui canceladas.',
-              ),
-              _Metric(
-                title: 'Receita recebida no mês',
-                value: money.format(data.receivedRevenue),
-                description: 'Valores pagos por data de pagamento, inclusive vencimentos de outros meses.',
-              ),
-              _Metric(
-                title: 'Cobranças vencidas',
-                value:
-                    '${data.overdueCharges} • ${money.format(data.overdueAmount)}',
-                description:
-                    'Saldo de cobranças em atraso, de todos os períodos.',
-                alert: data.overdueCharges > 0,
-                onTap: () => context.go('/finance?status=overdue'),
-              ),
-              _Metric(
-                title: 'Matrículas vigentes',
-                value: '${data.activeEnrollments}',
-                description: 'Ativas, já iniciadas e ainda não encerradas.',
-              ),
-              _Metric(
-                title: 'Matrículas a vencer',
-                value: '${data.expiringEnrollments}',
-                description:
-                    'Vigentes com término nos próximos ${data.expiringWithinDays} dias.',
-                alert: data.expiringEnrollments > 0,
-              ),
+              if (model.includeFinancial && data.hasFinancial) ...[
+                _Metric(
+                  title: 'Receita prevista no mês',
+                  value: money.format(data.expectedRevenue),
+                  description: 'Cobranças por vencimento, líquidas de descontos; exclui canceladas.',
+                ),
+                _Metric(
+                  title: 'Receita recebida no mês',
+                  value: money.format(data.receivedRevenue),
+                  description: 'Valores pagos por data de pagamento, inclusive vencimentos de outros meses.',
+                ),
+                _Metric(
+                  title: 'Cobranças vencidas',
+                  value:
+                      '${data.overdueCharges} • ${money.format(data.overdueAmount)}',
+                  description:
+                      'Saldo de cobranças em atraso, de todos os períodos.',
+                  alert: data.overdueCharges! > 0,
+                  onTap: () => context.go('/finance?status=overdue'),
+                ),
+                _Metric(
+                  title: 'Matrículas vigentes',
+                  value: '${data.activeEnrollments}',
+                  description: 'Ativas, já iniciadas e ainda não encerradas.',
+                ),
+                _Metric(
+                  title: 'Matrículas a vencer',
+                  value: '${data.expiringEnrollments}',
+                  description:
+                      'Vigentes com término nos próximos ${data.expiringWithinDays} dias.',
+                  alert: data.expiringEnrollments! > 0,
+                ),
+              ],
               _Metric(
                 title: 'Alunos ativos',
                 value: '${data.activeStudents}',
@@ -118,10 +124,11 @@ class _Metrics extends StatelessWidget {
             ],
           ),
           if (data.activeStudents == 0 &&
-              data.activeEnrollments == 0 &&
-              data.expectedRevenue == 0 &&
-              data.receivedRevenue == 0 &&
-              data.overdueCharges == 0)
+              (!data.hasFinancial ||
+                  (data.activeEnrollments == 0 &&
+                      data.expectedRevenue == 0 &&
+                      data.receivedRevenue == 0 &&
+                      data.overdueCharges == 0)))
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 12),
               child: Text(

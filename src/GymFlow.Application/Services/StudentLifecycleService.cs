@@ -80,11 +80,10 @@ public class StudentLifecycleService
                 if (student.InactivationReason ==
                     StudentInactivationReason.NoValidEnrollment)
                 {
-                    student.User.IsActive = true;
+                    student.IsActive = true;
                     student.InactivationReason = null;
                     student.InactivatedAt = null;
 
-                    student.User.UpdatedAt = now;
                     student.UpdatedAt = now;
 
                     hasChanges = true;
@@ -139,13 +138,14 @@ public class StudentLifecycleService
 
             if (daysWithoutValidEnrollment >= 90)
             {
-                if (student.User.IsActive)
+                student.IsActive = false;
+
+                if (student.InactivationReason is not StudentInactivationReason.NoValidEnrollment
+                    and not StudentInactivationReason.Manual)
                 {
-                    student.User.IsActive = false;
                     student.InactivationReason =
                         StudentInactivationReason.NoValidEnrollment;
                     student.InactivatedAt ??= now;
-                    student.User.UpdatedAt = now;
                 }
 
                 student.ArchivedAt ??= now;
@@ -157,14 +157,13 @@ public class StudentLifecycleService
             }
 
             if (daysWithoutValidEnrollment >= 30 &&
-                student.User.IsActive)
+                student.InactivationReason is not StudentInactivationReason.NoValidEnrollment
+                    and not StudentInactivationReason.Manual)
             {
-                student.User.IsActive = false;
+                student.IsActive = false;
                 student.InactivationReason =
                     StudentInactivationReason.NoValidEnrollment;
                 student.InactivatedAt = now;
-
-                student.User.UpdatedAt = now;
                 student.UpdatedAt = now;
 
                 hasChanges = true;

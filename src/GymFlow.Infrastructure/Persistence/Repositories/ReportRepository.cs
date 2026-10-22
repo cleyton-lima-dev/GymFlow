@@ -24,7 +24,7 @@ public sealed class ReportRepository(AppDbContext db) : IReportRepository
     };
 
     private IQueryable<Enrollment> TenantEnrollments(Guid gym) => db.Enrollments.AsNoTracking()
-        .Where(e => e.Student.User.GymId == gym && e.Plan.GymId == gym);
+        .Where(e => e.Student.GymId == gym && e.Plan.GymId == gym);
     private static string Money(decimal value) => value.ToString("F2", ReportService.Brazilian);
     private static string Date(DateOnly? value) => value?.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture) ?? "";
     private static string Instant(DateTime? value, ReportContext c) => value.HasValue
@@ -69,20 +69,30 @@ public sealed class ReportRepository(AppDbContext db) : IReportRepository
 
     private async Task<ReportResult> Students(Guid gym, ReportQuery q, ReportContext c, bool export, CancellationToken token)
     {
-        var enrollments = TenantEnrollments(gym);
-        var source = db.Students.AsNoTracking().Where(s => s.User.GymId == gym);
+        var source = db.Students.AsNoTracking().Where(s => s.GymId == gym);
         if (q.StudentId.HasValue) source = source.Where(s => s.Id == q.StudentId);
-        if (q.Search != null) { var search = q.Search.ToLower(); source = source.Where(s => s.User.Name.ToLower().Contains(search)); }
+        if (q.Search != null) { var search = q.Search.ToLower(); source = source.Where(s => s.Name.ToLower().Contains(search)); }
         source = q.Status switch
         {
-            "active" => source.Where(s => s.User.IsActive && s.ArchivedAt == null),
-            "inactive" => source.Where(s => !s.User.IsActive && s.ArchivedAt == null),
+            "active" => source.Where(s => s.IsActive && s.ArchivedAt == null),
+            "inactive" => source.Where(s => !s.IsActive && s.ArchivedAt == null),
             "archived" => source.Where(s => s.ArchivedAt != null),
             _ => source
         };
+        if (!c.IncludeEnrollmentMetadata)
+        {
+            var sharedCount = await Count(source, export, token);
+            var sharedRows = await Window(source.OrderBy(s => s.Name).ThenBy(s => s.Id)
+                .Select(s => new { s.Id, s.Name, s.IsActive, s.ArchivedAt }), q, export).ToListAsync(token);
+            return Result("Alunos", "Situação cadastral atual.", q, c,
+                ["ID aluno", "Aluno", "Cadastro"],
+                sharedRows.Select(s => new[] { s.Id.ToString(), s.Name,
+                    s.ArchivedAt != null ? "Arquivado" : s.IsActive ? "Ativo" : "Inativo" }).ToList(), sharedCount, export);
+        }
+        var enrollments = TenantEnrollments(gym);
         var projected = source.Select(s => new
         {
-            s.Id, s.User.Name, s.User.IsActive, s.ArchivedAt, s.InactivationReason,
+            s.Id, s.Name, s.IsActive, s.ArchivedAt, s.InactivationReason,
             Valid = enrollments.Any(e => e.StudentId == s.Id && e.Status == EnrollmentStatus.Active && e.StartDate <= c.Today && e.EndDate > c.Today),
             LastStatus = enrollments.Where(e => e.StudentId == s.Id).OrderByDescending(e => e.EndDate).ThenBy(e => e.Id)
                 .Select(e => (EnrollmentStatus?)e.Status).FirstOrDefault(),
@@ -105,7 +115,7 @@ public sealed class ReportRepository(AppDbContext db) : IReportRepository
     {
         var source = TenantEnrollments(gym).Where(e => e.EndDate >= q.FromDate && e.EndDate <= q.ToDate);
         if (q.StudentId.HasValue) source = source.Where(e => e.StudentId == q.StudentId);
-        if (q.Search != null) { var search = q.Search.ToLower(); source = source.Where(e => e.Student.User.Name.ToLower().Contains(search)); }
+        if (q.Search != null) { var search = q.Search.ToLower(); source = source.Where(e => e.Student.Name.ToLower().Contains(search)); }
         source = q.Status switch
         {
             "active" => source.Where(e => e.Status == EnrollmentStatus.Active && e.StartDate <= c.Today && e.EndDate > c.Today),
@@ -117,7 +127,7 @@ public sealed class ReportRepository(AppDbContext db) : IReportRepository
         };
         var count = await Count(source, export, token);
         var rows = await Window(source.OrderBy(e => e.EndDate).ThenBy(e => e.Id).Select(e => new
-        { e.Id, e.Student.User.Name, e.PlanName, e.PlanPrice, e.StartDate, e.EndDate, e.Status }), q, export).ToListAsync(token);
+        { e.Id, e.Student.Name, e.PlanName, e.PlanPrice, e.StartDate, e.EndDate, e.Status }), q, export).ToListAsync(token);
         return Result("Matrículas", "Período aplicado ao vencimento (fim exclusivo da vigência); situação calculada na data local de hoje.", q, c,
             ["ID matrícula", "Aluno", "Plano contratado", "Valor contratado (R$)", "Início", "Vencimento", "Situação"],
             rows.Select(e => new[] { e.Id.ToString(), e.Name, e.PlanName, Money(e.PlanPrice), Date(e.StartDate), Date(e.EndDate),
@@ -126,14 +136,14 @@ public sealed class ReportRepository(AppDbContext db) : IReportRepository
 
     private async Task<ReportResult> Financial(Guid gym, ReportQuery q, ReportContext c, bool export, CancellationToken token)
     {
-        var source = db.Charges.AsNoTracking().Where(x => x.Enrollment.Student.User.GymId == gym && x.Enrollment.Plan.GymId == gym);
+        var source = db.Charges.AsNoTracking().Where(x => x.Enrollment.Student.GymId == gym && x.Enrollment.Plan.GymId == gym);
         var paidView = q.View is "payments" or "revenue";
         source = paidView
             ? source.Where(x => x.Status == ChargeStatus.Paid && x.PaidAt >= c.FromUtc && x.PaidAt < c.UntilUtc)
             : source.Where(x => x.DueDate >= q.FromDate && x.DueDate <= q.ToDate);
         if (q.View == "overdue") source = source.Where(x => x.Status == ChargeStatus.Overdue || x.Status == ChargeStatus.Pending && x.DueDate < c.Today);
         if (q.StudentId.HasValue) source = source.Where(x => x.Enrollment.StudentId == q.StudentId);
-        if (q.Search != null) { var search = q.Search.ToLower(); source = source.Where(x => x.Enrollment.Student.User.Name.ToLower().Contains(search)); }
+        if (q.Search != null) { var search = q.Search.ToLower(); source = source.Where(x => x.Enrollment.Student.Name.ToLower().Contains(search)); }
         source = q.Status switch
         {
             "pending" => source.Where(x => x.Status == ChargeStatus.Pending && x.DueDate >= c.Today),
@@ -146,12 +156,12 @@ public sealed class ReportRepository(AppDbContext db) : IReportRepository
         var totals = await source.GroupBy(_ => 1).Select(g => new
         {
             Net = g.Sum(x => x.Status != ChargeStatus.Cancelled ? x.Amount - x.DiscountAmount : 0m),
-            Received = g.Sum(x => x.Status == ChargeStatus.Paid ? x.PaidAmount ?? 0m : 0m),
+            Received = g.Sum(x => x.Status == ChargeStatus.Paid && x.PaymentOrigin == PaymentOrigin.Avelri ? x.PaidAmount ?? 0m : 0m),
             Overdue = g.Sum(x => x.Status == ChargeStatus.Overdue || x.Status == ChargeStatus.Pending && x.DueDate < c.Today ? x.Amount - x.DiscountAmount : 0m)
         }).SingleOrDefaultAsync(token);
         var ordered = paidView ? source.OrderBy(x => x.PaidAt).ThenBy(x => x.Id) : source.OrderBy(x => x.DueDate).ThenBy(x => x.Id);
         var rows = await Window(ordered.Select(x => new
-        { x.Id, x.Enrollment.Student.User.Name, x.Enrollment.PlanName, x.Amount, x.DiscountAmount, x.PaidAmount, x.PaymentMethod, x.DueDate, x.Status, x.PaidAt }), q, export).ToListAsync(token);
+        { x.Id, x.Enrollment.Student.Name, x.Enrollment.PlanName, x.Amount, x.DiscountAmount, x.PaidAmount, x.PaymentMethod, x.DueDate, x.Status, x.PaidAt }), q, export).ToListAsync(token);
         return Result(q.View switch { "payments" => "Pagamentos", "revenue" => "Receita recebida", "overdue" => "Inadimplência", _ => "Cobranças" },
             paidView ? "Período aplicado ao pagamento efetivo, no fuso da academia. Receita = PaidAmount de cobranças pagas."
                 : "Período aplicado ao vencimento. Total líquido exclui canceladas; valores recebidos são das cobranças selecionadas, mesmo se pagos em outro período.", q, c,
@@ -165,18 +175,18 @@ public sealed class ReportRepository(AppDbContext db) : IReportRepository
 
     private async Task<ReportResult> Attendance(Guid gym, ReportQuery q, ReportContext c, bool export, CancellationToken token)
     {
-        var source = db.CheckIns.AsNoTracking().Where(x => x.GymId == gym && x.Student.User.GymId == gym &&
+        var source = db.CheckIns.AsNoTracking().Where(x => x.GymId == gym && x.Student.GymId == gym &&
             (x.RecordedByUserId == null || db.Users.Any(u => u.Id == x.RecordedByUserId && u.GymId == gym)) &&
             (x.PhysicalAccessEventId == null || x.PhysicalAccessEvent!.GymId == gym && x.PhysicalAccessEvent.StudentId == x.StudentId) &&
             x.OccurredAt >= c.FromUtc && x.OccurredAt < c.UntilUtc);
         if (q.StudentId.HasValue) source = source.Where(x => x.StudentId == q.StudentId);
-        if (q.Search != null) { var search = q.Search.ToLower(); source = source.Where(x => x.Student.User.Name.ToLower().Contains(search)); }
+        if (q.Search != null) { var search = q.Search.ToLower(); source = source.Where(x => x.Student.Name.ToLower().Contains(search)); }
         if (q.Status == "manual") source = source.Where(x => x.Source == CheckInSource.Manual);
         if (q.Status == "physical") source = source.Where(x => x.Source == CheckInSource.PhysicalAccess && x.PhysicalAccessEventId != null);
         var count = await Count(source, export, token);
         var students = await source.Select(x => x.StudentId).Distinct().CountAsync(token);
         var rows = await Window(source.OrderBy(x => x.OccurredAt).ThenBy(x => x.Id).Select(x => new
-        { x.Id, x.Student.User.Name, x.Source, x.OccurredAt, x.RequestId, x.PhysicalAccessEventId }), q, export).ToListAsync(token);
+        { x.Id, x.Student.Name, x.Source, x.OccurredAt, x.RequestId, x.PhysicalAccessEventId }), q, export).ToListAsync(token);
         return Result("Frequência", "Check-ins efetivamente registrados. Check-in manual não comprova passagem física; autorização Allowed não é presença.", q, c,
             ["ID check-in", "Aluno", $"Data local ({c.Zone.Id})", "Origem", "Passagem confirmada registrada", "RequestId"],
             rows.Select(x => new[] { x.Id.ToString(), x.Name, Instant(x.OccurredAt, c), x.Source == CheckInSource.Manual ? "Manual" : "Acesso físico",
@@ -187,18 +197,18 @@ public sealed class ReportRepository(AppDbContext db) : IReportRepository
     private async Task<ReportResult> Events(Guid gym, ReportQuery q, ReportContext c, bool export, CancellationToken token)
     {
         var source = db.PhysicalAccessEvents.AsNoTracking().Where(x => x.GymId == gym &&
-            (x.StudentId == null || x.Student!.User.GymId == gym) &&
-            (x.CredentialId == null || x.Credential!.GymId == gym && x.Credential.Student.User.GymId == gym &&
+            (x.StudentId == null || x.Student!.GymId == gym) &&
+            (x.CredentialId == null || x.Credential!.GymId == gym && x.Credential.Student.GymId == gym &&
                 (x.StudentId == null || x.Credential.StudentId == x.StudentId)) && x.OccurredAt >= c.FromUtc && x.OccurredAt < c.UntilUtc);
         if (q.StudentId.HasValue) source = source.Where(x => x.StudentId == q.StudentId);
-        if (q.Search != null) { var search = q.Search.ToLower(); source = source.Where(x => x.Student != null && x.Student.User.Name.ToLower().Contains(search)); }
+        if (q.Search != null) { var search = q.Search.ToLower(); source = source.Where(x => x.Student != null && x.Student.Name.ToLower().Contains(search)); }
         if (q.Status == "allowed") source = source.Where(x => x.Decision == PhysicalAccessDecision.Allowed);
         if (q.Status == "denied") source = source.Where(x => x.Decision == PhysicalAccessDecision.Denied);
         var count = await Count(source, export, token);
         var rows = await Window(source.OrderBy(x => x.OccurredAt).ThenBy(x => x.Id).Select(x => new
         {
-            x.Id, Name = x.Student != null ? x.Student.User.Name : "Não identificado", x.OccurredAt, x.Decision, x.Reason, x.Source, x.RequestId,
-            Passage = db.CheckIns.Any(check => check.GymId == gym && check.Student.User.GymId == gym &&
+            x.Id, Name = x.Student != null ? x.Student.Name : "Não identificado", x.OccurredAt, x.Decision, x.Reason, x.Source, x.RequestId,
+            Passage = db.CheckIns.Any(check => check.GymId == gym && check.Student.GymId == gym &&
                 check.StudentId == x.StudentId && check.PhysicalAccessEventId == x.Id && check.Source == CheckInSource.PhysicalAccess)
         }), q, export).ToListAsync(token);
         return Result("Eventos de acesso", "Decisões e passagens são eventos distintos. Confirmação indica registro recebido pela API; não atesta homologação do equipamento.", q, c,

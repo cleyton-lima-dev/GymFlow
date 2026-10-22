@@ -1,4 +1,4 @@
-﻿using GymFlow.Application.DTOs.Enrollments;
+using GymFlow.Application.DTOs.Enrollments;
 using GymFlow.Application.Interfaces.Repositories;
 using GymFlow.Application.Interfaces.Time;
 using GymFlow.Domain.Entities;
@@ -188,28 +188,27 @@ public class EnrollmentService
 
             if (isValidToday)
             {
-                var studentChanged = false;
-
                 if (student.NoValidEnrollmentSince is not null)
                 {
                     student.NoValidEnrollmentSince = null;
-                    studentChanged = true;
                 }
 
                 if (student.InactivationReason ==
                     StudentInactivationReason.NoValidEnrollment)
                 {
-                    student.User.IsActive = true;
                     student.InactivationReason = null;
                     student.InactivatedAt = null;
-                    student.User.UpdatedAt = now;
-                    student.UpdatedAt = now;
-                    studentChanged = true;
                 }
-
-                if (studentChanged)
-                    await _studentRepository.SaveChangesAsync();
             }
+
+            // Always check the student's concurrency tokens, even for future enrollments
+            // or an already active student. The transaction rolls back all financial writes
+            // if archival won; UpdatedAt also prevents a stale lifecycle pass winning later.
+            // Advance by at least PostgreSQL's microsecond precision.
+            student.UpdatedAt = student.UpdatedAt is { } previous && now.Ticks / 10 <= previous.Ticks / 10
+                ? previous.AddTicks(10)
+                : now;
+            await _studentRepository.SaveChangesAsync();
         });
 
         return ToResponse(
@@ -394,12 +393,8 @@ public class EnrollmentService
                 StudentInactivationReason.NoValidEnrollment)
             {
                 var now = DateTime.UtcNow;
-
-                student.User.IsActive = true;
                 student.InactivationReason = null;
                 student.InactivatedAt = null;
-
-                student.User.UpdatedAt = now;
                 student.UpdatedAt = now;
 
                 studentChanged = true;
@@ -481,21 +476,24 @@ public class EnrollmentService
 
         if (!preserveManualBlock && (isValidToday || !requiresEnrollment))
         {
-            student.User.IsActive = true;
+            student.IsActive = true;
             student.NoValidEnrollmentSince = null;
             student.InactivationReason = null;
             student.InactivatedAt = null;
         }
         else if (!preserveManualBlock)
         {
-            student.User.IsActive = false;
+            student.IsActive = false;
             student.NoValidEnrollmentSince = today;
             student.InactivationReason =
                 StudentInactivationReason.NoValidEnrollment;
             student.InactivatedAt = now;
         }
+        else
+        {
+            student.IsActive = false;
+        }
 
-        student.User.UpdatedAt = now;
         student.UpdatedAt = now;
 
         var enrollment = new Enrollment
@@ -671,7 +669,7 @@ public class EnrollmentService
         {
             Id = enrollment.Id,
             StudentId = enrollment.StudentId,
-            StudentName = enrollment.Student.User.Name,
+            StudentName = enrollment.Student.Name,
 
             PlanId = enrollment.PlanId,
             PlanName = enrollment.PlanName,

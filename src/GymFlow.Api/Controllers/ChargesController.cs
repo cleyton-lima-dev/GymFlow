@@ -1,5 +1,6 @@
 ﻿using GymFlow.Application.Services;
 using Microsoft.AspNetCore.Authorization;
+using GymFlow.Api.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
 using GymFlow.Application.DTOs.Charges;
@@ -9,6 +10,7 @@ namespace GymFlow.Api.Controllers;
 [ApiController]
 [Route("api/charges")]
 [Authorize(Roles = "Admin")]
+[ServiceFilter(typeof(ErpEnabledFilter))]
 public class ChargesController : ControllerBase
 {
     private readonly ChargeService _chargeService;

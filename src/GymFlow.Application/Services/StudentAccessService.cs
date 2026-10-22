@@ -24,10 +24,17 @@ public class StudentAccessService
     }
 
     // Identity and activity must already have been validated by the caller.
-    public Task<bool> CanAccessApplicationAsync(Guid userId, Guid gymId) =>
-        _erpPolicy.IsEnabled(gymId)
-            ? HasActiveEnrollmentAsync(userId, gymId)
-            : Task.FromResult(true);
+    public async Task<bool> CanAccessApplicationAsync(Guid userId, Guid gymId)
+    {
+        var student = await _studentRepository.GetByUserIdAndGymIdAsync(userId, gymId);
+        if (student is null || student.ArchivedAt is not null ||
+            !student.IsActive || !student.AppAccessEnabled ||
+            student.User is null || !student.User.IsActive)
+            return false;
+
+        return !_erpPolicy.IsEnabled(gymId) ||
+            await HasActiveEnrollmentForStudentAsync(student.Id, gymId);
+    }
 
     public async Task<bool> HasActiveEnrollmentAsync(
         Guid userId,
@@ -41,6 +48,11 @@ public class StudentAccessService
         if (student is null)
             return false;
 
+        return await HasActiveEnrollmentForStudentAsync(student.Id, gymId);
+    }
+
+    private async Task<bool> HasActiveEnrollmentForStudentAsync(Guid studentId, Guid gymId)
+    {
         var timeZone =
             _gymTimeZoneProvider.GetTimeZone(gymId);
 
@@ -54,7 +66,7 @@ public class StudentAccessService
 
         var enrollment = await _enrollmentRepository
             .GetActiveByStudentAsync(
-                student.Id,
+                studentId,
                 gymId,
                 today);
 

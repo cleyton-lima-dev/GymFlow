@@ -20,6 +20,12 @@ public class Charge
 
     public ChargeStatus Status { get; set; }
 
+    public ChargeOrigin Origin { get; set; } = ChargeOrigin.Avelri;
+
+    public PaymentOrigin PaymentOrigin { get; set; } = PaymentOrigin.Avelri;
+
+    public ChargeVerificationStatus VerificationStatus { get; set; } = ChargeVerificationStatus.Verified;
+
     public DateTime? PaidAt { get; set; }
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;

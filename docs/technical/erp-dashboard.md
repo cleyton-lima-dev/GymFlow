@@ -1,13 +1,15 @@
 # Dashboard gerencial ERP — issue #62
 
-Implementação de leitura em `feature/erp-dashboard`, baseada em `origin/main`.
-Não integra os PRs #122/#123, altera autenticação, estados financeiros ou schema.
+G6: o endpoint financeiro original exige `ErpEnabled`. A rota compartilhada
+`GET /api/dashboard/operational` consulta apenas alunos/avaliações e não depende
+de matrícula, cobrança ou resolução de entitlement. Veja o
+[contrato de módulos](module-entitlements.md).
 
 ## Contrato e período
 
 `GET /api/dashboard` exige JWT e role Admin. O GymId vem exclusivamente da claim
 autenticada; nenhum parâmetro seleciona outra academia. Consultas financeiras
-validam tanto `Enrollment.Student.User.GymId` quanto `Enrollment.Plan.GymId`.
+validam tanto `Enrollment.Student.GymId` quanto `Enrollment.Plan.GymId`.
 
 O período financeiro é o mês corrente no timezone configurado da academia,
 com início inclusivo e próximo mês exclusivo. Datas de pagamento UTC são
@@ -21,7 +23,7 @@ comparadas aos limites locais convertidos para UTC; vencimentos usam DateOnly.
 | Cobranças vencidas | Status Overdue ou Pending com DueDate anterior a hoje, em todos os períodos; total líquido dos descontos registrados. No vencimento, Pending não está atrasada. |
 | Matrículas vigentes | Active com StartDate ≤ hoje e EndDate > hoje, respeitando término exclusivo. Não inclui futura ou PendingPayment. |
 | Matrículas a vencer | Subconjunto vigente com término até hoje + 15 dias, inclusive. |
-| Alunos ativos | Student não arquivado com User.IsActive. |
+| Alunos ativos | Student não arquivado com Student.IsActive. |
 | Sem avaliação | Alunos ativos sem avaliação física registrada. |
 | Reavaliações pendentes | Alunos ativos cuja avaliação mais recente + 2 meses ≤ hoje, conforme regra existente, incluindo ajuste de fim de mês. |
 
@@ -40,8 +42,8 @@ são explícitos. Valores são agregados no servidor em três consultas, sem
 carregamento de entidades nem N+1. As consultas não constituem um snapshot
 transacional único: alterações concorrentes podem ocorrer entre indicadores.
 
-Frequência e alunos ausentes permanecem indisponíveis: main não contém os
-check-ins do PR #122. Eventos de autorização física não substituem presença.
+Frequência e alunos ausentes não são indicadores deste dashboard. Eventos de
+autorização física não substituem presença.
 
 ## Validação
 

@@ -1,5 +1,6 @@
 using GymFlow.Application.DTOs.Reports;
 using GymFlow.Application.Services;
+using GymFlow.Api.Authorization;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -8,7 +9,8 @@ namespace GymFlow.Api.Controllers;
 [ApiController]
 [Route("api/reports")]
 [Authorize(Roles = "Admin")]
-public sealed class ReportsController(ReportService service) : ControllerBase
+[ServiceFilter(typeof(ErpReportFilter))]
+public sealed class ReportsController(ReportService service, ErpMetadataAccess erpMetadata) : ControllerBase
 {
     [HttpGet("{kind}")]
     public Task<IActionResult> Get(string kind, [FromQuery] ReportQuery query, CancellationToken token) =>
@@ -23,12 +25,16 @@ public sealed class ReportsController(ReportService service) : ControllerBase
         if (!Guid.TryParse(User.FindFirst("gym_id")?.Value, out var gymId) || gymId == Guid.Empty)
             return Unauthorized();
         Response.Headers.CacheControl = "no-store";
+        var includeEnrollmentMetadata = kind != "students" || erpMetadata.IsEnabled(gymId);
+        if (!includeEnrollmentMetadata && !string.IsNullOrWhiteSpace(query.EnrollmentStatus))
+            return StatusCode(StatusCodes.Status403Forbidden);
         try
         {
             if (export)
-                return File(await service.ExportAsync(gymId, kind, query, token), "text/csv; charset=utf-8",
+                return File(await service.ExportAsync(gymId, kind, query, token, includeEnrollmentMetadata), "text/csv; charset=utf-8",
                     $"avelri-{kind}.csv");
-            return Ok(await service.GetAsync(gymId, kind, query, cancellationToken: token));
+            return Ok(await service.GetAsync(gymId, kind, query, cancellationToken: token,
+                includeEnrollmentMetadata: includeEnrollmentMetadata));
         }
         catch (ArgumentException ex)
         {

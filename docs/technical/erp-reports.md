@@ -1,5 +1,9 @@
 # Relatórios e exportação — ERP Core #65
 
+G6: `financial` e `enrollments` exigem `ErpEnabled`, inclusive exportação.
+`students`, `attendance` e `access-events` permanecem compartilhados conforme o
+[contrato de módulos](module-entitlements.md).
+
 Módulo de leitura do Avelri Gestão. Os endpoints `GET /api/reports/{kind}` e
 `GET /api/reports/{kind}/export` exigem Admin e usam exclusivamente o GymId
 da identidade autenticada. Nenhuma consulta altera situações, pagamentos ou acesso.

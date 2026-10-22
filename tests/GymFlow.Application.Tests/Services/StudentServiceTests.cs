@@ -11,6 +11,33 @@ namespace GymFlow.Application.Tests.Services;
 
 public class StudentServiceTests
 {
+    [Fact]
+    public async Task Create_NameOnly_PersistsAdministrativeRecordWithoutIdentity()
+    {
+        var gym = Guid.NewGuid();
+        Assert.True(await _service.CreateAsync(gym,
+            new CreateStudentRequest { Name = "Aluno sintético" }));
+        await _studentRepository.Received(1).AddAsync(Arg.Is<Student>(s =>
+            s.GymId == gym && s.Name == "Aluno sintético" && s.Email == null &&
+            s.UserId == null && !s.AppAccessEnabled));
+        await _userRepository.DidNotReceiveWithAnyArgs().AddAsync(default!);
+    }
+
+    [Fact]
+    public async Task Create_WithEmail_DoesNotActivateApp()
+    {
+        var gym = Guid.NewGuid();
+        _passwordHasher.Hash(Arg.Any<string>()).Returns("synthetic-hash");
+        Assert.True(await _service.CreateAsync(gym, new CreateStudentRequest
+        {
+            Name = "Aluno sintético", Email = "student@example.test"
+        }));
+        await _studentRepository.Received(1).AddAsync(Arg.Is<Student>(s =>
+            s.GymId == gym && s.Email == "student@example.test" && s.UserId == null &&
+            !s.AppAccessEnabled && s.Phone == null && s.BirthDate == null &&
+            s.NoValidEnrollmentSince != null));
+        await _enrollmentRepository.DidNotReceiveWithAnyArgs().GetActiveByStudentAsync(default, default, default);
+    }
     private readonly IUserRepository _userRepository;
     private readonly IStudentRepository _studentRepository;
     private readonly IPasswordHasher _passwordHasher;
@@ -54,7 +81,7 @@ public class StudentServiceTests
     }
 
     [Fact]
-    public async Task CreateAsync_WithValidData_ShouldCreateStudentAndUser()
+    public async Task CreateAsync_WithValidData_ShouldCreateStudentWithoutUser()
     {
         var gymId = Guid.NewGuid();
         var birthDate = new DateOnly(2000, 5, 10);
@@ -63,7 +90,6 @@ public class StudentServiceTests
         {
             Name = "  Aluno Teste  ",
             Email = "  ALUNO@GYMFLOW.DEV  ",
-            Password = "Senha123",
             Phone = "  21999999999  ",
             BirthDate = birthDate
         };
@@ -72,40 +98,20 @@ public class StudentServiceTests
             .GetByEmailAsync("aluno@gymflow.dev")
             .Returns((User?)null);
 
-        _passwordHasher
-            .Hash(request.Password)
-            .Returns("hashed-password");
-
         var result =
             await _service.CreateAsync(gymId, request);
 
         Assert.True(result);
 
-        await _studentRepository
-            .Received(1)
-            .AddAsync(
-                Arg.Is<User>(user =>
-                    user.GymId == gymId &&
-                    user.Name == "Aluno Teste" &&
-                    user.Email == "aluno@gymflow.dev" &&
-                    user.PasswordHash == "hashed-password" &&
-                    user.Role == UserRole.Student &&
-                    user.IsActive),
-                Arg.Is<Student>(student =>
-                    student.UserId == student.User.Id &&
-                    student.User.GymId == gymId &&
-                    student.User.Name == "Aluno Teste" &&
-                    student.User.Email == "aluno@gymflow.dev" &&
-                    student.Phone == "21999999999" &&
-                    student.BirthDate == birthDate));
-
-        _passwordHasher
-            .Received(1)
-            .Hash("Senha123");
+        await _studentRepository.Received(1).AddAsync(Arg.Is<Student>(student =>
+            student.GymId == gymId && student.Name == "Aluno Teste" &&
+            student.Email == "aluno@gymflow.dev" && student.UserId == null &&
+            student.Phone == "21999999999" && student.BirthDate == birthDate));
+        _passwordHasher.DidNotReceive().Hash(Arg.Any<string>());
     }
 
     [Fact]
-    public async Task CreateAsync_WhenEmailAlreadyExists_ShouldReturnFalse()
+    public async Task CreateAsync_WhenEmailAlreadyExists_CanKeepAdministrativeContact()
     {
         var existingUser = new User
         {
@@ -122,7 +128,7 @@ public class StudentServiceTests
         {
             Name = "Aluno Teste",
             Email = "  ALUNO@GYMFLOW.DEV  ",
-            Password = "Senha123"
+            Password = null
         };
 
         _userRepository
@@ -134,21 +140,17 @@ public class StudentServiceTests
                 Guid.NewGuid(),
                 request);
 
-        Assert.False(result);
+        Assert.True(result);
 
         _passwordHasher
             .DidNotReceive()
             .Hash(Arg.Any<string>());
 
-        await _studentRepository
-            .DidNotReceive()
-            .AddAsync(
-                Arg.Any<User>(),
-                Arg.Any<Student>());
+        await _studentRepository.Received(1).AddAsync(Arg.Any<Student>());
     }
 
     [Fact]
-    public async Task CreateAsync_WithPasswordShorterThan8Characters_ShouldRejectCreation()
+    public async Task CreateAsync_AdminSuppliedPassword_IsRejected()
     {
         var request = new CreateStudentRequest
         {
@@ -157,39 +159,29 @@ public class StudentServiceTests
             Password = "Senha12"
         };
 
-        await Assert.ThrowsAsync<ArgumentException>(
-            () => _service.CreateAsync(
-                Guid.NewGuid(),
-                request));
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            _service.CreateAsync(Guid.NewGuid(), request));
 
         _passwordHasher
             .DidNotReceive()
             .Hash(Arg.Any<string>());
 
-        await _studentRepository
-            .DidNotReceive()
-            .AddAsync(
-                Arg.Any<User>(),
-                Arg.Any<Student>());
+        await _studentRepository.DidNotReceive().AddAsync(Arg.Any<Student>());
     }
 
     [Fact]
-    public async Task CreateAsync_WithPasswordExactly8Characters_ShouldCreateStudent()
+    public async Task CreateAsync_WithoutPassword_ShouldCreateStudent()
     {
         var request = new CreateStudentRequest
         {
             Name = "Aluno Teste",
             Email = "aluno@gymflow.dev",
-            Password = "Senha123"
+            Password = null
         };
 
         _userRepository
             .GetByEmailAsync("aluno@gymflow.dev")
             .Returns((User?)null);
-
-        _passwordHasher
-            .Hash("Senha123")
-            .Returns("hashed-password");
 
         var result =
             await _service.CreateAsync(
@@ -198,42 +190,31 @@ public class StudentServiceTests
 
         Assert.True(result);
 
-        _passwordHasher
-            .Received(1)
-            .Hash("Senha123");
+        _passwordHasher.DidNotReceive().Hash(Arg.Any<string>());
 
-        await _studentRepository
-            .Received(1)
-            .AddAsync(
-                Arg.Any<User>(),
-                Arg.Any<Student>());
+        await _studentRepository.Received(1).AddAsync(Arg.Any<Student>());
     }
 
     [Fact]
-    public async Task CreateAsync_ShouldNormalizeEmailBeforeCheckingDuplication()
+    public async Task CreateAsync_ShouldNormalizeOptionalContactEmail()
     {
         var request = new CreateStudentRequest
         {
             Name = "Aluno Teste",
             Email = "  ALUNO@GYMFLOW.DEV  ",
-            Password = "Senha123"
+            Password = null
         };
 
         _userRepository
             .GetByEmailAsync("aluno@gymflow.dev")
             .Returns((User?)null);
 
-        _passwordHasher
-            .Hash(request.Password)
-            .Returns("hashed-password");
-
         await _service.CreateAsync(
             Guid.NewGuid(),
             request);
 
-        await _userRepository
-            .Received(1)
-            .GetByEmailAsync("aluno@gymflow.dev");
+        await _studentRepository.Received(1).AddAsync(
+            Arg.Is<Student>(s => s.Email == "aluno@gymflow.dev"));
     }
     [Fact]
     public async Task GetAllAsync_WithValidParameters_ShouldReturnPagedStudents()
@@ -610,13 +591,11 @@ public class StudentServiceTests
             false);
 
         Assert.True(result);
-        Assert.False(student.User.IsActive);
+        Assert.False(student.IsActive);
+        Assert.True(student.User!.IsActive);
 
         Assert.NotNull(student.UpdatedAt);
-        Assert.NotNull(student.User.UpdatedAt);
-        Assert.Equal(
-            student.UpdatedAt,
-            student.User.UpdatedAt);
+        Assert.Null(student.User.UpdatedAt);
 
         await _studentRepository
             .Received(1)
@@ -715,7 +694,7 @@ public class StudentServiceTests
         {
             Name = "Aluno Teste",
             Email = "aluno@gymflow.dev",
-            Password = "Senha123",
+            Password = null,
             Phone = "21999999999"
         };
 
@@ -795,6 +774,11 @@ public class StudentServiceTests
         return new Student
         {
             Id = Guid.NewGuid(),
+            GymId = gymId,
+            Name = name,
+            Email = email,
+            IsActive = isActive,
+            AppAccessEnabled = true,
             UserId = user.Id,
             Phone = "21999999999",
             BirthDate = new DateOnly(2000, 1, 1),

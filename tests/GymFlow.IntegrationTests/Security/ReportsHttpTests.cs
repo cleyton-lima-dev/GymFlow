@@ -51,26 +51,28 @@ public partial class TenantEnrollmentAccessTests
     private static async Task VerifyReportsHttp(bool postgres)
     {
         await using var factory = new TestApi(postgres);
-        var admin = factory.AddUser(factory.LegacyGym, UserRole.Admin);
-        var own = factory.AddUser(factory.LegacyGym);
-        var foreign = factory.AddUser(factory.EnabledGym);
+        var admin = factory.AddUser(factory.EnabledGym, UserRole.Admin);
+        var own = factory.AddUser(factory.EnabledGym);
+        var foreign = factory.AddUser(factory.OtherEnabledGym);
         Guid foreignId = default;
         factory.WithDb(db =>
         {
             db.Users.Single(u => u.Id == own.Id).Name = "Relatório sintético";
+            db.Students.Single(student => student.UserId == own.Id).Name = "Relatório sintético";
             db.Users.Single(u => u.Id == foreign.Id).Name = "Outro tenant não exportar";
+            db.Students.Single(student => student.UserId == foreign.Id).Name = "Outro tenant não exportar";
             foreignId = db.Students.Single(s => s.UserId == foreign.Id).Id;
         });
         using var client = factory.CreateClient();
         client.DefaultRequestHeaders.Authorization = new("Bearer", factory.Token(admin));
         foreach (var kind in ReportKinds)
         {
-            var response = await client.GetAsync($"/api/reports/{kind}?gymId={factory.EnabledGym}");
+            var response = await client.GetAsync($"/api/reports/{kind}?gymId={factory.OtherEnabledGym}");
             Assert.Equal(HttpStatusCode.OK, response.StatusCode);
             Assert.True(response.Headers.CacheControl!.NoStore);
             var result = await response.Content.ReadFromJsonAsync<JsonElement>();
             Assert.Equal(kind == "students" ? 1 : 0, result.GetProperty("totalCount").GetInt32());
-            var export = await client.GetAsync($"/api/reports/{kind}/export?gymId={factory.EnabledGym}");
+            var export = await client.GetAsync($"/api/reports/{kind}/export?gymId={factory.OtherEnabledGym}");
             Assert.Equal(HttpStatusCode.OK, export.StatusCode);
             Assert.Equal("text/csv", export.Content.Headers.ContentType!.MediaType);
             var bytes = await export.Content.ReadAsByteArrayAsync();

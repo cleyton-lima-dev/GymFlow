@@ -1,0 +1,3 @@
+void clearActivationTokenFromAddressBar() {}
+
+void prepareDirectActivationRoute() {}

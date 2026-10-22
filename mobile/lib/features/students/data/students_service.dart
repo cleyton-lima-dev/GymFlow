@@ -36,8 +36,7 @@ class StudentsService {
 
   Future<void> createStudent({
     required String name,
-    required String email,
-    required String password,
+    String? email,
     String? phone,
     DateTime? birthDate,
   }) async {
@@ -47,8 +46,7 @@ class StudentsService {
       'api/students',
       body: {
         'name': name.trim(),
-        'email': email.trim(),
-        'password': password,
+        'email': _optionalText(email),
         'phone': normalizedPhone == null || normalizedPhone.isEmpty
             ? null
             : normalizedPhone,
@@ -63,6 +61,11 @@ class StudentsService {
     final day = date.day.toString().padLeft(2, '0');
 
     return '$year-$month-$day';
+  }
+
+  String? _optionalText(String? value) {
+    final normalized = value?.trim();
+    return normalized == null || normalized.isEmpty ? null : normalized;
   }
 
   Future<StudentSummary> getStudentById(String studentId) async {
@@ -88,7 +91,7 @@ class StudentsService {
   Future<void> updateStudent({
     required String studentId,
     required String name,
-    required String email,
+    String? email,
     String? phone,
     DateTime? birthDate,
   }) async {
@@ -98,7 +101,7 @@ class StudentsService {
       'api/students/$studentId',
       body: {
         'name': name.trim(),
-        'email': email.trim(),
+        'email': _optionalText(email),
         'phone': normalizedPhone == null || normalizedPhone.isEmpty
             ? null
             : normalizedPhone,

@@ -3,7 +3,9 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import 'package:avelri_gestao/app/session/session_controller.dart';
+import 'package:avelri_gestao/app/session/erp_feature_controller.dart';
 import 'package:avelri_gestao/app/theme/branding_controller.dart';
+
 import 'dashboard_metrics.dart';
 
 class DashboardPage extends StatelessWidget {
@@ -12,6 +14,9 @@ class DashboardPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final user = context.watch<SessionController>().user;
+    final erpEnabled =
+        user != null &&
+        context.watch<ErpFeatureController>().isEnabledForGym(user.gymId);
     final branding = context.watch<BrandingController>().branding;
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
@@ -43,7 +48,7 @@ class DashboardPage extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 28),
-            const DashboardMetrics(),
+            DashboardMetrics(erpEnabled: erpEnabled),
             const SizedBox(height: 20),
             Container(
               width: double.infinity,
@@ -51,9 +56,7 @@ class DashboardPage extends StatelessWidget {
               decoration: BoxDecoration(
                 color: colorScheme.surface,
                 borderRadius: BorderRadius.circular(18),
-                border: Border.all(
-                  color: theme.dividerColor,
-                ),
+                border: Border.all(color: theme.dividerColor),
               ),
               child: Row(
                 children: [
@@ -66,14 +69,11 @@ class DashboardPage extends StatelessWidget {
                       borderRadius: BorderRadius.circular(15),
                     ),
                     child: branding.logoAsset != null
-                        ? Image.asset(
-                      branding.logoAsset!,
-                      fit: BoxFit.contain,
-                    )
+                        ? Image.asset(branding.logoAsset!, fit: BoxFit.contain)
                         : Icon(
-                      Icons.business_rounded,
-                      color: branding.primaryColor,
-                    ),
+                            Icons.business_rounded,
+                            color: branding.primaryColor,
+                          ),
                   ),
                   const SizedBox(width: 18),
                   Expanded(
@@ -106,7 +106,9 @@ class DashboardPage extends StatelessWidget {
                     ),
                     decoration: BoxDecoration(
                       color: statusColor.withValues(
-                        alpha: theme.brightness == Brightness.dark ? 0.16 : 0.10,
+                        alpha: theme.brightness == Brightness.dark
+                            ? 0.16
+                            : 0.10,
                       ),
                       borderRadius: BorderRadius.circular(30),
                     ),
@@ -153,20 +155,22 @@ class DashboardPage extends StatelessWidget {
                   accentColor: branding.primaryColor,
                   onTap: () => context.go('/students'),
                 ),
-                _QuickAccessCard(
-                  title: 'Planos',
-                  description: 'Planos e matrículas da academia',
-                  icon: Icons.sell_outlined,
-                  accentColor: branding.primaryColor,
-                  onTap: () => context.go('/plans'),
-                ),
-                _QuickAccessCard(
-                  title: 'Financeiro',
-                  description: 'Mensalidades, pagamentos e histórico',
-                  icon: Icons.account_balance_wallet_outlined,
-                  accentColor: branding.primaryColor,
-                  onTap: () => context.go('/finance'),
-                ),
+                if (erpEnabled)
+                  _QuickAccessCard(
+                    title: 'Planos',
+                    description: 'Planos e matrículas da academia',
+                    icon: Icons.sell_outlined,
+                    accentColor: branding.primaryColor,
+                    onTap: () => context.go('/plans'),
+                  ),
+                if (erpEnabled)
+                  _QuickAccessCard(
+                    title: 'Financeiro',
+                    description: 'Mensalidades, pagamentos e histórico',
+                    icon: Icons.account_balance_wallet_outlined,
+                    accentColor: branding.primaryColor,
+                    onTap: () => context.go('/finance'),
+                  ),
                 _QuickAccessCard(
                   title: 'Check-in',
                   description: 'Frequência e presença dos alunos',
@@ -268,11 +272,7 @@ class _QuickAccessCardState extends State<_QuickAccessCard> {
           width: 268,
           height: 150,
           padding: const EdgeInsets.all(20),
-          transform: Matrix4.translationValues(
-            0,
-            _hovering ? -3 : 0,
-            0,
-          ),
+          transform: Matrix4.translationValues(0, _hovering ? -3 : 0, 0),
           decoration: BoxDecoration(
             color: colorScheme.surface,
             borderRadius: BorderRadius.circular(16),
@@ -283,12 +283,12 @@ class _QuickAccessCardState extends State<_QuickAccessCard> {
             ),
             boxShadow: _hovering
                 ? const [
-              BoxShadow(
-                color: Color(0x0D111425),
-                blurRadius: 18,
-                offset: Offset(0, 8),
-              ),
-            ]
+                    BoxShadow(
+                      color: Color(0x0D111425),
+                      blurRadius: 18,
+                      offset: Offset(0, 8),
+                    ),
+                  ]
                 : const [],
           ),
           child: Column(
@@ -298,15 +298,10 @@ class _QuickAccessCardState extends State<_QuickAccessCard> {
                 width: 38,
                 height: 38,
                 decoration: BoxDecoration(
-                  color:
-                  widget.accentColor.withValues(alpha: 0.10),
+                  color: widget.accentColor.withValues(alpha: 0.10),
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: Icon(
-                  widget.icon,
-                  color: widget.accentColor,
-                  size: 20,
-                ),
+                child: Icon(widget.icon, color: widget.accentColor, size: 20),
               ),
               const Spacer(),
               Text(

@@ -37,8 +37,12 @@ public class StudentAccessServiceTests
     [Fact]
     public async Task CanAccessApplicationAsync_LegacyTenant_DoesNotQueryEnrollmentOrTimeZone()
     {
-        Assert.True(await _service.CanAccessApplicationAsync(Guid.NewGuid(), Guid.NewGuid()));
-        Assert.Empty(_studentRepository.ReceivedCalls());
+        var userId = Guid.NewGuid();
+        var gymId = Guid.NewGuid();
+        _studentRepository.GetByUserIdAndGymIdAsync(userId, gymId).Returns(new Student
+            { Id = Guid.NewGuid(), AppAccessEnabled = true, User = new User { IsActive = true } });
+        Assert.True(await _service.CanAccessApplicationAsync(userId, gymId));
+        await _studentRepository.Received(1).GetByUserIdAndGymIdAsync(userId, gymId);
         Assert.Empty(_enrollmentRepository.ReceivedCalls());
         Assert.Empty(_gymTimeZoneProvider.ReceivedCalls());
     }
@@ -50,11 +54,30 @@ public class StudentAccessServiceTests
         var legacyGym = Guid.NewGuid();
         var userId = Guid.NewGuid();
         _erpPolicy.IsEnabled(enabledGym).Returns(true);
+        _studentRepository.GetByUserIdAndGymIdAsync(userId, legacyGym).Returns(new Student
+            { Id = Guid.NewGuid(), AppAccessEnabled = true, User = new User { IsActive = true } });
 
         Assert.False(await _service.CanAccessApplicationAsync(userId, enabledGym));
         Assert.True(await _service.CanAccessApplicationAsync(userId, legacyGym));
         await _studentRepository.Received(1).GetByUserIdAndGymIdAsync(userId, enabledGym);
-        await _studentRepository.DidNotReceive().GetByUserIdAndGymIdAsync(userId, legacyGym);
+        await _studentRepository.Received(1).GetByUserIdAndGymIdAsync(userId, legacyGym);
+    }
+
+    [Theory]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    public async Task CanAccessApplicationAsync_RequiresAdminEnablementAndIdentity(
+        bool appEnabled, bool hasUser)
+    {
+        var gym = Guid.NewGuid();
+        var user = Guid.NewGuid();
+        _studentRepository.GetByUserIdAndGymIdAsync(user, gym).Returns(new Student
+        {
+            Id = Guid.NewGuid(), IsActive = true, AppAccessEnabled = appEnabled,
+            User = hasUser ? new User { IsActive = true } : null
+        });
+        Assert.False(await _service.CanAccessApplicationAsync(user, gym));
+        Assert.Empty(_enrollmentRepository.ReceivedCalls());
     }
 
     [Fact]
@@ -75,15 +98,18 @@ public class StudentAccessServiceTests
         Assert.False(result);
     }
 
-    [Fact]
-    public async Task HasActiveEnrollmentAsync_WhenEnrollmentIsActive_ShouldReturnTrue()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task HasActiveEnrollmentAsync_WhenEnrollmentIsActive_ShouldReturnTrue(bool archived)
     {
         var userId = Guid.NewGuid();
         var gymId = Guid.NewGuid();
 
         var student = new Student
         {
-            Id = Guid.NewGuid()
+            Id = Guid.NewGuid(),
+            ArchivedAt = archived ? DateTime.UtcNow : null
         };
 
         _studentRepository

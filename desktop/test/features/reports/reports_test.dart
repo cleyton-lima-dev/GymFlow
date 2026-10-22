@@ -5,11 +5,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
-import 'package:provider/provider.dart';
 import 'package:avelri_gestao/core/network/api_client.dart';
 import 'package:avelri_gestao/features/reports/data/reports_service.dart';
 import 'package:avelri_gestao/features/reports/presentation/reports_page.dart';
 import 'package:avelri_gestao/features/reports/presentation/reports_view_model.dart';
+
+import '../../support/management_test_scope.dart';
 
 Map<String, Object?> report({bool empty = false}) => {
   'title': 'Relatório sintético',
@@ -142,8 +143,8 @@ void main() {
       ),
     );
     await tester.pumpWidget(
-      Provider<ApiClient>.value(
-        value: api,
+      ManagementTestScope(
+        api: api,
         child: const MaterialApp(home: Scaffold(body: ReportsPage())),
       ),
     );
@@ -172,8 +173,8 @@ void main() {
       client: MockClient((_) async => http.Response(jsonEncode(report()), 200)),
     );
     await tester.pumpWidget(
-      Provider<ApiClient>.value(
-        value: api,
+      ManagementTestScope(
+        api: api,
         child: const MaterialApp(home: Scaffold(body: ReportsPage())),
       ),
     );

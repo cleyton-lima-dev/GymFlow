@@ -8,6 +8,22 @@ class AuthService {
 
   final ApiClient _apiClient;
 
+  Future<void> activateStudentApp(String token, String password) async {
+    await _apiClient.post(
+      'api/students/app-activate',
+      authenticated: false,
+      body: {'token': token.trim(), 'password': password},
+    );
+  }
+
+  Future<void> validateStudentAppInvite(String token) async {
+    await _apiClient.post(
+      'api/students/app-activate/validate',
+      authenticated: false,
+      body: {'token': token.trim()},
+    );
+  }
+
   Future<CurrentUserResponse> getCurrentUser() async {
     final response = await _apiClient.get('api/auth/me');
 
@@ -25,10 +41,7 @@ class AuthService {
     final response = await _apiClient.post(
       'api/auth/login',
       authenticated: false,
-      body: {
-        'email': email,
-        'password': password,
-      },
+      body: {'email': email, 'password': password},
     );
 
     if (response is! Map<String, dynamic>) {
@@ -45,30 +58,19 @@ class AuthService {
   }) async {
     await _apiClient.post(
       'api/auth/register',
-      body: {
-        'name': name.trim(),
-        'email': email.trim(),
-        'password': password,
-      },
+      body: {'name': name.trim(), 'email': email.trim(), 'password': password},
     );
   }
 
   Future<List<ProfessorResponse>> getProfessors() async {
-    final response =
-    await _apiClient.get('api/auth/professors');
+    final response = await _apiClient.get('api/auth/professors');
 
     if (response is! List) {
-      throw const FormatException(
-        'Invalid professors response.',
-      );
+      throw const FormatException('Invalid professors response.');
     }
 
     return response
-        .map(
-          (item) => ProfessorResponse.fromJson(
-        item as Map<String, dynamic>,
-      ),
-    )
+        .map((item) => ProfessorResponse.fromJson(item as Map<String, dynamic>))
         .toList();
   }
 }

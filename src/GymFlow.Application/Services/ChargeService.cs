@@ -1,4 +1,4 @@
-﻿using GymFlow.Application.Interfaces.Repositories;
+using GymFlow.Application.Interfaces.Repositories;
 using GymFlow.Application.Interfaces.Time;
 using GymFlow.Domain.Enums;
 using GymFlow.Application.DTOs.Charges;
@@ -42,7 +42,7 @@ public class ChargeService
                 Id = charge.Id,
                 EnrollmentId = charge.EnrollmentId,
                 StudentId = charge.Enrollment.StudentId,
-                StudentName = charge.Enrollment.Student.User.Name,
+                StudentName = charge.Enrollment.Student.Name,
                 PlanName = charge.Enrollment.PlanName,
                 Amount = charge.Amount,
                 DiscountAmount = charge.DiscountAmount,
@@ -53,6 +53,8 @@ public class ChargeService
                         charge.Status,
                         charge.DueDate,
                         today),
+                Origin = charge.Origin,
+                VerificationStatus = charge.VerificationStatus,
                 PaidAt = charge.PaidAt,
                 CreatedAt = charge.CreatedAt,
                 UpdatedAt = charge.UpdatedAt
@@ -103,6 +105,8 @@ public class ChargeService
         charge.DiscountAmount = request.DiscountAmount;
         charge.PaidAmount = request.PaidAmount;
         charge.PaymentMethod = request.PaymentMethod;
+        charge.PaymentOrigin = PaymentOrigin.Avelri;
+        charge.VerificationStatus = ChargeVerificationStatus.Verified;
         charge.PaidAt = paidAtUtc;
         charge.UpdatedAt = now;
 
@@ -120,15 +124,13 @@ public class ChargeService
             charge.Enrollment.StartDate <= today &&
             charge.Enrollment.EndDate > today;
 
-        if (isValidToday &&
+        if (student.ArchivedAt is null && isValidToday &&
             student.InactivationReason ==
                 StudentInactivationReason.NoValidEnrollment)
         {
-            student.User.IsActive = true;
             student.NoValidEnrollmentSince = null;
             student.InactivationReason = null;
             student.InactivatedAt = null;
-            student.User.UpdatedAt = now;
             student.UpdatedAt = now;
         }
 

@@ -1,8 +1,10 @@
 ﻿using GymFlow.Application.DTOs.Students;
 using GymFlow.Application.Services;
+using GymFlow.Api.Authorization;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
+using Microsoft.AspNetCore.RateLimiting;
 
 
 namespace GymFlow.Api.Controllers;
@@ -14,13 +16,60 @@ public class StudentsController : ControllerBase
 {
     private readonly StudentService _studentService;
     private readonly EnrollmentService _enrollmentService;
+    private readonly ErpMetadataAccess _erpMetadata;
 
     public StudentsController(
     StudentService studentService,
-    EnrollmentService enrollmentService)
+    EnrollmentService enrollmentService,
+    ErpMetadataAccess erpMetadata)
     {
         _studentService = studentService;
         _enrollmentService = enrollmentService;
+        _erpMetadata = erpMetadata;
+    }
+
+    [Authorize(Roles = "Admin")]
+    [HttpPost("{id:guid}/app-access")]
+    public async Task<IActionResult> SetAppAccess(Guid id, SetStudentAppAccessRequest request)
+    {
+        if (!TryGetGymId(out var gymId)) return Unauthorized();
+        Response.Headers.CacheControl = "no-store";
+        try
+        {
+            var result = await _studentService.SetAppAccessAsync(id, gymId, request.Enabled);
+            return result is null ? NotFound() : Ok(new
+            {
+                enabled = result.Value.Enabled,
+                token = result.Value.Token,
+                expiresAt = result.Value.ExpiresAt
+            });
+        }
+        catch (ArgumentException ex) { return BadRequest(new { message = ex.Message }); }
+    }
+
+    [AllowAnonymous]
+    [EnableRateLimiting("login")]
+    [HttpPost("app-activate/validate")]
+    public async Task<IActionResult> ValidateAppInvite(ValidateStudentAppInviteRequest request)
+    {
+        Response.Headers.CacheControl = "no-store";
+        var message = await _studentService.ValidateAppInviteAsync(request.Token);
+        return message is null
+            ? Ok(new { valid = true })
+            : BadRequest(new { valid = false, message });
+    }
+
+    [AllowAnonymous]
+    [EnableRateLimiting("login")]
+    [HttpPost("app-activate")]
+    public async Task<IActionResult> ActivateApp(ActivateStudentAppRequest request)
+    {
+        try
+        {
+            return await _studentService.ActivateAppAsync(request.Token, request.Password)
+                ? NoContent() : BadRequest(new { message = "Convite inválido ou expirado." });
+        }
+        catch (ArgumentException ex) { return BadRequest(new { message = ex.Message }); }
     }
 
 
@@ -73,6 +122,12 @@ public class StudentsController : ControllerBase
         if (!TryGetGymId(out var gymId))
             return Unauthorized();
 
+        Response.Headers.CacheControl = "no-store";
+        var includeEnrollmentMetadata = User.IsInRole("Admin") && _erpMetadata.IsEnabled(gymId);
+        // A filter would reveal the hidden contract through counts and membership.
+        if (enrollmentFilter.HasValue && !includeEnrollmentMetadata)
+            return StatusCode(StatusCodes.Status403Forbidden);
+
         try
         {
             var students = await _studentService.GetAllAsync(
@@ -82,7 +137,8 @@ public class StudentsController : ControllerBase
                 enrollmentFilter,
                 archiveFilter,
                 page,
-                pageSize);
+                pageSize,
+                includeEnrollmentMetadata);
 
             return Ok(students);
         }
@@ -187,6 +243,7 @@ public class StudentsController : ControllerBase
 
     [Authorize(Roles = "Admin")]
     [HttpPost("{id:guid}/reactivate")]
+    [ServiceFilter(typeof(ErpEnabledFilter))]
     public async Task<IActionResult> ReactivateArchived(
     Guid id,
     ReactivateArchivedStudentRequest request)
@@ -215,6 +272,7 @@ public class StudentsController : ControllerBase
 
     [Authorize(Roles = "Admin")]
     [HttpGet("{id:guid}/financial-history")]
+    [ServiceFilter(typeof(ErpEnabledFilter))]
     public async Task<IActionResult> GetFinancialHistory(Guid id)
     {
         if (!TryGetGymId(out var gymId))

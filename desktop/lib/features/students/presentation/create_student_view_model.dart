@@ -20,18 +20,10 @@ class CreateStudentViewModel extends ChangeNotifier {
   Future<bool> createStudent({
     required String name,
     required String email,
-    required String password,
-    required String confirmPassword,
     String? phone,
     DateTime? birthDate,
   }) async {
     if (_isLoading) {
-      return false;
-    }
-
-    if (password != confirmPassword) {
-      _errorMessage = 'As senhas nÃ£o coincidem.';
-      notifyListeners();
       return false;
     }
 
@@ -43,7 +35,6 @@ class CreateStudentViewModel extends ChangeNotifier {
       await _studentsService.createStudent(
         name: name,
         email: email,
-        password: password,
         phone: phone,
         birthDate: birthDate,
       );

@@ -6,7 +6,14 @@ public class Student
 {
     public Guid Id { get; set; }
 
-    public Guid UserId { get; set; }
+    public Guid GymId { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public string? Email { get; set; }
+    public bool IsActive { get; set; } = true;
+    public bool AppAccessEnabled { get; set; }
+    public string? AppInviteTokenHash { get; set; }
+    public DateTime? AppInviteExpiresAt { get; set; }
+    public Guid? UserId { get; set; }
 
     public DateOnly? BirthDate { get; set; }
 
@@ -24,5 +31,5 @@ public class Student
 
     public DateTime? UpdatedAt { get; set; }
 
-    public User User { get; set; } = null!;
+    public User? User { get; set; }
 }

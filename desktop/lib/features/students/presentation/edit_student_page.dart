@@ -196,15 +196,11 @@ class _EditStudentViewState extends State<_EditStudentView> {
                         const SizedBox(width: 20),
                         Expanded(
                           child: _Field(
-                            label: 'E-mail *',
+                            label: 'E-mail',
                             controller: _emailController,
                             icon: Icons.mail_outline_rounded,
                             validator: (value) {
-                              if (value == null || value.trim().isEmpty) {
-                                return 'Informe o e-mail.';
-                              }
-
-                              if (!value.contains('@')) {
+                              if (value != null && value.trim().isNotEmpty && !value.contains('@')) {
                                 return 'Informe um e-mail válido.';
                               }
 

@@ -13,6 +13,8 @@ class StudentSummary {
     required this.planName,
     required this.enrollmentEndDate,
     required this.archivedAt,
+    required this.appAccessEnabled,
+    required this.userId,
   });
 
   final String id;
@@ -26,6 +28,8 @@ class StudentSummary {
   final String? planName;
   final DateTime? enrollmentEndDate;
   final DateTime? archivedAt;
+  final bool appAccessEnabled;
+  final String? userId;
 
   factory StudentSummary.fromJson(Map<String, dynamic> json) {
     final birthDateValue = json['birthDate'] as String?;
@@ -42,7 +46,9 @@ class StudentSummary {
     return StudentSummary(
       id: json['id'] as String,
       name: json['name'] as String,
-      email: json['email'] as String,
+      email: json['email'] as String? ?? '',
+      appAccessEnabled: json['appAccessEnabled'] as bool? ?? false,
+      userId: json['userId'] as String?,
       phone: json['phone'] as String?,
       birthDate: birthDateValue == null ? null : DateTime.parse(birthDateValue),
       isActive: json['isActive'] as bool,

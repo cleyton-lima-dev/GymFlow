@@ -54,14 +54,14 @@ public class AuthController : ControllerBase
             if (!canAccessApplication)
             {
                 _logger.LogWarning(
-                    "Login rejeitado por matrícula inválida. UserId: {UserId}, GymId: {GymId}",
+                    "Login rejeitado pela política de acesso do aluno. UserId: {UserId}, GymId: {GymId}",
                     result.UserId,
                     result.GymId);
 
                 return Unauthorized(new
                 {
                     message =
-                        "Matrícula inexistente, vencida ou cancelada."
+                        "Aluno sem permissão de acesso ao aplicativo."
                 });
             }
         }

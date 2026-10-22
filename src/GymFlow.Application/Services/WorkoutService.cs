@@ -1,4 +1,4 @@
-﻿using GymFlow.Application.DTOs.Common;
+using GymFlow.Application.DTOs.Common;
 using GymFlow.Application.DTOs.Workouts;
 using GymFlow.Application.Interfaces.Repositories;
 using GymFlow.Application.Interfaces.Time;
@@ -46,7 +46,7 @@ public class WorkoutService
         if (student is null)
             throw new KeyNotFoundException("Aluno não encontrado.");
 
-        if (!student.User.IsActive)
+        if (!student.IsActive)
             throw new InvalidOperationException(
                 "Não é possível atribuir treino a um aluno inativo.");
 
@@ -192,7 +192,7 @@ public class WorkoutService
         if (student is null)
             throw new KeyNotFoundException("Aluno não encontrado.");
 
-        if (!student.User.IsActive)
+        if (!student.IsActive)
         {
             throw new InvalidOperationException(
                 "Não é possível atribuir treino a um aluno inativo.");
@@ -368,7 +368,7 @@ public class WorkoutService
             throw new KeyNotFoundException(
                 "Aluno não encontrado.");
 
-        if (!student.User.IsActive)
+        if (!student.IsActive)
         {
             throw new InvalidOperationException(
                 "Aluno inativo não pode registrar execução de treino.");
@@ -473,7 +473,7 @@ public class WorkoutService
         if (student is null)
             throw new KeyNotFoundException("Aluno não encontrado.");
 
-        if (!student.User.IsActive)
+        if (!student.IsActive)
         {
             throw new InvalidOperationException(
                 "Aluno inativo não pode alterar progresso de treino.");
@@ -557,7 +557,7 @@ public class WorkoutService
         if (student is null)
             throw new KeyNotFoundException("Aluno não encontrado.");
 
-        if (!student.User.IsActive)
+        if (!student.IsActive)
         {
             throw new InvalidOperationException(
                 "Aluno inativo não pode registrar progresso de treino.");

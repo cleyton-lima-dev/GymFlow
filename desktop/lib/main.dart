@@ -7,6 +7,7 @@ import 'package:avelri_gestao/app/app.dart';
 import 'package:avelri_gestao/app/config/app_config.dart';
 import 'package:avelri_gestao/app/router/app_router.dart';
 import 'package:avelri_gestao/app/session/session_controller.dart';
+import 'package:avelri_gestao/app/session/erp_feature_controller.dart';
 import 'package:avelri_gestao/app/session/session_status.dart';
 import 'package:avelri_gestao/app/theme/ac_power_gym_branding.dart';
 import 'package:avelri_gestao/app/theme/branding_controller.dart';
@@ -22,13 +23,13 @@ void main() {
 
   final config = AppConfig.fromEnvironment();
 
-  const secureStorage = FlutterSecureStorage();
+  const secureStorage = FlutterSecureStorage(
+    wOptions: WindowsOptions(useBackwardCompatibility: true),
+  );
 
   final tokenStorage = TokenStorage(secureStorage);
 
-  final apiClient = ApiClient(
-    baseUrl: config.apiBaseUrl,
-  );
+  final apiClient = ApiClient(baseUrl: config.apiBaseUrl);
 
   final authService = AuthService(apiClient);
 
@@ -37,10 +38,10 @@ void main() {
     authService,
     apiClient,
   );
+  final erpFeatureController = ErpFeatureController(apiClient);
+  apiClient.setErpAccessDeniedHandler(erpFeatureController.denyCurrentSession);
 
-  apiClient.setUnauthorizedHandler(
-    sessionController.invalidateSession,
-  );
+  apiClient.setUnauthorizedHandler(sessionController.invalidateSession);
 
   const brandingRepository = LocalBrandingRepository({
     '11111111-1111-1111-1111-111111111111': acPowerGymBranding,
@@ -57,14 +58,14 @@ void main() {
 
     if (sessionController.status == SessionStatus.authenticated &&
         user != null) {
-      unawaited(
-        brandingController.loadForGym(user.gymId),
-      );
+      unawaited(brandingController.loadForGym(user.gymId));
+      unawaited(erpFeatureController.loadForGym(user.gymId));
       return;
     }
 
     if (sessionController.status == SessionStatus.unauthenticated) {
       brandingController.reset();
+      erpFeatureController.reset();
     }
   }
 
@@ -73,12 +74,14 @@ void main() {
   final appRouter = AppRouter(
     sessionController,
     brandingController,
+    erpFeatureController,
   );
 
   runApp(
     AvelriGestaoApp(
       sessionController: sessionController,
       brandingController: brandingController,
+      erpFeatureController: erpFeatureController,
       apiClient: apiClient,
       router: appRouter.router,
     ),

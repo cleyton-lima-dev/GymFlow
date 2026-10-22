@@ -1,15 +1,19 @@
-import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import 'package:go_router/go_router.dart';
 import 'package:avelri_gestao/features/students/presentation/student_details_page.dart';
 import 'package:avelri_gestao/app/router/management_shell_page.dart';
 import 'package:avelri_gestao/app/router/session_loading_page.dart';
+import 'package:avelri_gestao/app/router/session_popup_observer.dart';
 import 'package:avelri_gestao/app/session/session_controller.dart';
+import 'package:avelri_gestao/app/session/erp_feature_controller.dart';
 import 'package:avelri_gestao/app/session/session_status.dart';
 import 'package:avelri_gestao/app/theme/branding_controller.dart';
 import 'package:avelri_gestao/features/auth/presentation/login_page.dart';
 import 'package:avelri_gestao/features/dashboard/presentation/dashboard_page.dart';
 import 'package:avelri_gestao/features/gym_settings/presentation/gym_settings_page.dart';
 import 'package:avelri_gestao/features/students/presentation/students_page.dart';
+import 'package:avelri_gestao/features/students/presentation/student_import_page.dart';
+import 'package:avelri_gestao/features/students/presentation/migration_wizard_page.dart';
 import 'package:avelri_gestao/features/students/presentation/create_student_page.dart';
 import 'package:avelri_gestao/features/students/presentation/edit_student_page.dart';
 import 'package:avelri_gestao/app/session/app_role.dart';
@@ -23,18 +27,64 @@ import 'package:avelri_gestao/features/charges/presentation/charges_page.dart';
 import 'package:avelri_gestao/features/access_control/presentation/access_control_page.dart';
 import 'package:avelri_gestao/features/check_ins/presentation/check_ins_page.dart';
 import 'package:avelri_gestao/features/reports/presentation/reports_page.dart';
+import 'package:avelri_gestao/core/network/erp_access_policy.dart';
 
 class AppRouter {
-  AppRouter(this._sessionController, this._brandingController);
+  AppRouter(
+    this._sessionController,
+    this._brandingController,
+    this._erpFeatureController,
+  ) {
+    _lastSessionRevision = _sessionController.revision;
+    _lastErpEnabled = _erpEnabled;
+    _sessionController.addListener(_authorizationChanged);
+    _erpFeatureController.addListener(_authorizationChanged);
+  }
 
   final SessionController _sessionController;
   final BrandingController _brandingController;
+  final ErpFeatureController _erpFeatureController;
+  final _rootPopups = SessionPopupObserver();
+  final _shellPopups = SessionPopupObserver();
+  late int _lastSessionRevision;
+  late bool _lastErpEnabled;
+  bool _disposed = false;
+
+  bool get _erpEnabled {
+    final gymId = _sessionController.user?.gymId;
+    return gymId != null && _erpFeatureController.isEnabledForGym(gymId);
+  }
+
+  void _authorizationChanged() {
+    final currentErp = _erpEnabled;
+    final shouldDismiss =
+        _lastSessionRevision != _sessionController.revision ||
+        (_lastErpEnabled && !currentErp);
+    _lastSessionRevision = _sessionController.revision;
+    _lastErpEnabled = currentErp;
+    if (shouldDismiss) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (_disposed) return;
+        _rootPopups.dismissPopups();
+        _shellPopups.dismissPopups();
+      });
+    }
+  }
+
+  void dispose() {
+    _disposed = true;
+    _sessionController.removeListener(_authorizationChanged);
+    _erpFeatureController.removeListener(_authorizationChanged);
+    router.dispose();
+  }
 
   late final GoRouter router = GoRouter(
     initialLocation: '/bootstrap',
+    observers: [_rootPopups],
     refreshListenable: Listenable.merge([
       _sessionController,
       _brandingController,
+      _erpFeatureController,
     ]),
     redirect: (context, state) {
       final status = _sessionController.status;
@@ -63,6 +113,11 @@ class AppRouter {
         return location == '/bootstrap' ? null : '/bootstrap';
       }
 
+      final isErpRoute = ErpAccessPolicy.isErpRoute(location);
+      if (isErpRoute && !_erpFeatureController.isEnabledForGym(user.gymId)) {
+        return '/students';
+      }
+
       if (location == '/bootstrap' || location == '/login') {
         return '/dashboard';
       }
@@ -76,8 +131,12 @@ class AppRouter {
       ),
       GoRoute(path: '/login', builder: (context, state) => const LoginPage()),
       ShellRoute(
+        observers: [_shellPopups],
         builder: (context, state, child) {
-          return ManagementShellPage(location: state.uri.path, child: child);
+          return KeyedSubtree(
+            key: ValueKey(_sessionController.revision),
+            child: ManagementShellPage(location: state.uri.path, child: child),
+          );
         },
         routes: [
           GoRoute(
@@ -94,6 +153,16 @@ class AppRouter {
             path: '/students/new',
             pageBuilder: (context, state) =>
                 const NoTransitionPage(child: CreateStudentPage()),
+          ),
+          GoRoute(
+            path: '/students/import',
+            pageBuilder: (context, state) =>
+                const NoTransitionPage(child: StudentImportPage()),
+          ),
+          GoRoute(
+            path: '/students/migration',
+            pageBuilder: (context, state) =>
+                const NoTransitionPage(child: MigrationWizardPage()),
           ),
           GoRoute(
             path: '/students/:studentId',
@@ -123,6 +192,8 @@ class AppRouter {
           ),
           GoRoute(
             path: '/plans/edit',
+            redirect: (context, state) =>
+                state.extra is PlanSummary ? null : '/plans',
             pageBuilder: (context, state) {
               final plan = state.extra as PlanSummary;
 
@@ -141,8 +212,11 @@ class AppRouter {
           ),
           GoRoute(
             path: '/finance',
-            pageBuilder: (context, state) =>
-                NoTransitionPage(child: ChargesPage(overdueOnly: state.uri.queryParameters['status'] == 'overdue')),
+            pageBuilder: (context, state) => NoTransitionPage(
+              child: ChargesPage(
+                overdueOnly: state.uri.queryParameters['status'] == 'overdue',
+              ),
+            ),
           ),
           GoRoute(
             path: '/access-control',
@@ -156,15 +230,13 @@ class AppRouter {
           ),
           GoRoute(
             path: '/reports',
-            pageBuilder: (context, state) => const NoTransitionPage(
-              child: ReportsPage(),
-            ),
+            pageBuilder: (context, state) =>
+                const NoTransitionPage(child: ReportsPage()),
           ),
           GoRoute(
             path: '/settings',
-            pageBuilder: (context, state) => const NoTransitionPage(
-              child: GymSettingsPage(),
-            ),
+            pageBuilder: (context, state) =>
+                const NoTransitionPage(child: GymSettingsPage()),
           ),
         ],
       ),

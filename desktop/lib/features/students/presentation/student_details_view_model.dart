@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'dart:convert';
+
 import 'package:flutter/foundation.dart';
 import 'package:avelri_gestao/core/network/api_exception.dart';
 import 'package:avelri_gestao/features/students/data/students_service.dart';
@@ -9,16 +11,32 @@ import 'package:avelri_gestao/features/students/models/physical_access_credentia
 import 'package:avelri_gestao/features/students/models/physical_access_override.dart';
 
 class StudentDetailsViewModel extends ChangeNotifier {
-  StudentDetailsViewModel(this._studentsService, this._studentId);
+  StudentDetailsViewModel(
+    this._studentsService,
+    this._studentId, {
+    this.erpEnabled = false,
+  });
 
   final StudentsService _studentsService;
   final String _studentId;
-  final List<StudentFinancialHistoryItem> _financialHistory = [];
-  final List<PhysicalAccessCredential>
-  _physicalAccessCredentials = [];
+  final bool erpEnabled;
+  bool _disposed = false;
 
-  PhysicalAccessOverride?
-  _physicalAccessOverride;
+  @override
+  void notifyListeners() {
+    if (!_disposed) super.notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _disposed = true;
+    super.dispose();
+  }
+
+  final List<StudentFinancialHistoryItem> _financialHistory = [];
+  final List<PhysicalAccessCredential> _physicalAccessCredentials = [];
+
+  PhysicalAccessOverride? _physicalAccessOverride;
   bool _isPhysicalAccessLoading = false;
   String? _physicalAccessErrorMessage;
 
@@ -26,6 +44,10 @@ class StudentDetailsViewModel extends ChangeNotifier {
   bool _isLoading = false;
   bool _isUpdatingStatus = false;
   bool _isReactivating = false;
+  bool _isUpdatingAppAccess = false;
+  bool get isUpdatingAppAccess => _isUpdatingAppAccess;
+  String? _appAccessErrorMessage;
+  String? get appAccessErrorMessage => _appAccessErrorMessage;
 
   bool _isFinancialHistoryLoading = false;
   String? _errorMessage;
@@ -35,33 +57,105 @@ class StudentDetailsViewModel extends ChangeNotifier {
   bool get isLoading => _isLoading;
   bool get isUpdatingStatus => _isUpdatingStatus;
   String? get errorMessage => _errorMessage;
+
+  Future<({bool succeeded, String? token})> setAppAccess(
+    bool enabled, {
+    String? email,
+  }) async {
+    if (_isUpdatingAppAccess) return (succeeded: false, token: null);
+    final currentStudent = _student;
+    if (currentStudent == null) {
+      _appAccessErrorMessage = 'Não foi possível carregar os dados do aluno.';
+      notifyListeners();
+      return (succeeded: false, token: null);
+    }
+    _isUpdatingAppAccess = true;
+    _appAccessErrorMessage = null;
+    notifyListeners();
+    try {
+      final normalizedEmail = email?.trim();
+      if (enabled && normalizedEmail != null && normalizedEmail.isNotEmpty) {
+        await _studentsService.updateStudent(
+          studentId: _studentId,
+          name: currentStudent.name,
+          email: normalizedEmail,
+          phone: currentStudent.phone,
+          birthDate: currentStudent.birthDate,
+        );
+        _student = _copyStudent(currentStudent, email: normalizedEmail);
+      }
+      final token = await _studentsService.setAppAccess(_studentId, enabled);
+      _student = _copyStudent(_student!, appAccessEnabled: enabled);
+      return (succeeded: true, token: token);
+    } on ApiException catch (exception) {
+      if (exception.statusCode == 409) {
+        _appAccessErrorMessage = 'O convite foi alterado ou usado por outra operação. Atualizando os dados do aluno.';
+        try {
+          _student = await _studentsService.getStudentById(_studentId);
+        } catch (_) {
+          // Keep the conflict message if the follow-up read also fails.
+        }
+      } else {
+        _appAccessErrorMessage = _messageFromApiException(exception);
+      }
+      return (succeeded: false, token: null);
+    } on TimeoutException {
+      _appAccessErrorMessage =
+          'A operação demorou mais que o esperado. Tente novamente.';
+      return (succeeded: false, token: null);
+    } on http.ClientException {
+      _appAccessErrorMessage =
+          'Não foi possível conectar ao servidor. Verifique sua conexão.';
+      return (succeeded: false, token: null);
+    } on FormatException {
+      _appAccessErrorMessage = 'O servidor retornou uma resposta inválida.';
+      return (succeeded: false, token: null);
+    } catch (_) {
+      _appAccessErrorMessage =
+          'Não foi possível alterar o acesso ao aplicativo.';
+      return (succeeded: false, token: null);
+    } finally {
+      _isUpdatingAppAccess = false;
+      notifyListeners();
+    }
+  }
+
+  StudentSummary _copyStudent(
+    StudentSummary student, {
+    String? email,
+    bool? appAccessEnabled,
+  }) => StudentSummary(
+    id: student.id,
+    name: student.name,
+    email: email ?? student.email,
+    phone: student.phone,
+    birthDate: student.birthDate,
+    isActive: student.isActive,
+    createdAt: student.createdAt,
+    enrollmentStatus: student.enrollmentStatus,
+    planName: student.planName,
+    enrollmentEndDate: student.enrollmentEndDate,
+    archivedAt: student.archivedAt,
+    appAccessEnabled: appAccessEnabled ?? student.appAccessEnabled,
+    userId: student.userId,
+  );
   bool get isReactivating => _isReactivating;
 
   List<StudentFinancialHistoryItem> get financialHistory =>
       List.unmodifiable(_financialHistory);
 
-  bool get isFinancialHistoryLoading =>
-      _isFinancialHistoryLoading;
+  bool get isFinancialHistoryLoading => _isFinancialHistoryLoading;
 
-  String? get financialHistoryErrorMessage =>
-      _financialHistoryErrorMessage;
+  String? get financialHistoryErrorMessage => _financialHistoryErrorMessage;
 
-  List<PhysicalAccessCredential>
-  get physicalAccessCredentials =>
-      List.unmodifiable(
-        _physicalAccessCredentials,
-      );
+  List<PhysicalAccessCredential> get physicalAccessCredentials =>
+      List.unmodifiable(_physicalAccessCredentials);
 
-  PhysicalAccessOverride?
-  get physicalAccessOverride =>
-      _physicalAccessOverride;
+  PhysicalAccessOverride? get physicalAccessOverride => _physicalAccessOverride;
 
-  bool get isPhysicalAccessLoading =>
-      _isPhysicalAccessLoading;
+  bool get isPhysicalAccessLoading => _isPhysicalAccessLoading;
 
-  String? get physicalAccessErrorMessage =>
-      _physicalAccessErrorMessage;
-
+  String? get physicalAccessErrorMessage => _physicalAccessErrorMessage;
 
   Future<void> load() async {
     if (_isLoading) {
@@ -75,10 +169,7 @@ class StudentDetailsViewModel extends ChangeNotifier {
     try {
       _student = await _studentsService.getStudentById(_studentId);
 
-      await Future.wait([
-        loadFinancialHistory(),
-        loadPhysicalAccess(),
-      ]);
+      await Future.wait([loadFinancialHistory(), loadPhysicalAccess()]);
     } on ApiException catch (exception) {
       _errorMessage = _messageFromApiException(exception);
     } on TimeoutException {
@@ -107,15 +198,11 @@ class StudentDetailsViewModel extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final credentials =
-      await _studentsService
-          .getPhysicalAccessCredentials(
+      final credentials = await _studentsService.getPhysicalAccessCredentials(
         _studentId,
       );
 
-      final accessOverride =
-      await _studentsService
-          .getPhysicalAccessOverride(
+      final accessOverride = await _studentsService.getPhysicalAccessOverride(
         _studentId,
       );
 
@@ -123,31 +210,29 @@ class StudentDetailsViewModel extends ChangeNotifier {
         ..clear()
         ..addAll(credentials);
 
-      _physicalAccessOverride =
-          accessOverride;
+      _physicalAccessOverride = accessOverride;
     } on ApiException catch (exception) {
       if (exception.statusCode == 403) {
         _physicalAccessErrorMessage =
-        'Você não possui permissão para acessar o controle de acesso.';
+            'Você não possui permissão para acessar o controle de acesso.';
       } else if (exception.statusCode >= 500) {
         _physicalAccessErrorMessage =
-        'O controle de acesso está temporariamente indisponível.';
+            'O controle de acesso está temporariamente indisponível.';
       } else {
         _physicalAccessErrorMessage =
-        'Não foi possível carregar o controle de acesso.';
+            'Não foi possível carregar o controle de acesso.';
       }
     } on TimeoutException {
       _physicalAccessErrorMessage =
-      'A consulta do controle de acesso demorou mais que o esperado.';
+          'A consulta do controle de acesso demorou mais que o esperado.';
     } on http.ClientException {
-      _physicalAccessErrorMessage =
-      'Não foi possível conectar ao servidor.';
+      _physicalAccessErrorMessage = 'Não foi possível conectar ao servidor.';
     } on FormatException {
       _physicalAccessErrorMessage =
-      'Não foi possível interpretar os dados de controle de acesso.';
+          'Não foi possível interpretar os dados de controle de acesso.';
     } catch (_) {
       _physicalAccessErrorMessage =
-      'Não foi possível carregar o controle de acesso.';
+          'Não foi possível carregar o controle de acesso.';
     } finally {
       _isPhysicalAccessLoading = false;
       notifyListeners();
@@ -168,42 +253,34 @@ class StudentDetailsViewModel extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final credential =
-      await _studentsService
-          .createPhysicalAccessCredential(
+      final credential = await _studentsService.createPhysicalAccessCredential(
         studentId: _studentId,
         type: type,
         providerKey: providerKey,
-        externalIdentifier:
-        externalIdentifier,
+        externalIdentifier: externalIdentifier,
       );
 
-      _physicalAccessCredentials.add(
-        credential,
-      );
+      _physicalAccessCredentials.add(credential);
 
       return true;
     } on ApiException catch (exception) {
       if (exception.statusCode == 409) {
-        _physicalAccessErrorMessage =
-        'Não foi possível cadastrar a credencial. Verifique se ela já está vinculada.';
+        _physicalAccessErrorMessage = 'Não foi possível cadastrar a credencial. Verifique se ela já está vinculada.';
       } else {
         _physicalAccessErrorMessage =
-        'Não foi possível cadastrar a credencial de acesso.';
+            'Não foi possível cadastrar a credencial de acesso.';
       }
 
       return false;
     } on TimeoutException {
-      _physicalAccessErrorMessage =
-      'A operação demorou mais que o esperado.';
+      _physicalAccessErrorMessage = 'A operação demorou mais que o esperado.';
       return false;
     } on http.ClientException {
-      _physicalAccessErrorMessage =
-      'Não foi possível conectar ao servidor.';
+      _physicalAccessErrorMessage = 'Não foi possível conectar ao servidor.';
       return false;
     } catch (_) {
       _physicalAccessErrorMessage =
-      'Não foi possível cadastrar a credencial de acesso.';
+          'Não foi possível cadastrar a credencial de acesso.';
       return false;
     } finally {
       _isPhysicalAccessLoading = false;
@@ -224,33 +301,28 @@ class StudentDetailsViewModel extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final accessOverride =
-      await _studentsService
-          .setPhysicalAccessOverride(
+      final accessOverride = await _studentsService.setPhysicalAccessOverride(
         studentId: _studentId,
         type: type,
         reason: reason,
       );
 
-      _physicalAccessOverride =
-          accessOverride;
+      _physicalAccessOverride = accessOverride;
 
       return true;
     } on ApiException catch (_) {
       _physicalAccessErrorMessage =
-      'Não foi possível definir a exceção manual de acesso.';
+          'Não foi possível definir a exceção manual de acesso.';
       return false;
     } on TimeoutException {
-      _physicalAccessErrorMessage =
-      'A operação demorou mais que o esperado.';
+      _physicalAccessErrorMessage = 'A operação demorou mais que o esperado.';
       return false;
     } on http.ClientException {
-      _physicalAccessErrorMessage =
-      'Não foi possível conectar ao servidor.';
+      _physicalAccessErrorMessage = 'Não foi possível conectar ao servidor.';
       return false;
     } catch (_) {
       _physicalAccessErrorMessage =
-      'Não foi possível definir a exceção manual de acesso.';
+          'Não foi possível definir a exceção manual de acesso.';
       return false;
     } finally {
       _isPhysicalAccessLoading = false;
@@ -268,8 +340,7 @@ class StudentDetailsViewModel extends ChangeNotifier {
     notifyListeners();
 
     try {
-      await _studentsService
-          .removePhysicalAccessOverride(
+      await _studentsService.removePhysicalAccessOverride(
         studentId: _studentId,
       );
 
@@ -283,19 +354,17 @@ class StudentDetailsViewModel extends ChangeNotifier {
       }
 
       _physicalAccessErrorMessage =
-      'Não foi possível remover a exceção manual de acesso.';
+          'Não foi possível remover a exceção manual de acesso.';
       return false;
     } on TimeoutException {
-      _physicalAccessErrorMessage =
-      'A operação demorou mais que o esperado.';
+      _physicalAccessErrorMessage = 'A operação demorou mais que o esperado.';
       return false;
     } on http.ClientException {
-      _physicalAccessErrorMessage =
-      'Não foi possível conectar ao servidor.';
+      _physicalAccessErrorMessage = 'Não foi possível conectar ao servidor.';
       return false;
     } catch (_) {
       _physicalAccessErrorMessage =
-      'Não foi possível remover a exceção manual de acesso.';
+          'Não foi possível remover a exceção manual de acesso.';
       return false;
     } finally {
       _isPhysicalAccessLoading = false;
@@ -316,52 +385,44 @@ class StudentDetailsViewModel extends ChangeNotifier {
     notifyListeners();
 
     try {
-      await _studentsService
-          .updatePhysicalAccessCredentialStatus(
+      await _studentsService.updatePhysicalAccessCredentialStatus(
         credentialId: credentialId,
         isActive: isActive,
       );
 
-      final index =
-      _physicalAccessCredentials.indexWhere(
-            (credential) =>
-        credential.id == credentialId,
+      final index = _physicalAccessCredentials.indexWhere(
+        (credential) => credential.id == credentialId,
       );
 
       if (index >= 0) {
-        final current =
-        _physicalAccessCredentials[index];
+        final current = _physicalAccessCredentials[index];
 
-        _physicalAccessCredentials[index] =
-            PhysicalAccessCredential(
-              id: current.id,
-              studentId: current.studentId,
-              type: current.type,
-              providerKey: current.providerKey,
-              externalIdentifier:
-              current.externalIdentifier,
-              isActive: isActive,
-              createdAt: current.createdAt,
-              updatedAt: DateTime.now().toUtc(),
-            );
+        _physicalAccessCredentials[index] = PhysicalAccessCredential(
+          id: current.id,
+          studentId: current.studentId,
+          type: current.type,
+          providerKey: current.providerKey,
+          externalIdentifier: current.externalIdentifier,
+          isActive: isActive,
+          createdAt: current.createdAt,
+          updatedAt: DateTime.now().toUtc(),
+        );
       }
 
       return true;
     } on ApiException catch (_) {
       _physicalAccessErrorMessage =
-      'Não foi possível alterar o status da credencial.';
+          'Não foi possível alterar o status da credencial.';
       return false;
     } on TimeoutException {
-      _physicalAccessErrorMessage =
-      'A operação demorou mais que o esperado.';
+      _physicalAccessErrorMessage = 'A operação demorou mais que o esperado.';
       return false;
     } on http.ClientException {
-      _physicalAccessErrorMessage =
-      'Não foi possível conectar ao servidor.';
+      _physicalAccessErrorMessage = 'Não foi possível conectar ao servidor.';
       return false;
     } catch (_) {
       _physicalAccessErrorMessage =
-      'Não foi possível alterar o status da credencial.';
+          'Não foi possível alterar o status da credencial.';
       return false;
     } finally {
       _isPhysicalAccessLoading = false;
@@ -411,7 +472,7 @@ class StudentDetailsViewModel extends ChangeNotifier {
     required String planId,
     required DateTime startDate,
   }) async {
-    if (_isReactivating || _student?.archivedAt == null) {
+    if (!erpEnabled || _isReactivating || _student?.archivedAt == null) {
       return false;
     }
 
@@ -434,11 +495,11 @@ class StudentDetailsViewModel extends ChangeNotifier {
       return false;
     } on TimeoutException {
       _errorMessage =
-      'A operação demorou mais que o esperado. Tente novamente.';
+          'A operação demorou mais que o esperado. Tente novamente.';
       return false;
     } on http.ClientException {
       _errorMessage =
-      'Não foi possível conectar ao servidor. Verifique sua conexão.';
+          'Não foi possível conectar ao servidor. Verifique sua conexão.';
       return false;
     } catch (_) {
       _errorMessage = 'Não foi possível reativar o aluno.';
@@ -450,7 +511,7 @@ class StudentDetailsViewModel extends ChangeNotifier {
   }
 
   Future<void> loadFinancialHistory() async {
-    if (_isFinancialHistoryLoading) {
+    if (!erpEnabled || _isFinancialHistoryLoading || _disposed) {
       return;
     }
 
@@ -459,9 +520,7 @@ class StudentDetailsViewModel extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final history =
-      await _studentsService
-          .getStudentFinancialHistory(
+      final history = await _studentsService.getStudentFinancialHistory(
         _studentId,
       );
 
@@ -471,26 +530,25 @@ class StudentDetailsViewModel extends ChangeNotifier {
     } on ApiException catch (exception) {
       if (exception.statusCode == 403) {
         _financialHistoryErrorMessage =
-        'Você não possui permissão para acessar o histórico financeiro.';
+            'Você não possui permissão para acessar o histórico financeiro.';
       } else if (exception.statusCode >= 500) {
         _financialHistoryErrorMessage =
-        'O histórico financeiro está temporariamente indisponível.';
+            'O histórico financeiro está temporariamente indisponível.';
       } else {
         _financialHistoryErrorMessage =
-        'Não foi possível carregar o histórico financeiro.';
+            'Não foi possível carregar o histórico financeiro.';
       }
     } on TimeoutException {
       _financialHistoryErrorMessage =
-      'A consulta do histórico financeiro demorou mais que o esperado.';
+          'A consulta do histórico financeiro demorou mais que o esperado.';
     } on http.ClientException {
-      _financialHistoryErrorMessage =
-      'Não foi possível conectar ao servidor.';
+      _financialHistoryErrorMessage = 'Não foi possível conectar ao servidor.';
     } on FormatException {
       _financialHistoryErrorMessage =
-      'Não foi possível interpretar o histórico financeiro.';
+          'Não foi possível interpretar o histórico financeiro.';
     } catch (_) {
       _financialHistoryErrorMessage =
-      'Não foi possível carregar o histórico financeiro.';
+          'Não foi possível carregar o histórico financeiro.';
     } finally {
       _isFinancialHistoryLoading = false;
       notifyListeners();
@@ -498,18 +556,35 @@ class StudentDetailsViewModel extends ChangeNotifier {
   }
 
   String _messageFromApiException(ApiException exception) {
+    try {
+      final body = jsonDecode(exception.message);
+      if (body is Map<String, dynamic> && body['message'] is String) {
+        return body['message'] as String;
+      }
+    } on FormatException {
+      // Use a local message when the server response is not a JSON API error.
+    }
+
     if (exception.statusCode == 404) {
-      return 'Aluno nÃ£o encontrado.';
+      return 'Aluno não encontrado.';
     }
 
     if (exception.statusCode == 403) {
-      return 'VocÃª nÃ£o possui permissÃ£o para acessar este aluno.';
+      return 'Você não possui permissão para acessar este aluno.';
+    }
+
+    if (exception.statusCode == 409) {
+      return 'Este e-mail já está vinculado a outra conta.';
+    }
+
+    if (exception.statusCode == 400) {
+      return 'Confira o e-mail informado e tente novamente.';
     }
 
     if (exception.statusCode >= 500) {
-      return 'O Avelri estÃ¡ temporariamente indisponÃ­vel. Tente novamente.';
+      return 'O Avelri está temporariamente indisponível. Tente novamente.';
     }
 
-    return 'NÃ£o foi possÃ­vel carregar os dados do aluno.';
+    return 'Não foi possível alterar o acesso ao aplicativo.';
   }
 }

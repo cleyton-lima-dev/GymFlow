@@ -1,4 +1,4 @@
-﻿using GymFlow.Application.Interfaces.Repositories;
+using GymFlow.Application.Interfaces.Repositories;
 using GymFlow.Domain.Entities;
 using GymFlow.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
@@ -32,7 +32,7 @@ public class ChargeRepository : IChargeRepository
                 .ThenInclude(enrollment => enrollment.Plan)
             .FirstOrDefaultAsync(charge =>
                 charge.Id == chargeId &&
-                charge.Enrollment.Student.User.GymId == gymId &&
+                charge.Enrollment.Student.GymId == gymId &&
                 charge.Enrollment.Plan.GymId == gymId);
     }
 
@@ -48,7 +48,7 @@ public class ChargeRepository : IChargeRepository
                 .ThenInclude(enrollment => enrollment.Plan)
             .FirstOrDefaultAsync(charge =>
                 charge.EnrollmentId == enrollmentId &&
-                charge.Enrollment.Student.User.GymId == gymId &&
+                charge.Enrollment.Student.GymId == gymId &&
                 charge.Enrollment.Plan.GymId == gymId);
     }
 
@@ -62,7 +62,7 @@ public class ChargeRepository : IChargeRepository
             .Include(charge => charge.Enrollment)
                 .ThenInclude(enrollment => enrollment.Plan)
             .Where(charge =>
-                charge.Enrollment.Student.User.GymId == gymId &&
+                charge.Enrollment.Student.GymId == gymId &&
                 charge.Enrollment.Plan.GymId == gymId)
             .OrderBy(charge => charge.DueDate)
             .ThenBy(charge => charge.Id)

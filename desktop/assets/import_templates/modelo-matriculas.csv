@@ -1,0 +1,2 @@
+externalId,studentExternalId,planExternalId,name,price,durationMonths,billingCycle,startDate,endDate,chargeState,chargeDueDate
+EXEMPLO-MATRICULA-001,EXEMPLO-ALUNO-001,EXEMPLO-PLANO-001,Plano Ficticio Mensal,129.90,1,mensal,2026-11-01,2026-12-01,Pending,2026-11-05

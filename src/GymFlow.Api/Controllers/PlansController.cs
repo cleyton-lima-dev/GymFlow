@@ -1,5 +1,6 @@
 ﻿using GymFlow.Application.DTOs.Plans;
 using GymFlow.Application.Services;
+using GymFlow.Api.Authorization;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -8,6 +9,7 @@ namespace GymFlow.Api.Controllers;
 [ApiController]
 [Route("api/plans")]
 [Authorize(Roles = "Admin")]
+[ServiceFilter(typeof(ErpEnabledFilter))]
 public class PlansController : ControllerBase
 {
     private readonly PlanService _planService;
