@@ -11,6 +11,156 @@ namespace GymFlow.AccessAgent.Tests.Services;
 
 public class AccessDecisionServiceTests
 {
+    [Theory]
+    [InlineData(6, false)]
+    [InlineData(4, true)]
+    [InlineData(-1, false)]
+    public async Task LegacyThirtyMinutePinCacheIsBoundedByOriginalWriteTime(
+        int ageMinutes, bool expectedAllowed)
+    {
+        var credentialStore = Substitute.For<IAgentCredentialStore>();
+        var apiClient = Substitute.For<IAvelriAccessApiClient>();
+        var offlineStore = Substitute.For<IAccessOfflineStore>();
+        var limiter = Substitute.For<IPinAttemptLimiter>();
+        var credentials = new AgentCredentials(Guid.NewGuid(), Guid.NewGuid(),
+            "synthetic-secret", "https://api.avelri.test");
+        var attempt = new DeviceAccessAttempt(Guid.NewGuid(), "0007",
+            AccessCredentialType.PinExternalId, DateTime.UtcNow);
+        credentialStore.LoadAsync(Arg.Any<CancellationToken>()).Returns(credentials);
+        apiClient.LoginAsync(credentials, Arg.Any<CancellationToken>()).Returns(
+            new AgentLoginResult(credentials.AgentId, credentials.GymId,
+                "Synthetic Agent", "synthetic-jwt"));
+        apiClient.DecideAsync(credentials, "synthetic-jwt", "toletus-litenet2",
+                attempt, Arg.Any<CancellationToken>())
+            .Returns<Task<AgentAccessDecisionResult>>(_ =>
+                throw new HttpRequestException("Synthetic network outage"));
+        limiter.TryConsumeAsync(credentials.GymId, Arg.Any<CancellationToken>())
+            .Returns(true);
+        var now = DateTime.UtcNow;
+        offlineStore.GetPermissionAsync("toletus-litenet2",
+                AccessCredentialType.PinExternalId, "0007", Arg.Any<DateTime>(),
+                Arg.Any<CancellationToken>())
+            .Returns(new CachedAccessPermission("toletus-litenet2",
+                AccessCredentialType.PinExternalId, "0007", true, "Eligible",
+                now.AddMinutes(20), ageMinutes < 0
+                    ? default : now.AddMinutes(-ageMinutes)));
+
+        var service = new AccessDecisionService(credentialStore, apiClient,
+            offlineStore, Options.Create(new AccessOfflineStoreOptions()),
+            new AgentSessionService(apiClient), limiter);
+        var result = await service.DecideAsync("toletus-litenet2", attempt,
+            CancellationToken.None);
+
+        Assert.Equal(expectedAllowed, result.Allowed);
+        Assert.Equal(expectedAllowed ? "Eligible" : "OfflineNoCachedPermission",
+            result.Reason);
+    }
+
+    [Fact]
+    public async Task PinLockoutDeniesBeforeOnlineOrOfflineLookup()
+    {
+        var credentialStore = Substitute.For<IAgentCredentialStore>();
+        var apiClient = Substitute.For<IAvelriAccessApiClient>();
+        var offlineStore = Substitute.For<IAccessOfflineStore>();
+        var limiter = Substitute.For<IPinAttemptLimiter>();
+        var credentials = new AgentCredentials(Guid.NewGuid(), Guid.NewGuid(),
+            "synthetic-secret", "https://api.avelri.test");
+        credentialStore.LoadAsync(Arg.Any<CancellationToken>())
+            .Returns(credentials);
+        limiter.IsLockedAsync(credentials.GymId, Arg.Any<CancellationToken>())
+            .Returns(true);
+        var service = new AccessDecisionService(credentialStore, apiClient,
+            offlineStore, Options.Create(new AccessOfflineStoreOptions()),
+            new AgentSessionService(apiClient), limiter);
+
+        var result = await service.DecideAsync("toletus-litenet2",
+            new DeviceAccessAttempt(Guid.NewGuid(), "0007",
+                AccessCredentialType.PinExternalId, DateTime.UtcNow),
+            CancellationToken.None);
+
+        Assert.False(result.Allowed);
+        Assert.Equal("PinRateLimited", result.Reason);
+        await apiClient.DidNotReceive().LoginAsync(
+            Arg.Any<AgentCredentials>(), Arg.Any<CancellationToken>());
+        await offlineStore.DidNotReceive().GetPermissionAsync(
+            Arg.Any<string>(), Arg.Any<AccessCredentialType>(),
+            Arg.Any<string>(), Arg.Any<DateTime>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task OfflineUnknownPinCountsAsFailureAndCannotRelease()
+    {
+        var credentialStore = Substitute.For<IAgentCredentialStore>();
+        var apiClient = Substitute.For<IAvelriAccessApiClient>();
+        var offlineStore = Substitute.For<IAccessOfflineStore>();
+        var limiter = Substitute.For<IPinAttemptLimiter>();
+        var credentials = new AgentCredentials(Guid.NewGuid(), Guid.NewGuid(),
+            "synthetic-secret", "https://api.avelri.test");
+        var attempt = new DeviceAccessAttempt(Guid.NewGuid(), "0007",
+            AccessCredentialType.PinExternalId, DateTime.UtcNow);
+        credentialStore.LoadAsync(Arg.Any<CancellationToken>()).Returns(credentials);
+        apiClient.LoginAsync(credentials, Arg.Any<CancellationToken>()).Returns(
+            new AgentLoginResult(credentials.AgentId, credentials.GymId,
+                "Synthetic Agent", "synthetic-jwt"));
+        apiClient.DecideAsync(credentials, "synthetic-jwt", "toletus-litenet2",
+                attempt, Arg.Any<CancellationToken>())
+            .Returns<Task<AgentAccessDecisionResult>>(_ =>
+                throw new HttpRequestException("Synthetic network outage"));
+        offlineStore.GetPermissionAsync("toletus-litenet2",
+                AccessCredentialType.PinExternalId, "0007", Arg.Any<DateTime>(),
+                Arg.Any<CancellationToken>())
+            .Returns((CachedAccessPermission?)null);
+        limiter.TryConsumeAsync(credentials.GymId, Arg.Any<CancellationToken>())
+            .Returns(false);
+        var service = new AccessDecisionService(credentialStore, apiClient,
+            offlineStore, Options.Create(new AccessOfflineStoreOptions()),
+            new AgentSessionService(apiClient), limiter);
+
+        var result = await service.DecideAsync("toletus-litenet2", attempt,
+            CancellationToken.None);
+
+        Assert.False(result.Allowed);
+        Assert.Equal("PinRateLimited", result.Reason);
+        await limiter.Received(1).TryConsumeAsync(
+            credentials.GymId, Arg.Any<CancellationToken>());
+        await offlineStore.DidNotReceive().EnqueueEventAsync(
+            Arg.Any<PendingAccessEvent>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task OnlinePinPermissionHasShortOfflineLifetime()
+    {
+        var credentialStore = Substitute.For<IAgentCredentialStore>();
+        var apiClient = Substitute.For<IAvelriAccessApiClient>();
+        var offlineStore = Substitute.For<IAccessOfflineStore>();
+        var credentials = new AgentCredentials(Guid.NewGuid(), Guid.NewGuid(),
+            "synthetic-secret", "https://api.avelri.test");
+        var attempt = new DeviceAccessAttempt(Guid.NewGuid(), "0007",
+            AccessCredentialType.PinExternalId, DateTime.UtcNow);
+        credentialStore.LoadAsync(Arg.Any<CancellationToken>()).Returns(credentials);
+        apiClient.LoginAsync(credentials, Arg.Any<CancellationToken>()).Returns(
+            new AgentLoginResult(credentials.AgentId, credentials.GymId,
+                "Synthetic Agent", "synthetic-jwt"));
+        apiClient.DecideAsync(credentials, "synthetic-jwt", "toletus-litenet2",
+                attempt, Arg.Any<CancellationToken>())
+            .Returns(new AgentAccessDecisionResult(attempt.RequestId, true,
+                "Eligible", DateTime.UtcNow));
+        var service = new AccessDecisionService(credentialStore, apiClient,
+            offlineStore, Options.Create(new AccessOfflineStoreOptions
+            {
+                PermissionCacheMinutes = 30
+            }), new AgentSessionService(apiClient), Substitute.For<IPinAttemptLimiter>());
+
+        var before = DateTime.UtcNow;
+        Assert.True((await service.DecideAsync("toletus-litenet2", attempt,
+            CancellationToken.None)).Allowed);
+        await offlineStore.Received(1).UpsertPermissionAsync(
+            Arg.Is<CachedAccessPermission>(permission =>
+                permission.CredentialType == AccessCredentialType.PinExternalId &&
+                permission.ValidUntil <= before.AddMinutes(5).AddSeconds(2)),
+            Arg.Any<CancellationToken>());
+    }
+
     [Fact]
     public async Task DecideAsync_WhenAgentIsNotPaired_ReturnsDenied()
     {
@@ -464,7 +614,8 @@ public class AccessDecisionServiceTests
                 apiClient,
                 offlineStore,
 options,
-new AgentSessionService(apiClient));
+new AgentSessionService(apiClient),
+Substitute.For<IPinAttemptLimiter>());
 
         var result =
             await service.DecideAsync(
@@ -580,7 +731,8 @@ new AgentSessionService(apiClient));
                 apiClient,
                 offlineStore,
 options,
-new AgentSessionService(apiClient));
+new AgentSessionService(apiClient),
+Substitute.For<IPinAttemptLimiter>());
 
         var result =
             await service.DecideAsync(
@@ -676,7 +828,8 @@ new AgentSessionService(apiClient));
                 apiClient,
                 offlineStore,
 options,
-new AgentSessionService(apiClient));
+new AgentSessionService(apiClient),
+Substitute.For<IPinAttemptLimiter>());
 
         var before =
             DateTime.UtcNow;
@@ -735,6 +888,7 @@ new AgentSessionService(apiClient));
             apiClient,
             offlineStore,
 options,
-new AgentSessionService(apiClient));
+new AgentSessionService(apiClient),
+Substitute.For<IPinAttemptLimiter>());
     }
 }

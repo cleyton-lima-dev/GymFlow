@@ -69,6 +69,8 @@ public static class DependencyInjection
         services.AddScoped<IAccessAgentTokenService, AccessAgentJwtTokenService>();
         services.AddScoped<IAccessAgentSecretService, AccessAgentSecretService>();
         services.AddScoped<IAccessAgentPairingCodeService, AccessAgentPairingCodeService>();
+        services.AddSingleton<IPhysicalAccessPinProtector, PhysicalAccessPinProtector>();
+        services.AddScoped<IPhysicalAccessPinAttemptLimiter, PersistentPhysicalAccessPinAttemptLimiter>();
 
         services.AddSingleton<ConfigurationGymTimeZoneProvider>();
         services.AddScoped<IGymTimeZoneProvider, PersistedGymTimeZoneProvider>();

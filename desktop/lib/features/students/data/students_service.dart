@@ -204,6 +204,29 @@ class StudentsService {
     );
   }
 
+  Future<(PhysicalAccessCredential, String)> issuePhysicalAccessPin(
+    String studentId,
+  ) async {
+    final response = await _apiClient.post(
+      'api/physical-access/credentials/student/$studentId/pin',
+      body: <String, dynamic>{},
+    );
+    if (response is! Map) {
+      throw const FormatException('Invalid PIN issue response.');
+    }
+    final data = Map<String, dynamic>.from(response);
+    final pin = data['pin'];
+    final credential = data['credential'];
+    if (pin is! String || !RegExp(r'^\d{4}$').hasMatch(pin) ||
+        credential is! Map) {
+      throw const FormatException('Invalid PIN issue response.');
+    }
+    return (
+      PhysicalAccessCredential.fromJson(Map<String, dynamic>.from(credential)),
+      pin,
+    );
+  }
+
   Future<StudentSummary> getStudentById(String studentId) async {
     final response = await _apiClient.get('api/students/$studentId');
 

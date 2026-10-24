@@ -30,6 +30,9 @@ public class PhysicalAccessService
 
     private readonly IGymErpPolicy _erpPolicy;
 
+    private readonly IPhysicalAccessPinProtector _pinProtector;
+    private readonly IPhysicalAccessPinAttemptLimiter _pinAttemptLimiter;
+
     public PhysicalAccessService(
         IPhysicalAccessCredentialRepository credentialRepository,
         IPhysicalAccessOverrideRepository overrideRepository,
@@ -37,7 +40,9 @@ public class PhysicalAccessService
         IEnrollmentRepository enrollmentRepository,
         IChargeRepository chargeRepository,
         IGymTimeZoneProvider gymTimeZoneProvider,
-        IGymErpPolicy erpPolicy)
+        IGymErpPolicy erpPolicy,
+        IPhysicalAccessPinProtector pinProtector,
+        IPhysicalAccessPinAttemptLimiter pinAttemptLimiter)
     {
         _credentialRepository = credentialRepository;
         _overrideRepository = overrideRepository;
@@ -46,6 +51,8 @@ public class PhysicalAccessService
         _chargeRepository = chargeRepository;
         _gymTimeZoneProvider = gymTimeZoneProvider;
         _erpPolicy = erpPolicy;
+        _pinProtector = pinProtector;
+        _pinAttemptLimiter = pinAttemptLimiter;
     }
 
     public async Task<PhysicalAccessDecisionResponse> DecideAsync(
@@ -92,16 +99,44 @@ public class PhysicalAccessService
             return ToResponse(existingEvent);
         }
 
+        var identifier = request.ExternalIdentifier.Trim();
+        PhysicalAccessPinReservation? reservation = null;
+        var pinFailed = false;
+        if (request.CredentialType == PhysicalAccessCredentialType.PinExternalId)
+        {
+            if (identifier.Length != 4 ||
+                !identifier.All(character => character is >= '0' and <= '9'))
+            {
+                throw new ArgumentException("O PIN deve conter exatamente quatro dígitos.");
+            }
+
+            reservation = await _pinAttemptLimiter.TryReserveAsync(gymId);
+            if (reservation is null)
+            {
+                return await RegisterDecisionAsync(gymId, request, null, null,
+                    PhysicalAccessDecision.Denied,
+                    PhysicalAccessDecisionReason.PinRateLimited);
+            }
+
+        }
+
+        try
+        {
+        if (reservation is not null)
+            identifier = _pinProtector.ComputeLookupHash(gymId, identifier);
+
         var credential =
             await _credentialRepository
                 .GetByExternalIdentifierAsync(
                     gymId,
                     request.ProviderKey.Trim(),
                     request.CredentialType,
-                    request.ExternalIdentifier.Trim());
+                    identifier);
 
         if (credential is null)
         {
+            pinFailed = reservation is not null;
+
             return await RegisterDecisionAsync(
                 gymId,
                 request,
@@ -233,6 +268,12 @@ public class PhysicalAccessService
             credential.Id,
             PhysicalAccessDecision.Allowed,
             PhysicalAccessDecisionReason.Eligible);
+        }
+        finally
+        {
+            if (reservation is not null)
+                await _pinAttemptLimiter.CompleteAsync(reservation, pinFailed);
+        }
     }
 
     public async Task<PhysicalAccessDecisionResponse> SyncOfflineEventAsync(
@@ -314,13 +355,16 @@ public class PhysicalAccessService
             return ToResponse(existingEvent);
         }
 
-        var credential =
-            await _credentialRepository
-                .GetByExternalIdentifierAsync(
-                    gymId,
-                    request.ProviderKey.Trim(),
-                    request.CredentialType,
-                    request.ExternalIdentifier.Trim());
+        var offlineIdentifier = request.ExternalIdentifier.Trim();
+        var validPin = offlineIdentifier.Length == 4 &&
+            offlineIdentifier.All(character => character is >= '0' and <= '9');
+        var credential = request.CredentialType == PhysicalAccessCredentialType.PinExternalId && !validPin
+            ? null
+            : await _credentialRepository.GetByExternalIdentifierAsync(
+                gymId, request.ProviderKey.Trim(), request.CredentialType,
+                request.CredentialType == PhysicalAccessCredentialType.PinExternalId
+                    ? _pinProtector.ComputeLookupHash(gymId, offlineIdentifier)
+                    : offlineIdentifier);
 
         var accessEvent =
             new PhysicalAccessEvent

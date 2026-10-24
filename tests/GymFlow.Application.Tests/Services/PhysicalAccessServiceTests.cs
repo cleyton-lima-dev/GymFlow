@@ -70,7 +70,9 @@ public class PhysicalAccessServiceTests
             _enrollmentRepository,
             _chargeRepository,
             _gymTimeZoneProvider,
-            _erpPolicy);
+            _erpPolicy,
+            Substitute.For<IPhysicalAccessPinProtector>(),
+            Substitute.For<IPhysicalAccessPinAttemptLimiter>());
     }
 
     [Fact]

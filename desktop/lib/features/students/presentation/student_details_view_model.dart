@@ -288,6 +288,27 @@ class StudentDetailsViewModel extends ChangeNotifier {
     }
   }
 
+  Future<String?> issuePhysicalAccessPin() async {
+    if (_isPhysicalAccessLoading) return null;
+    _isPhysicalAccessLoading = true;
+    _physicalAccessErrorMessage = null;
+    notifyListeners();
+    try {
+      final (credential, pin) =
+          await _studentsService.issuePhysicalAccessPin(_studentId);
+      _physicalAccessCredentials.removeWhere((item) => item.type == 5);
+      _physicalAccessCredentials.add(credential);
+      return pin;
+    } catch (_) {
+      _physicalAccessErrorMessage =
+          'Não foi possível emitir o PIN. Verifique a configuração e tente novamente.';
+      return null;
+    } finally {
+      _isPhysicalAccessLoading = false;
+      notifyListeners();
+    }
+  }
+
   Future<bool> setPhysicalAccessOverride({
     required int type,
     String? reason,

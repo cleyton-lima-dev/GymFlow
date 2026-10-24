@@ -50,6 +50,14 @@ public class PhysicalAccessCredentialConfiguration
         builder.HasIndex(credential => new
         {
             credential.GymId,
+            credential.StudentId
+        }, "IX_PhysicalAccessCredentials_OnePinPerStudent")
+        .IsUnique()
+        .HasFilter("\"Type\" = 5");
+
+        builder.HasIndex(credential => new
+        {
+            credential.GymId,
             credential.ProviderKey,
             credential.Type,
             credential.ExternalIdentifier

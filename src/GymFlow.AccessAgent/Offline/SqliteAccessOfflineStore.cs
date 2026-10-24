@@ -179,6 +179,22 @@ public sealed class SqliteAccessOfflineStore :
             return null;
         }
 
+        DateTime updatedAt = default;
+        if (credentialType == AccessCredentialType.PinExternalId &&
+            (reader.IsDBNull(4) ||
+             !DateTime.TryParseExact(reader.GetString(4), "O",
+                 CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind,
+                 out updatedAt)))
+            return null;
+
+        if (credentialType != AccessCredentialType.PinExternalId)
+            updatedAt = ParseDatabaseDateTime(reader.GetString(4));
+
+        if (credentialType == AccessCredentialType.PinExternalId &&
+            (updatedAt == default || updatedAt > utcNow ||
+             updatedAt.AddMinutes(5) <= utcNow))
+            return null;
+
         return new CachedAccessPermission(
             providerKey,
             credentialType,
@@ -188,8 +204,7 @@ public sealed class SqliteAccessOfflineStore :
             reader.GetString(2),
             ParseDatabaseDateTime(
                 reader.GetString(3)),
-            ParseDatabaseDateTime(
-                reader.GetString(4)));
+            updatedAt);
     }
 
     public async Task UpsertPermissionAsync(

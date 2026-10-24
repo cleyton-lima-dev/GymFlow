@@ -65,6 +65,9 @@ builder.Services
         IAccessDecisionService,
         AccessDecisionService>();
 
+builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.AddSingleton<IPinAttemptLimiter, SqlitePinAttemptLimiter>();
+
 builder.Services
     .AddSingleton<
         IAgentSessionService,

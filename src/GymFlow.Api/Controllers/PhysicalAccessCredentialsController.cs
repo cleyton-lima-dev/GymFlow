@@ -2,6 +2,8 @@
 using GymFlow.Application.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using Npgsql;
 
 namespace GymFlow.Api.Controllers;
 
@@ -69,6 +71,33 @@ public class PhysicalAccessCredentialsController : ControllerBase
                     studentId);
 
         return Ok(credentials);
+    }
+
+    [HttpPost("student/{studentId:guid}/pin")]
+    public async Task<IActionResult> IssuePin(Guid studentId)
+    {
+        if (!TryGetGymId(out var gymId))
+            return Unauthorized();
+
+        try
+        {
+            var result = await _credentialService.IssuePinAsync(gymId, studentId);
+            return result is null
+                ? Conflict(new { message = "Não foi possível emitir o PIN." })
+                : Ok(result);
+        }
+        catch (InvalidOperationException)
+        {
+            return StatusCode(StatusCodes.Status503ServiceUnavailable,
+                new { message = "Emissão de PIN indisponível." });
+        }
+        catch (DbUpdateException ex)
+            when (ex.InnerException is PostgresException
+                { SqlState: PostgresErrorCodes.UniqueViolation })
+        {
+            // The database unique index resolves concurrent PIN collisions.
+            return Conflict(new { message = "PIN ocupado. Tente novamente." });
+        }
     }
 
     [HttpPatch("{id:guid}/status")]

@@ -642,6 +642,28 @@ namespace GymFlow.Infrastructure.Migrations
                     b.ToTable("GymSettingsAuditLogs", (string)null);
                 });
 
+            modelBuilder.Entity("GymFlow.Domain.Entities.PhysicalAccessPinAttemptState", b =>
+                {
+                    b.Property<Guid>("GymId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Failures")
+                        .HasColumnType("integer");
+
+                    b.Property<long>("LockedUntil")
+                        .HasColumnType("bigint");
+
+                    b.Property<int>("Pending")
+                        .HasColumnType("integer");
+
+                    b.Property<long>("WindowStart")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("GymId");
+
+                    b.ToTable("PhysicalAccessPinAttemptStates", (string)null);
+                });
+
             modelBuilder.Entity("GymFlow.Domain.Entities.PhysicalAccessCredential", b =>
                 {
                     b.Property<Guid>("Id")
@@ -681,6 +703,10 @@ namespace GymFlow.Infrastructure.Migrations
                     b.HasIndex("GymId");
 
                     b.HasIndex("StudentId");
+
+                    b.HasIndex(new[] { "GymId", "StudentId" }, "IX_PhysicalAccessCredentials_OnePinPerStudent")
+                        .IsUnique()
+                        .HasFilter("\"Type\" = 5");
 
                     b.HasIndex("GymId", "ProviderKey", "Type", "ExternalIdentifier")
                         .IsUnique();

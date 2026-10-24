@@ -531,10 +531,14 @@ public sealed class ToletusLiteNet2Adapter :
         if (credentialType is null)
             return false;
 
+        if (credentialType == AccessCredentialType.PinExternalId &&
+            identification.Data > 9999)
+            return false;
+
         var externalIdentifier =
-            Convert.ToString(
-                identification.Data,
-                CultureInfo.InvariantCulture);
+            credentialType == AccessCredentialType.PinExternalId
+                ? identification.Data.ToString("D4", CultureInfo.InvariantCulture)
+                : Convert.ToString(identification.Data, CultureInfo.InvariantCulture);
 
         if (string.IsNullOrWhiteSpace(
                 externalIdentifier))

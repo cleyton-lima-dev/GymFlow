@@ -27,7 +27,9 @@ public class PhysicalAccessEventHistoryTests
             Substitute.For<IEnrollmentRepository>(),
             Substitute.For<IChargeRepository>(),
             timeZoneProvider,
-            Substitute.For<IGymErpPolicy>());
+            Substitute.For<IGymErpPolicy>(),
+            Substitute.For<IPhysicalAccessPinProtector>(),
+            Substitute.For<IPhysicalAccessPinAttemptLimiter>());
     }
 
     [Fact]
@@ -53,7 +55,9 @@ public class PhysicalAccessEventHistoryTests
             Substitute.For<IEnrollmentRepository>(),
             Substitute.For<IChargeRepository>(),
             timeZoneProvider,
-            Substitute.For<IGymErpPolicy>());
+            Substitute.For<IGymErpPolicy>(),
+            Substitute.For<IPhysicalAccessPinProtector>(),
+            Substitute.For<IPhysicalAccessPinAttemptLimiter>());
 
         var fromUtc = new DateTime(
             2026, 10, 10, 3, 0, 0, DateTimeKind.Utc);
@@ -118,7 +122,9 @@ public class PhysicalAccessEventHistoryTests
             Substitute.For<IEnrollmentRepository>(),
             Substitute.For<IChargeRepository>(),
             timeZoneProvider,
-            Substitute.For<IGymErpPolicy>());
+            Substitute.For<IGymErpPolicy>(),
+            Substitute.For<IPhysicalAccessPinProtector>(),
+            Substitute.For<IPhysicalAccessPinAttemptLimiter>());
 
         var occurredAt = new DateTime(
             2026, 10, 11, 12, 0, 0, DateTimeKind.Utc);

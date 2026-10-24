@@ -9,6 +9,66 @@ namespace GymFlow.AccessAgent.Tests.Offline;
 
 public class SqliteAccessOfflineStoreTests
 {
+    [Theory]
+    [InlineData(AccessCredentialType.PinExternalId, 6, false)]
+    [InlineData(AccessCredentialType.PinExternalId, 4, true)]
+    [InlineData(AccessCredentialType.PinExternalId, -1, false)]
+    [InlineData(AccessCredentialType.Card, 6, true)]
+    [InlineData(AccessCredentialType.BiometricExternalId, 6, true)]
+    public async Task RestartedStoreCapsLegacyPinWithoutChangingOtherCredentials(
+        AccessCredentialType type, int ageMinutes, bool expectedAvailable)
+    {
+        var databasePath = CreateDatabasePath();
+        try
+        {
+            var now = DateTime.UtcNow;
+            var permission = new CachedAccessPermission("toletus-litenet2",
+                type, "0007", true, "Eligible", now.AddMinutes(20),
+                ageMinutes < 0 ? default : now.AddMinutes(-ageMinutes));
+            await CreateStore(databasePath).UpsertPermissionAsync(permission,
+                CancellationToken.None);
+
+            var restarted = CreateStore(databasePath);
+            var result = await restarted.GetPermissionAsync(permission.ProviderKey,
+                type, permission.ExternalIdentifier, now, CancellationToken.None);
+
+            Assert.Equal(expectedAvailable, result is not null);
+        }
+        finally
+        {
+            Cleanup(databasePath);
+        }
+    }
+
+    [Fact]
+    public async Task RestartedStoreRejectsPinWithoutParseableWriteTimestamp()
+    {
+        var databasePath = CreateDatabasePath();
+        try
+        {
+            var now = DateTime.UtcNow;
+            await CreateStore(databasePath).UpsertPermissionAsync(
+                new CachedAccessPermission("toletus-litenet2",
+                    AccessCredentialType.PinExternalId, "0007", true, "Eligible",
+                    now.AddMinutes(20), now), CancellationToken.None);
+            await using (var connection = new SqliteConnection($"Data Source={databasePath}"))
+            {
+                await connection.OpenAsync();
+                await using var command = connection.CreateCommand();
+                command.CommandText = "UPDATE CachedPermissions SET UpdatedAt = '' WHERE CredentialType = 5";
+                Assert.Equal(1, await command.ExecuteNonQueryAsync());
+            }
+
+            Assert.Null(await CreateStore(databasePath).GetPermissionAsync(
+                "toletus-litenet2", AccessCredentialType.PinExternalId,
+                "0007", now, CancellationToken.None));
+        }
+        finally
+        {
+            Cleanup(databasePath);
+        }
+    }
+
     [Fact]
     public async Task UpsertAndGetPermissionAsync_ReturnsCachedPermission()
     {

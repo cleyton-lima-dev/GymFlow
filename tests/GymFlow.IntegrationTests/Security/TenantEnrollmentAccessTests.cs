@@ -625,6 +625,8 @@ public partial class TenantEnrollmentAccessTests
                 ["Jwt:Issuer"] = "isolated-tests",
                 ["Jwt:Audience"] = "isolated-tests",
                 ["Jwt:ExpirationMinutes"] = "30",
+                ["PhysicalAccess:PinLookupKey"] = Convert.ToBase64String(
+                    Enumerable.Repeat((byte)0xA7, 32).ToArray()),
                 ["ConnectionStrings:DefaultConnection"] = "Host=unused.invalid;Database=unused",
                 ["StudentLifecycle:Enabled"] = "false",
                 // Even a legacy global true must have no effect.

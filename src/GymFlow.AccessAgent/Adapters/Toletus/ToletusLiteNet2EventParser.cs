@@ -57,6 +57,15 @@ public static class ToletusLiteNet2EventParser
         if (string.IsNullOrWhiteSpace(externalIdentifier))
             return false;
 
+        if (credentialType == AccessCredentialType.PinExternalId)
+        {
+            if (externalIdentifier.Length is < 1 or > 4 ||
+                !externalIdentifier.All(character => character is >= '0' and <= '9'))
+                return false;
+
+            externalIdentifier = externalIdentifier.PadLeft(4, '0');
+        }
+
         attempt =
             new DeviceAccessAttempt(
                 Guid.NewGuid(),

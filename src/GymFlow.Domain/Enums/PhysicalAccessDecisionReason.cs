@@ -13,6 +13,7 @@ public enum PhysicalAccessDecisionReason
     FinancialRestriction = 105,
     ManualBlock = 106,
     PlanRestriction = 107,
-    OfflineNoCachedPermission = 108
+    OfflineNoCachedPermission = 108,
+    PinRateLimited = 109
 
 }
