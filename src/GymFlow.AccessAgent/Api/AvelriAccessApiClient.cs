@@ -264,6 +264,7 @@ public class AvelriAccessApiClient :
             106 => "ManualBlock",
             107 => "PlanRestriction",
             108 => "OfflineNoCachedPermission",
+            109 => "PinRateLimited",
             _ => $"Unknown:{reason}"
         };
     }
@@ -284,6 +285,7 @@ public class AvelriAccessApiClient :
             "ManualBlock" => 106,
             "PlanRestriction" => 107,
             "OfflineNoCachedPermission" => 108,
+            "PinRateLimited" => 109,
             _ => throw new InvalidOperationException(
                 $"Motivo de acesso offline desconhecido: {reason}")
         };

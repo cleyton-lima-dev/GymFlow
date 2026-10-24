@@ -107,6 +107,7 @@ public static class AgentPairingBootstrap
     public static async Task<int> RunAsync(
         IAccessAgentPairingClient pairingClient,
         IAgentCredentialStore credentialStore,
+        ILocalAgentStateProbe localStateProbe,
         string? apiBaseUrl,
         CancellationToken cancellationToken)
     {
@@ -148,51 +149,21 @@ public static class AgentPairingBootstrap
             return 1;
         }
 
-        PairAccessAgentResult? result;
-
-        try
-        {
-            result =
-                await pairingClient.PairAsync(
-                    normalizedBaseUrl!,
-                    pairingCode,
-                    machineName,
-                    cancellationToken);
-        }
-        catch (HttpRequestException ex)
-        {
-            Console.WriteLine();
-            Console.WriteLine(
-                $"ERRO: Não foi possível acessar a API: {ex.Message}");
-
-            return 1;
-        }
-
-        if (result is null)
-        {
-            Console.WriteLine();
-            Console.WriteLine(
-                "ERRO: Código inválido, expirado ou já utilizado.");
-
-            return 1;
-        }
-
-        if (!TryCreateCredentials(
-                result,
-                normalizedBaseUrl!,
-                out var credentials,
-                out var credentialsError))
-        {
-            Console.WriteLine();
-            Console.WriteLine(
-                $"ERRO: {credentialsError}");
-
-            return 1;
-        }
-
-        await credentialStore.SaveAsync(
-            credentials!,
+        var outcome = await PairWithCodeAsync(
+            pairingClient,
+            credentialStore,
+            localStateProbe,
+            normalizedBaseUrl!,
+            pairingCode,
+            machineName,
             cancellationToken);
+
+        if (!outcome.Success)
+        {
+            Console.WriteLine();
+            Console.WriteLine($"ERRO: {outcome.Error}");
+            return 1;
+        }
 
         Console.WriteLine();
         Console.WriteLine(
@@ -202,4 +173,123 @@ public static class AgentPairingBootstrap
 
         return 0;
     }
+
+    public static async Task<PairingOutcome> PairWithCodeAsync(
+        IAccessAgentPairingClient pairingClient,
+        IAgentCredentialStore credentialStore,
+        ILocalAgentStateProbe localStateProbe,
+        string apiBaseUrl,
+        string pairingCode,
+        string machineName,
+        CancellationToken cancellationToken)
+    {
+        IDisposable pairingLock;
+        try
+        {
+            pairingLock = localStateProbe.AcquirePairingLock();
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            return PairingOutcome.Fail(
+                "Não foi possível obter acesso exclusivo aos dados locais. O pareamento foi bloqueado.");
+        }
+
+        using var heldPairingLock = pairingLock;
+
+        AgentCredentials? previous;
+
+        try
+        {
+            previous = await credentialStore.LoadAsync(cancellationToken);
+
+            if (previous is null)
+            {
+                if (localStateProbe.HasPotentialLocalState())
+                    return PairingOutcome.Fail(
+                        "Há dados locais sem identidade verificável. O pareamento foi bloqueado para proteger o tenant anterior.");
+            }
+            else if (!HasValidIdentity(previous))
+            {
+                return PairingOutcome.Fail(
+                    "A identidade local anterior é inválida. O pareamento foi bloqueado.");
+            }
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            return PairingOutcome.Fail(
+                "Não foi possível verificar a identidade local anterior. O pareamento foi bloqueado.");
+        }
+
+        PairAccessAgentResult? result;
+        try
+        {
+            result = await pairingClient.PairAsync(
+                apiBaseUrl,
+                pairingCode,
+                machineName,
+                cancellationToken);
+        }
+        catch (HttpRequestException)
+        {
+            return PairingOutcome.Fail("Não foi possível acessar a API.");
+        }
+
+        if (result is null)
+            return PairingOutcome.Fail("Código inválido, expirado ou já utilizado.");
+
+        if (!TryCreateCredentials(
+                result,
+                apiBaseUrl,
+                out var credentials,
+                out var credentialsError))
+        {
+            return PairingOutcome.Fail(credentialsError!);
+        }
+
+        if (previous is not null && previous.GymId != credentials!.GymId)
+        {
+            return PairingOutcome.Fail(
+                "O código pertence a outra academia. A credencial e os dados locais anteriores foram preservados.");
+        }
+
+        try
+        {
+            // Reject an identity changed while the pairing request was in flight.
+            var current = await credentialStore.LoadAsync(cancellationToken);
+            if (current != previous ||
+                (current is null && localStateProbe.HasPotentialLocalState()))
+            {
+                return PairingOutcome.Fail(
+                    "A identidade local mudou durante o pareamento. Nenhuma credencial foi substituída.");
+            }
+
+            await credentialStore.SaveAsync(
+                credentials!,
+                cancellationToken);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            return PairingOutcome.Fail(
+                "Não foi possível gravar a credencial com segurança. O serviço deve permanecer parado.");
+        }
+
+        return PairingOutcome.Ok();
+    }
+
+    private static bool HasValidIdentity(AgentCredentials credentials)
+    {
+        return credentials.AgentId != Guid.Empty &&
+               credentials.GymId != Guid.Empty &&
+               !string.IsNullOrWhiteSpace(credentials.Secret) &&
+               TryValidateApiBaseUrl(
+                   credentials.ApiBaseUrl,
+                   out _,
+                   out _);
+    }
+}
+
+public sealed record PairingOutcome(bool Success, string? Error)
+{
+    public static PairingOutcome Ok() => new(true, null);
+    public static PairingOutcome Fail(string error) => new(false, error);
 }

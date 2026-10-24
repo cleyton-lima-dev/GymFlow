@@ -1,5 +1,6 @@
 ﻿using GymFlow.Application.DTOs.PhysicalAccess;
 using GymFlow.Application.Interfaces.Repositories;
+using GymFlow.Application.Interfaces.Security;
 using GymFlow.Application.Services;
 using GymFlow.Domain.Entities;
 using GymFlow.Domain.Enums;
@@ -29,7 +30,8 @@ public class PhysicalAccessCredentialServiceTests
         _service =
             new PhysicalAccessCredentialService(
                 _credentialRepository,
-                _studentRepository);
+                _studentRepository,
+                Substitute.For<IPhysicalAccessPinProtector>());
     }
 
     [Fact]

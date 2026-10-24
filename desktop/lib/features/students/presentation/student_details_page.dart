@@ -596,6 +596,31 @@ class _StudentDetailsView extends StatelessWidget {
               onAddCredential: () {
                 _showAddPhysicalAccessCredentialDialog(context, viewModel);
               },
+              onIssuePin: () async {
+                final pin = await viewModel.issuePhysicalAccessPin();
+                if (!context.mounted || pin == null) return;
+                await showDialog<void>(
+                  context: context,
+                  builder: (dialogContext) => AlertDialog(
+                    title: const Text('PIN emitido'),
+                    content: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('Anote o PIN agora. Ele não poderá ser consultado depois.'),
+                        const SizedBox(height: 16),
+                        SelectableText(pin, style: const TextStyle(fontSize: 28)),
+                      ],
+                    ),
+                    actions: [
+                      FilledButton(
+                        onPressed: () => Navigator.of(dialogContext).pop(),
+                        child: const Text('Concluir'),
+                      ),
+                    ],
+                  ),
+                );
+              },
 
               onToggleCredential: (credential) async {
                 final success = await viewModel
@@ -691,7 +716,6 @@ class _StudentDetailsView extends StatelessWidget {
                           value: 4,
                           child: Text('Reconhecimento facial'),
                         ),
-                        DropdownMenuItem(value: 5, child: Text('PIN')),
                         DropdownMenuItem(value: 99, child: Text('Outro')),
                       ],
                       onChanged: (value) {

@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Net;
 using GymFlow.AccessAgent.Abstractions;
 using GymFlow.AccessAgent.Api;
+using GymFlow.AccessAgent.Offline;
 using GymFlow.AccessAgent.Services;
 using Microsoft.Extensions.Options;
 using Toletus.LiteNet2;
@@ -26,6 +27,9 @@ public sealed class ToletusLiteNet2Adapter :
 
     private readonly IAccessReleaseControl
         _releaseControl;
+
+    private readonly PhysicalPassageConfirmationCoordinator
+        _passageConfirmation;
 
     private readonly SemaphoreSlim _processingLock =
         new(1, 1);
@@ -55,11 +59,17 @@ public sealed class ToletusLiteNet2Adapter :
     public ToletusLiteNet2Adapter(
         IOptions<ToletusLiteNet2Options> options,
         ILogger<ToletusLiteNet2Adapter> logger,
-        IAccessReleaseControl releaseControl)
+        IAccessReleaseControl releaseControl,
+        IPhysicalPassageOfflineStore passageStore,
+        TimeProvider clock)
     {
         _options = options.Value;
         _logger = logger;
         _releaseControl = releaseControl;
+        _passageConfirmation = new PhysicalPassageConfirmationCoordinator(
+            passageStore,
+            clock,
+            _options.EnablePhysicalPassageConfirmation);
     }
 
     public string ProviderKey =>
@@ -223,6 +233,12 @@ public sealed class ToletusLiteNet2Adapter :
                     board.OnIdentification +=
                         BoardOnIdentification;
 
+                    if (_options.EnablePhysicalPassageConfirmation)
+                    {
+                        board.OnGyre += BoardOnGyre;
+                        board.OnResponse += BoardOnResponse;
+                    }
+
                     _logger.LogInformation(
                         "Conectando à Toletus LiteNet2 em {Host}:{Port}.",
                         configuration.Host,
@@ -303,6 +319,10 @@ public sealed class ToletusLiteNet2Adapter :
                         board.OnIdentification -=
                             BoardOnIdentification;
 
+                        board.OnGyre -= BoardOnGyre;
+                        board.OnResponse -= BoardOnResponse;
+                        _passageConfirmation.ClearForDevice(board);
+
                         if (board.Connected)
                         {
                             board.Close();
@@ -372,8 +392,33 @@ public sealed class ToletusLiteNet2Adapter :
                 "A conexão com a LiteNet2 foi perdida.");
         }
 
-        board.ReleaseEntryAndExit(
-            "ACESSO LIBERADO");
+        if (_options.EnablePhysicalPassageConfirmation)
+        {
+            var deviceKey = GetConfiguredDeviceKey();
+            if (!_passageConfirmation.TryArm(
+                    board,
+                    deviceKey,
+                    attempt.RequestId,
+                    DateTime.UtcNow))
+            {
+                _logger.LogWarning(
+                    "Acesso autorizado, mas a liberação foi retida enquanto outra passagem aguarda confirmação física. RequestId: {RequestId}, DeviceKey: {DeviceKey}.",
+                    attempt.RequestId,
+                    deviceKey);
+                return;
+            }
+        }
+
+        try
+        {
+            board.ReleaseEntryAndExit(
+                "ACESSO LIBERADO");
+        }
+        catch
+        {
+            _passageConfirmation.Cancel(attempt.RequestId);
+            throw;
+        }
     }
 
     private async Task<AgentDeviceConfiguration?>
@@ -454,6 +499,69 @@ public sealed class ToletusLiteNet2Adapter :
             _stoppingToken);
     }
 
+    private void BoardOnGyre(
+        LiteNet2Board board,
+        Direction direction)
+    {
+        if (direction is not (Direction.Entry or Direction.Exit) ||
+            !ReferenceEquals(_board, board))
+            return;
+
+        var deviceKey = GetConfiguredDeviceKey();
+        _ = RecordPhysicalPassageAsync(board, deviceKey);
+    }
+
+    private async Task RecordPhysicalPassageAsync(
+        LiteNet2Board board,
+        string deviceKey)
+    {
+        try
+        {
+            var occurredAt = DateTime.UtcNow;
+            if (!await _passageConfirmation.ConfirmAsync(
+                    board,
+                    deviceKey,
+                    occurredAt,
+                    _stoppingToken))
+                return;
+
+            _logger.LogInformation(
+                "Passagem física confirmada pelo callback OnGyre da LiteNet2. DeviceKey: {DeviceKey}, OccurredAt: {OccurredAt}.",
+                deviceKey,
+                occurredAt);
+        }
+        catch (OperationCanceledException)
+            when (_stoppingToken.IsCancellationRequested)
+        {
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(
+                ex,
+                "Falha ao persistir confirmação de passagem física. DeviceKey: {DeviceKey}.",
+                deviceKey);
+        }
+    }
+
+    private void BoardOnResponse(
+        LiteNet2Board board,
+        LiteNet2Response response)
+    {
+        if (ReferenceEquals(_board, board) &&
+            response.Command == LiteNet2Commands.GyreTimeout)
+            _passageConfirmation.HandleReleaseTimeout(board);
+    }
+
+    private string GetConfiguredDeviceKey()
+    {
+        lock (_statusLock)
+        {
+            return string.IsNullOrWhiteSpace(_activeConfiguration?.DeviceKey)
+                ? "primary"
+                : _activeConfiguration.DeviceKey.Trim();
+        }
+    }
+
     private void RecordCredentialRead(
         DeviceAccessAttempt attempt)
     {
@@ -531,10 +639,14 @@ public sealed class ToletusLiteNet2Adapter :
         if (credentialType is null)
             return false;
 
+        if (credentialType == AccessCredentialType.PinExternalId &&
+            identification.Data > 9999)
+            return false;
+
         var externalIdentifier =
-            Convert.ToString(
-                identification.Data,
-                CultureInfo.InvariantCulture);
+            credentialType == AccessCredentialType.PinExternalId
+                ? identification.Data.ToString("D4", CultureInfo.InvariantCulture)
+                : Convert.ToString(identification.Data, CultureInfo.InvariantCulture);
 
         if (string.IsNullOrWhiteSpace(
                 externalIdentifier))
@@ -555,6 +667,7 @@ public sealed class ToletusLiteNet2Adapter :
     public void Dispose()
     {
         _connected = false;
+        _passageConfirmation.Clear();
 
         if (_board?.Connected == true)
         {

@@ -80,8 +80,10 @@ public class PhysicalAccessCredentialRepository
     public async Task UpdateAsync(
         PhysicalAccessCredential credential)
     {
-        _context.PhysicalAccessCredentials
-            .Update(credential);
+        // Update the credential row only. Student may have been loaded with
+        // AsNoTracking by the issuance flow; attaching its graph here can
+        // conflict with the already tracked student in this request.
+        _context.Entry(credential).State = EntityState.Modified;
 
         await _context.SaveChangesAsync();
     }

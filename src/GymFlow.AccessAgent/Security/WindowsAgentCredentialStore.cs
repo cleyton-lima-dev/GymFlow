@@ -30,6 +30,11 @@ public class WindowsAgentCredentialStore : IAgentCredentialStore
                 "credentials.dat");
     }
 
+    internal WindowsAgentCredentialStore(string filePath)
+    {
+        _filePath = filePath;
+    }
+
     public async Task SaveAsync(
         AgentCredentials credentials,
         CancellationToken cancellationToken)
@@ -53,10 +58,40 @@ public class WindowsAgentCredentialStore : IAgentCredentialStore
                 Entropy,
                 DataProtectionScope.LocalMachine);
 
-        await File.WriteAllBytesAsync(
-            _filePath,
-            protectedBytes,
-            cancellationToken);
+        var temporaryPath =
+            Path.Combine(
+                directory,
+                $"credentials.{Guid.NewGuid():N}.tmp");
+
+        try
+        {
+            await using (var stream = new FileStream(
+                temporaryPath,
+                FileMode.CreateNew,
+                FileAccess.Write,
+                FileShare.None,
+                4096,
+                FileOptions.WriteThrough))
+            {
+                await stream.WriteAsync(
+                    protectedBytes,
+                    cancellationToken);
+
+                await stream.FlushAsync(
+                    cancellationToken);
+            }
+
+            if (File.Exists(_filePath))
+                File.Replace(temporaryPath, _filePath, null);
+            else
+                File.Move(temporaryPath, _filePath);
+        }
+        finally
+        {
+            // Only a temporary file created by this write may be removed.
+            if (File.Exists(temporaryPath))
+                File.Delete(temporaryPath);
+        }
     }
 
     public async Task<AgentCredentials?> LoadAsync(

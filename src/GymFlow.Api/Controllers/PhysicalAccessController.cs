@@ -79,6 +79,11 @@ public class PhysicalAccessController : ControllerBase
                 message = ex.Message
             });
         }
+        catch (InvalidOperationException)
+        {
+            return StatusCode(StatusCodes.Status503ServiceUnavailable,
+                new { message = "Decisão de PIN indisponível." });
+        }
     }
 
     private bool TryGetGymId(out Guid gymId)

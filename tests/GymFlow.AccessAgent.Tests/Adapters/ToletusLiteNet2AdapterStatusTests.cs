@@ -1,6 +1,7 @@
 ﻿using GymFlow.AccessAgent.Abstractions;
 using GymFlow.AccessAgent.Adapters.Toletus;
 using GymFlow.AccessAgent.Api;
+using GymFlow.AccessAgent.Offline;
 using GymFlow.AccessAgent.Services;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
@@ -137,6 +138,8 @@ public class ToletusLiteNet2AdapterStatusTests
             NullLogger<
                 ToletusLiteNet2Adapter>
                 .Instance,
-            releaseControl);
+            releaseControl,
+            Substitute.For<IPhysicalPassageOfflineStore>(),
+            TimeProvider.System);
     }
 }

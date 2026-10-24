@@ -43,6 +43,11 @@ public class AccessAgentPhysicalAccessController : ControllerBase
                 message = ex.Message
             });
         }
+        catch (InvalidOperationException)
+        {
+            return StatusCode(StatusCodes.Status503ServiceUnavailable,
+                new { message = "Decisão de PIN indisponível." });
+        }
     }
 
     [HttpPost("offline-events")]

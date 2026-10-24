@@ -11,6 +11,7 @@ class StudentPhysicalAccessSection extends StatelessWidget {
     required this.primaryColor,
     required this.onRefresh,
     required this.onAddCredential,
+    required this.onIssuePin,
     required this.onToggleCredential,
     required this.onAllowAccess,
     required this.onBlockAccess,
@@ -26,6 +27,7 @@ class StudentPhysicalAccessSection extends StatelessWidget {
 
   final Future<void> Function() onRefresh;
   final VoidCallback onAddCredential;
+  final VoidCallback onIssuePin;
 
   final Future<void> Function(
       PhysicalAccessCredential credential,
@@ -148,6 +150,12 @@ class StudentPhysicalAccessSection extends StatelessWidget {
                 label: const Text(
                   'Adicionar credencial',
                 ),
+              ),
+              OutlinedButton.icon(
+                onPressed: isLoading ? null : onIssuePin,
+                icon: const Icon(Icons.pin_outlined, size: 18),
+                label: Text(credentials.any((item) => item.type == 5)
+                    ? 'Redefinir PIN' : 'Gerar PIN'),
               ),
             ],
           ),
@@ -332,6 +340,7 @@ class _CredentialCard extends StatelessWidget {
   static String _providerLabel(String providerKey) {
     return switch (providerKey.toLowerCase()) {
       'toletus' => 'Toletus',
+      'toletus-litenet2' => 'Toletus LiteNet2',
       'controlid' => 'Control iD',
       'henry' => 'Henry',
       _ => providerKey,
@@ -386,13 +395,22 @@ class _CredentialCard extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 2),
-                Text(
-                  'Identificador técnico: ${credential.externalIdentifier}',
-                  style: TextStyle(
-                    color: colorScheme.onSurfaceVariant,
-                    fontSize: 11,
+                if (credential.type != 5)
+                  Text(
+                    'Identificador técnico: ${credential.externalIdentifier}',
+                    style: TextStyle(
+                      color: colorScheme.onSurfaceVariant,
+                      fontSize: 11,
+                    ),
+                  )
+                else
+                  Text(
+                    'O PIN é exibido somente na emissão ou redefinição.',
+                    style: TextStyle(
+                      color: colorScheme.onSurfaceVariant,
+                      fontSize: 11,
+                    ),
                   ),
-                ),
               ],
             ),
           ),
