@@ -102,6 +102,191 @@ public partial class TenantEnrollmentAccessTests
 
     [PostgresTheory]
     [InlineData(true)]
+    public async Task PostgreSql_CheckInAndPhysicalEventHistories_PaginateFilterAndIsolateTenants(bool postgres)
+    {
+        await using var factory = new TestApi(postgres);
+        var adminA = factory.AddUser(factory.LegacyGym, UserRole.Admin);
+        var studentA1 = factory.AddUser(factory.LegacyGym);
+        var studentA2 = factory.AddUser(factory.LegacyGym);
+        var adminB = factory.AddUser(factory.EnabledGym, UserRole.Admin);
+        var studentB = factory.AddUser(factory.EnabledGym);
+        Guid studentA1Id = default, studentA2Id = default, studentBId = default;
+        factory.WithDb(db =>
+        {
+            studentA1Id = db.Students.Single(student => student.UserId == studentA1.Id).Id;
+            studentA2Id = db.Students.Single(student => student.UserId == studentA2.Id).Id;
+            studentBId = db.Students.Single(student => student.UserId == studentB.Id).Id;
+        });
+
+        var baseline = new DateTime(2026, 10, 1, 0, 0, 0, DateTimeKind.Utc);
+        var checkInsA = Enumerable.Range(0, 45).Select(index =>
+        {
+            var occurredAt = baseline.AddHours(index);
+            return new CheckIn
+            {
+                Id = Guid.NewGuid(), GymId = factory.LegacyGym,
+                StudentId = index % 2 == 0 ? studentA1Id : studentA2Id,
+                RequestId = Guid.NewGuid(), Source = CheckInSource.Manual,
+                RecordedByUserId = adminA.Id, OccurredAt = occurredAt, CreatedAt = occurredAt
+            };
+        }).ToList();
+        var eventsA = Enumerable.Range(0, 45).Select(index =>
+        {
+            var occurredAt = baseline.AddHours(index);
+            var decision = index % 2 == 0
+                ? PhysicalAccessDecision.Allowed
+                : PhysicalAccessDecision.Denied;
+            return new PhysicalAccessEvent
+            {
+                Id = Guid.NewGuid(), GymId = factory.LegacyGym, RequestId = Guid.NewGuid(),
+                StudentId = index % 2 == 0 ? studentA1Id : studentA2Id,
+                Decision = decision,
+                Reason = decision == PhysicalAccessDecision.Allowed
+                    ? PhysicalAccessDecisionReason.Eligible
+                    : PhysicalAccessDecisionReason.CredentialNotFound,
+                Source = (PhysicalAccessDecisionSource)(index % 3 + 1),
+                OccurredAt = occurredAt, ProcessedAt = occurredAt
+            };
+        }).ToList();
+        var checkInsB = Enumerable.Range(0, 3).Select(index => new CheckIn
+        {
+            Id = Guid.NewGuid(), GymId = factory.EnabledGym, StudentId = studentBId,
+            RequestId = Guid.NewGuid(), Source = CheckInSource.Manual,
+            RecordedByUserId = adminB.Id, OccurredAt = baseline.AddHours(index),
+            CreatedAt = baseline.AddHours(index)
+        }).ToList();
+        var eventsB = Enumerable.Range(0, 3).Select(index => new PhysicalAccessEvent
+        {
+            Id = Guid.NewGuid(), GymId = factory.EnabledGym, RequestId = Guid.NewGuid(),
+            StudentId = studentBId, Decision = PhysicalAccessDecision.Allowed,
+            Reason = PhysicalAccessDecisionReason.Eligible,
+            Source = PhysicalAccessDecisionSource.Online,
+            OccurredAt = baseline.AddHours(index), ProcessedAt = baseline.AddHours(index)
+        }).ToList();
+        factory.WithDb(db =>
+        {
+            db.CheckIns.AddRange(checkInsA.Concat(checkInsB));
+            db.PhysicalAccessEvents.AddRange(eventsA.Concat(eventsB));
+        });
+
+        using var client = factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new("Bearer", factory.Token(adminA));
+
+        static async Task<JsonElement> GetPage(HttpClient http, string endpoint, int page)
+        {
+            using var response = await http.GetAsync($"{endpoint}?page={page}&pageSize=20");
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            return (await response.Content.ReadFromJsonAsync<JsonElement>()).Clone();
+        }
+
+        static Guid[] ItemIds(JsonElement page) => page.GetProperty("items")
+            .EnumerateArray().Select(item => item.GetProperty("id").GetGuid()).ToArray();
+
+        static void AssertThreePages(JsonElement page, int expectedPage)
+        {
+            Assert.Equal(expectedPage, page.GetProperty("page").GetInt32());
+            Assert.Equal(20, page.GetProperty("pageSize").GetInt32());
+            Assert.Equal(45, page.GetProperty("totalCount").GetInt32());
+            Assert.Equal(3, page.GetProperty("totalPages").GetInt32());
+        }
+
+        var checkInPages = new[]
+        {
+            await GetPage(client, "/api/check-ins", 1),
+            await GetPage(client, "/api/check-ins", 2),
+            await GetPage(client, "/api/check-ins", 3)
+        };
+        var checkInIds = new List<Guid>();
+        for (var index = 0; index < checkInPages.Length; index++)
+        {
+            AssertThreePages(checkInPages[index], index + 1);
+            checkInIds.AddRange(ItemIds(checkInPages[index]));
+        }
+        var expectedCheckInIds = checkInsA.OrderByDescending(item => item.OccurredAt)
+            .Select(item => item.Id).ToArray();
+        Assert.Equal(expectedCheckInIds, checkInIds);
+        Assert.Equal(45, checkInIds.Distinct().Count());
+
+        var eventPages = new[]
+        {
+            await GetPage(client, "/api/physical-access/events", 1),
+            await GetPage(client, "/api/physical-access/events", 2),
+            await GetPage(client, "/api/physical-access/events", 3)
+        };
+        var eventIds = new List<Guid>();
+        for (var index = 0; index < eventPages.Length; index++)
+        {
+            AssertThreePages(eventPages[index], index + 1);
+            eventIds.AddRange(ItemIds(eventPages[index]));
+        }
+        var expectedEventIds = eventsA.OrderByDescending(item => item.OccurredAt)
+            .Select(item => item.Id).ToArray();
+        Assert.Equal(expectedEventIds, eventIds);
+        Assert.Equal(45, eventIds.Distinct().Count());
+
+        using var checkInFilterResponse = await client.GetAsync(
+            $"/api/check-ins?studentId={studentA1Id}&fromDate=2026-10-02&toDate=2026-10-03&page=1&pageSize=100");
+        Assert.Equal(HttpStatusCode.OK, checkInFilterResponse.StatusCode);
+        var checkInFilter = await checkInFilterResponse.Content.ReadFromJsonAsync<JsonElement>();
+        var expectedFilteredCheckIns = checkInsA.Where(item => item.StudentId == studentA1Id &&
+                item.OccurredAt >= new DateTime(2026, 10, 2, 0, 0, 0, DateTimeKind.Utc) &&
+                item.OccurredAt < new DateTime(2026, 10, 4, 0, 0, 0, DateTimeKind.Utc))
+            .OrderByDescending(item => item.OccurredAt).Select(item => item.Id).ToArray();
+        Assert.Equal(expectedFilteredCheckIns, ItemIds(checkInFilter));
+        Assert.Equal(expectedFilteredCheckIns.Length, checkInFilter.GetProperty("totalCount").GetInt32());
+
+        using var eventFilterResponse = await client.GetAsync(
+            $"/api/physical-access/events?studentId={studentA2Id}&decision=2&source=2&fromDate=2026-10-02&toDate=2026-10-03&page=1&pageSize=100");
+        Assert.Equal(HttpStatusCode.OK, eventFilterResponse.StatusCode);
+        var eventFilter = await eventFilterResponse.Content.ReadFromJsonAsync<JsonElement>();
+        var expectedFilteredEvents = eventsA.Where(item => item.StudentId == studentA2Id &&
+                item.Decision == PhysicalAccessDecision.Denied &&
+                item.Source == PhysicalAccessDecisionSource.OfflineCache &&
+                item.OccurredAt >= new DateTime(2026, 10, 2, 0, 0, 0, DateTimeKind.Utc) &&
+                item.OccurredAt < new DateTime(2026, 10, 4, 0, 0, 0, DateTimeKind.Utc))
+            .OrderByDescending(item => item.OccurredAt).Select(item => item.Id).ToArray();
+        Assert.NotEmpty(expectedFilteredEvents);
+        Assert.Equal(expectedFilteredEvents, ItemIds(eventFilter));
+        Assert.Equal(expectedFilteredEvents.Length, eventFilter.GetProperty("totalCount").GetInt32());
+
+        client.DefaultRequestHeaders.Authorization = new("Bearer", factory.Token(adminB));
+        var checkInsInOtherGym = await GetPage(client, "/api/check-ins", 1);
+        var eventsInOtherGym = await GetPage(client, "/api/physical-access/events", 1);
+        Assert.Equal(3, checkInsInOtherGym.GetProperty("totalCount").GetInt32());
+        Assert.Equal(3, eventsInOtherGym.GetProperty("totalCount").GetInt32());
+        Assert.All(ItemIds(checkInsInOtherGym), id => Assert.Contains(id, checkInsB.Select(item => item.Id)));
+        Assert.All(ItemIds(eventsInOtherGym), id => Assert.Contains(id, eventsB.Select(item => item.Id)));
+
+        client.DefaultRequestHeaders.Authorization = new("Bearer", factory.Token(adminA));
+        var checkInPageBeforeInsert = await GetPage(client, "/api/check-ins", 1);
+        var eventPageBeforeInsert = await GetPage(client, "/api/physical-access/events", 1);
+        factory.WithDb(db =>
+        {
+            var insertedAt = baseline.AddDays(10);
+            db.CheckIns.Add(new CheckIn
+            {
+                Id = Guid.NewGuid(), GymId = factory.LegacyGym, StudentId = studentA1Id,
+                RequestId = Guid.NewGuid(), Source = CheckInSource.Manual,
+                RecordedByUserId = adminA.Id, OccurredAt = insertedAt, CreatedAt = insertedAt
+            });
+            db.PhysicalAccessEvents.Add(new PhysicalAccessEvent
+            {
+                Id = Guid.NewGuid(), GymId = factory.LegacyGym, RequestId = Guid.NewGuid(),
+                StudentId = studentA1Id, Decision = PhysicalAccessDecision.Allowed,
+                Reason = PhysicalAccessDecisionReason.Eligible,
+                Source = PhysicalAccessDecisionSource.Online,
+                OccurredAt = insertedAt, ProcessedAt = insertedAt
+            });
+        });
+        var shiftedCheckInPage2 = await GetPage(client, "/api/check-ins", 2);
+        var shiftedEventPage2 = await GetPage(client, "/api/physical-access/events", 2);
+        // A new record before the current offset can repeat the old page boundary.
+        Assert.Equal(ItemIds(checkInPageBeforeInsert)[^1], ItemIds(shiftedCheckInPage2)[0]);
+        Assert.Equal(ItemIds(eventPageBeforeInsert)[^1], ItemIds(shiftedEventPage2)[0]);
+    }
+
+    [PostgresTheory]
+    [InlineData(true)]
     public async Task PostgreSql_ConcurrentManualRetries_RecordOneCheckIn(bool postgres)
     {
         await using var factory = new TestApi(postgres);
@@ -111,6 +296,7 @@ public partial class TenantEnrollmentAccessTests
         factory.WithDb(db => studentId = db.Students.Single(s => s.UserId == student.Id).Id);
         using var client = factory.CreateClient();
         client.DefaultRequestHeaders.Authorization = new("Bearer", factory.Token(admin));
+        SynchronizeNextTwoSaves(factory);
         var request = new { studentId, requestId = Guid.NewGuid() };
         var responses = await Task.WhenAll(Enumerable.Range(0, 8).Select(_ =>
             client.PostAsJsonAsync("/api/check-ins/manual", request)));
@@ -131,6 +317,144 @@ public partial class TenantEnrollmentAccessTests
             Assert.Equal(factory.LegacyGym, checkIn.GymId);
             Assert.Equal(studentId, checkIn.StudentId);
         });
+    }
+
+    [PostgresTheory]
+    [InlineData(true)]
+    public async Task PostgreSql_ConcurrentManualRequestsWithSameRequestIdAndDifferentStudents_Conflict(bool postgres)
+    {
+        await using var factory = new TestApi(postgres);
+        var admin = factory.AddUser(factory.LegacyGym, UserRole.Admin);
+        var firstStudent = factory.AddUser(factory.LegacyGym);
+        var secondStudent = factory.AddUser(factory.LegacyGym);
+        Guid firstStudentId = default, secondStudentId = default;
+        factory.WithDb(db =>
+        {
+            firstStudentId = db.Students.Single(s => s.UserId == firstStudent.Id).Id;
+            secondStudentId = db.Students.Single(s => s.UserId == secondStudent.Id).Id;
+        });
+
+        using var client = factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new("Bearer", factory.Token(admin));
+        var requestId = Guid.NewGuid();
+        SynchronizeNextTwoSaves(factory);
+        var responses = await Task.WhenAll(
+            client.PostAsJsonAsync("/api/check-ins/manual", new { studentId = firstStudentId, requestId }),
+            client.PostAsJsonAsync("/api/check-ins/manual", new { studentId = secondStudentId, requestId }));
+
+        try
+        {
+            Assert.Equal(1, responses.Count(response => response.StatusCode == HttpStatusCode.OK));
+            Assert.Equal(1, responses.Count(response => response.StatusCode == HttpStatusCode.Conflict));
+            var successful = Assert.Single(responses, response => response.StatusCode == HttpStatusCode.OK);
+            var persistedStudentId = (await successful.Content.ReadFromJsonAsync<JsonElement>())
+                .GetProperty("studentId").GetGuid();
+            Assert.Contains(persistedStudentId, new[] { firstStudentId, secondStudentId });
+            factory.WithDb(db =>
+            {
+                var checkIn = Assert.Single(db.CheckIns);
+                Assert.Equal(factory.LegacyGym, checkIn.GymId);
+                Assert.Equal(requestId, checkIn.RequestId);
+                Assert.Equal(persistedStudentId, checkIn.StudentId);
+                Assert.Equal(CheckInSource.Manual, checkIn.Source);
+            });
+        }
+        finally
+        {
+            foreach (var response in responses) response.Dispose();
+        }
+    }
+
+    [PostgresTheory]
+    [InlineData(true)]
+    public async Task PostgreSql_ConcurrentManualAndPhysicalRequestsWithSameRequestId_ConflictWithoutCrossLinking(bool postgres)
+    {
+        await using var factory = new TestApi(postgres);
+        var admin = factory.AddUser(factory.LegacyGym, UserRole.Admin);
+        var manualStudent = factory.AddUser(factory.LegacyGym);
+        var physicalStudent = factory.AddUser(factory.LegacyGym);
+        Guid manualStudentId = default, physicalStudentId = default;
+        factory.WithDb(db =>
+        {
+            manualStudentId = db.Students.Single(s => s.UserId == manualStudent.Id).Id;
+            physicalStudentId = db.Students.Single(s => s.UserId == physicalStudent.Id).Id;
+        });
+
+        var requestId = Guid.NewGuid();
+        var occurredAt = DateTime.UtcNow;
+        var agent = new AccessAgent
+        {
+            Id = Guid.NewGuid(), GymId = factory.LegacyGym, Name = "Synthetic race agent",
+            MachineName = "isolated-test", SecretHash = "unused", CredentialVersion = 1
+        };
+        var accessEvent = new PhysicalAccessEvent
+        {
+            Id = Guid.NewGuid(), GymId = factory.LegacyGym, RequestId = requestId,
+            StudentId = physicalStudentId, Decision = PhysicalAccessDecision.Allowed,
+            Reason = PhysicalAccessDecisionReason.Eligible, OccurredAt = occurredAt
+        };
+        factory.WithDb(db =>
+        {
+            db.AccessAgents.Add(agent);
+            db.PhysicalAccessEvents.Add(accessEvent);
+        });
+
+        using var manualClient = factory.CreateClient();
+        manualClient.DefaultRequestHeaders.Authorization = new("Bearer", factory.Token(admin));
+        using var agentScope = factory.Services.CreateScope();
+        using var physicalClient = factory.CreateClient();
+        physicalClient.DefaultRequestHeaders.Authorization = new("Bearer",
+            agentScope.ServiceProvider.GetRequiredService<IAccessAgentTokenService>().GenerateToken(agent));
+
+        SynchronizeNextTwoSaves(factory);
+        var responses = await Task.WhenAll(
+            manualClient.PostAsJsonAsync("/api/check-ins/manual",
+                new { studentId = manualStudentId, requestId }),
+            physicalClient.PostAsJsonAsync("/api/access-agent/check-ins/physical-passage",
+                new { requestId, occurredAt }));
+
+        try
+        {
+            Assert.Equal(1, responses.Count(response => response.StatusCode == HttpStatusCode.OK));
+            Assert.Equal(1, responses.Count(response => response.StatusCode == HttpStatusCode.Conflict));
+            var successful = Assert.Single(responses, response => response.StatusCode == HttpStatusCode.OK);
+            var responseBody = await successful.Content.ReadFromJsonAsync<JsonElement>();
+            var persistedId = responseBody.GetProperty("id").GetGuid();
+            factory.WithDb(db =>
+            {
+                var checkIn = Assert.Single(db.CheckIns);
+                Assert.Equal(persistedId, checkIn.Id);
+                Assert.Equal(factory.LegacyGym, checkIn.GymId);
+                Assert.Equal(requestId, checkIn.RequestId);
+                if (checkIn.Source == CheckInSource.Manual)
+                {
+                    Assert.Equal(manualStudentId, checkIn.StudentId);
+                    Assert.Null(checkIn.PhysicalAccessEventId);
+                }
+                else
+                {
+                    Assert.Equal(CheckInSource.PhysicalAccess, checkIn.Source);
+                    Assert.Equal(physicalStudentId, checkIn.StudentId);
+                    Assert.Equal(accessEvent.Id, checkIn.PhysicalAccessEventId);
+                }
+            });
+        }
+        finally
+        {
+            foreach (var response in responses) response.Dispose();
+        }
+    }
+
+    private static void SynchronizeNextTwoSaves(TestApi factory)
+    {
+        var arrived = 0;
+        var barrier = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        factory.BeforeEveryAsyncSave = async _ =>
+        {
+            if (Interlocked.Increment(ref arrived) == 2)
+                barrier.TrySetResult(true);
+            await barrier.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        };
     }
 
     private static async Task CheckIntegratedAdmin(bool postgres)
@@ -170,7 +494,10 @@ public partial class TenantEnrollmentAccessTests
 
         var otherAdmin = factory.AddUser(factory.EnabledGym, UserRole.Admin);
         client.DefaultRequestHeaders.Authorization = new("Bearer", factory.Token(otherAdmin));
-        Assert.Equal(0, (await client.GetFromJsonAsync<JsonElement>("/api/check-ins")).GetProperty("totalCount").GetInt32());
+        var sameRequestIdInOtherGym = await client.PostAsJsonAsync("/api/check-ins/manual",
+            new { studentId = foreignId, request.requestId });
+        Assert.Equal(HttpStatusCode.OK, sameRequestIdInOtherGym.StatusCode);
+        Assert.Equal(1, (await client.GetFromJsonAsync<JsonElement>("/api/check-ins")).GetProperty("totalCount").GetInt32());
     }
 
     [Fact]

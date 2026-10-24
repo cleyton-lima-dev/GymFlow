@@ -605,6 +605,7 @@ public partial class TenantEnrollmentAccessTests
         public string EnabledFlag { get; init; } = "true";
         public IGymErpPolicy? ErpPolicyOverride { get; init; }
         public Func<AppDbContext, Task>? BeforeNextAsyncSave { get; set; }
+        public Func<AppDbContext, Task>? BeforeEveryAsyncSave { get; set; }
         public Func<AppDbContext, Task>? BeforeNextTransaction { get; set; }
         public Action<AppDbContext>? AfterNextAsyncSave { get; set; }
         private const string SqliteConnectionString = "Data Source=TenantEnrollmentAccessTests;Mode=Memory;Cache=Shared";
@@ -798,6 +799,10 @@ public partial class TenantEnrollmentAccessTests
             public override async ValueTask<InterceptionResult<int>> SavingChangesAsync(
                 DbContextEventData eventData, InterceptionResult<int> result, CancellationToken cancellationToken = default)
             {
+                var everySaveCallback = factory.BeforeEveryAsyncSave;
+                if (everySaveCallback is not null)
+                    await everySaveCallback((AppDbContext)eventData.Context!);
+
                 var callback = factory.BeforeNextAsyncSave;
                 factory.BeforeNextAsyncSave = null;
                 if (callback is not null) await callback((AppDbContext)eventData.Context!);
