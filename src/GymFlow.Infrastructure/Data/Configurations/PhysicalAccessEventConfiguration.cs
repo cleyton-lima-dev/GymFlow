@@ -20,6 +20,17 @@ public class PhysicalAccessEventConfiguration
         builder.Property(accessEvent => accessEvent.RequestId)
             .IsRequired();
 
+        builder.Property(accessEvent => accessEvent.AccessAgentId)
+            .IsRequired(false);
+
+        builder.Property(accessEvent => accessEvent.DeviceKey)
+            .HasMaxLength(100)
+            .IsRequired(false);
+
+        builder.Property(accessEvent => accessEvent.RequestFingerprint)
+            .HasMaxLength(64)
+            .IsRequired(false);
+
         builder.Property(accessEvent => accessEvent.Decision)
             .IsRequired();
 
@@ -43,6 +54,11 @@ public class PhysicalAccessEventConfiguration
         builder.HasOne(accessEvent => accessEvent.Credential)
             .WithMany()
             .HasForeignKey(accessEvent => accessEvent.CredentialId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasOne<AccessAgent>()
+            .WithMany()
+            .HasForeignKey(accessEvent => accessEvent.AccessAgentId)
             .OnDelete(DeleteBehavior.Restrict);
 
         builder.HasIndex(accessEvent => new

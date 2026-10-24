@@ -1,4 +1,5 @@
 using GymFlow.Application.DTOs.CheckIns;
+using GymFlow.Application.Exceptions;
 using GymFlow.Application.DTOs.Common;
 using GymFlow.Application.Interfaces.Repositories;
 using GymFlow.Application.Interfaces.Time;
@@ -147,120 +148,92 @@ public class CheckInService
     public async Task<CheckInResponse?>
         CreateFromPhysicalPassageAsync(
             Guid gymId,
+            Guid accessAgentId,
             ConfirmPhysicalPassageRequest request)
     {
-        if (gymId == Guid.Empty)
-        {
-            throw new ArgumentException(
-                "A academia é obrigatória.");
-        }
-
+        if (gymId == Guid.Empty || accessAgentId == Guid.Empty)
+            throw new ArgumentException("A academia e o agente são obrigatórios.");
         if (request.RequestId == Guid.Empty)
-        {
-            throw new ArgumentException(
-                "O identificador da requisição é obrigatório.");
-        }
-
+            throw new ArgumentException("O identificador da requisição é obrigatório.");
         if (request.OccurredAt == default)
-        {
-            throw new ArgumentException(
-                "A data da passagem é obrigatória.");
-        }
+            throw new ArgumentException("A data da passagem é obrigatória.");
+        if (string.IsNullOrWhiteSpace(request.DeviceKey))
+            throw new PhysicalAccessOriginConflictException();
 
-        var existingCheckIn =
-            await _checkInRepository
-                .GetByRequestIdAsync(
-                    gymId,
-                    request.RequestId);
-
-        if (existingCheckIn is not null)
-        {
-            if (existingCheckIn.Source !=
-                CheckInSource.PhysicalAccess)
-            {
-                throw new InvalidOperationException(
-                    "O RequestId informado já foi utilizado por outro check-in.");
-            }
-
-            var existingStudent =
-                await _studentRepository
-                    .GetByIdAndGymIdAsync(
-                        existingCheckIn.StudentId,
-                        gymId);
-
-            if (existingStudent is null)
-            {
-                throw new InvalidOperationException(
-                    "O check-in existente referencia um aluno inválido.");
-            }
-
-            return ToResponse(
-                existingCheckIn,
-                existingStudent);
-        }
-
-        var accessEvent =
-            await _physicalAccessEventRepository
-                .GetByRequestIdAsync(
-                    gymId,
-                    request.RequestId);
-
+        var accessEvent = await _physicalAccessEventRepository.GetByRequestIdAsync(
+            gymId, request.RequestId);
         if (accessEvent is null)
             return null;
+        if (accessEvent.GymId != gymId || accessEvent.RequestId != request.RequestId)
+            throw new PhysicalAccessOriginConflictException();
 
-        if (accessEvent.Decision !=
-            PhysicalAccessDecision.Allowed)
-        {
+        // Null origin fields identify historical events. Never infer an agent or
+        // device association during confirmation.
+        if (accessEvent.AccessAgentId != accessAgentId ||
+            !string.Equals(accessEvent.DeviceKey, request.DeviceKey.Trim(),
+                StringComparison.OrdinalIgnoreCase))
+            throw new PhysicalAccessOriginConflictException();
+
+        // Offline decisions are client supplied and cannot be attested by the
+        // server. Keep them for history, but never derive presence from them.
+        if (accessEvent.Source != PhysicalAccessDecisionSource.Online)
+            throw new PhysicalAccessOriginConflictException();
+
+        if (accessEvent.Decision != PhysicalAccessDecision.Allowed)
             throw new InvalidOperationException(
                 "Não é possível registrar presença para um acesso negado.");
-        }
-
         if (!accessEvent.StudentId.HasValue)
-        {
             throw new InvalidOperationException(
                 "O acesso autorizado não possui aluno associado.");
+
+        var existingCheckIn = await _checkInRepository.GetByRequestIdAsync(
+            gymId, request.RequestId);
+        if (existingCheckIn is not null)
+        {
+            if (existingCheckIn.GymId != gymId ||
+                existingCheckIn.RequestId != request.RequestId ||
+                existingCheckIn.Source != CheckInSource.PhysicalAccess ||
+                existingCheckIn.PhysicalAccessEventId != accessEvent.Id ||
+                existingCheckIn.StudentId != accessEvent.StudentId.Value)
+                throw new PhysicalAccessOriginConflictException();
+
+            var existingStudent = await _studentRepository.GetByIdAndGymIdAsync(
+                existingCheckIn.StudentId, gymId);
+            if (existingStudent is null)
+                throw new InvalidOperationException(
+                    "O check-in existente referencia um aluno inválido.");
+            return ToResponse(existingCheckIn, existingStudent);
         }
 
-        var student =
-            await _studentRepository
-                .GetByIdAndGymIdAsync(
-                    accessEvent.StudentId.Value,
-                    gymId);
-
+        var student = await _studentRepository.GetByIdAndGymIdAsync(
+            accessEvent.StudentId.Value, gymId);
         if (student is null)
-        {
             throw new InvalidOperationException(
                 "O evento de acesso referencia um aluno inválido.");
-        }
 
-        var checkIn =
-            new CheckIn
-            {
-                Id = Guid.NewGuid(),
-                GymId = gymId,
-                StudentId = student.Id,
-                RequestId =
-                    accessEvent.RequestId,
-                Source =
-                    CheckInSource.PhysicalAccess,
-                PhysicalAccessEventId =
-                    accessEvent.Id,
-                RecordedByUserId = null,
-                OccurredAt =
-                    request.OccurredAt,
-                CreatedAt =
-                    DateTime.UtcNow
-            };
+        var checkIn = new CheckIn
+        {
+            Id = Guid.NewGuid(),
+            GymId = gymId,
+            StudentId = student.Id,
+            RequestId = accessEvent.RequestId,
+            Source = CheckInSource.PhysicalAccess,
+            PhysicalAccessEventId = accessEvent.Id,
+            RecordedByUserId = null,
+            OccurredAt = request.OccurredAt,
+            CreatedAt = DateTime.UtcNow
+        };
 
-        var persisted =
-            await _checkInRepository
-                .AddAsync(checkIn);
+        var persisted = await _checkInRepository.AddAsync(checkIn);
+        if (persisted.GymId != gymId ||
+            persisted.RequestId != accessEvent.RequestId ||
+            persisted.Source != CheckInSource.PhysicalAccess ||
+            persisted.PhysicalAccessEventId != accessEvent.Id ||
+            persisted.StudentId != accessEvent.StudentId.Value)
+            throw new PhysicalAccessOriginConflictException();
 
-        return ToResponse(
-            persisted,
-            student);
+        return ToResponse(persisted, student);
     }
-
     public async Task<PagedResponse<CheckInHistoryItemResponse>>
         GetHistoryAsync(
             Guid gymId,

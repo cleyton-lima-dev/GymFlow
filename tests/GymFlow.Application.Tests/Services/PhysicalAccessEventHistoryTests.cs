@@ -21,6 +21,7 @@ public class PhysicalAccessEventHistoryTests
             Substitute.For<IGymTimeZoneProvider>();
 
         _service = new PhysicalAccessService(
+            Substitute.For<IAccessAgentRepository>(),
             Substitute.For<IPhysicalAccessCredentialRepository>(),
             Substitute.For<IPhysicalAccessOverrideRepository>(),
             _eventRepository,
@@ -49,6 +50,7 @@ public class PhysicalAccessEventHistoryTests
                 "Test UTC-3"));
 
         var service = new PhysicalAccessService(
+            Substitute.For<IAccessAgentRepository>(),
             Substitute.For<IPhysicalAccessCredentialRepository>(),
             Substitute.For<IPhysicalAccessOverrideRepository>(),
             _eventRepository,
@@ -116,6 +118,7 @@ public class PhysicalAccessEventHistoryTests
             .Returns(TimeZoneInfo.Utc);
 
         var service = new PhysicalAccessService(
+            Substitute.For<IAccessAgentRepository>(),
             Substitute.For<IPhysicalAccessCredentialRepository>(),
             Substitute.For<IPhysicalAccessOverrideRepository>(),
             _eventRepository,

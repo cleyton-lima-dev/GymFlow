@@ -10,6 +10,16 @@ public class PhysicalAccessEvent
 
     public Guid RequestId { get; set; }
 
+    // Historical events remain null: their originating agent/device cannot be
+    // reconstructed safely from the event payload.
+    public Guid? AccessAgentId { get; set; }
+
+    public string? DeviceKey { get; set; }
+
+    // Nullable for historical rows that predate strict request idempotency.
+    // This is a one-way digest and never stores the presented credential.
+    public string? RequestFingerprint { get; set; }
+
     public Guid? StudentId { get; set; }
 
     public Guid? CredentialId { get; set; }
