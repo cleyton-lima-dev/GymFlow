@@ -68,7 +68,7 @@ public class CheckInRepository :
                     checkIn.RequestId);
 
             if (existingByRequest is not null)
-                return existingByRequest;
+                return ReturnIfSameRequest(existingByRequest, checkIn);
 
             if (checkIn.PhysicalAccessEventId.HasValue)
             {
@@ -78,11 +78,29 @@ public class CheckInRepository :
                         checkIn.PhysicalAccessEventId.Value);
 
                 if (existingByAccessEvent is not null)
-                    return existingByAccessEvent;
+                    return ReturnIfSameRequest(existingByAccessEvent, checkIn);
             }
 
             throw;
         }
+    }
+
+    private static CheckIn ReturnIfSameRequest(
+        CheckIn existing,
+        CheckIn requested)
+    {
+        if (existing.GymId == requested.GymId &&
+            existing.RequestId == requested.RequestId &&
+            existing.StudentId == requested.StudentId &&
+            existing.Source == requested.Source &&
+            existing.PhysicalAccessEventId ==
+                requested.PhysicalAccessEventId)
+        {
+            return existing;
+        }
+
+        throw new InvalidOperationException(
+            "O RequestId informado já foi utilizado por outro check-in.");
     }
 
     public async Task<(List<CheckIn> Items, int TotalCount)>
