@@ -21,6 +21,7 @@ public interface IAvelriAccessApiClient
         AgentCredentials credentials,
         string token,
         Guid requestId,
+        string deviceKey,
         DateTime occurredAt,
         CancellationToken cancellationToken);
 

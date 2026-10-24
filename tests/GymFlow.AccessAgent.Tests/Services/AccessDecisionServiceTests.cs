@@ -39,7 +39,7 @@ public class AccessDecisionServiceTests
         var now = DateTime.UtcNow;
         offlineStore.GetPermissionAsync("toletus-litenet2",
                 AccessCredentialType.PinExternalId, "0007", Arg.Any<DateTime>(),
-                Arg.Any<CancellationToken>())
+                Arg.Any<CancellationToken>(), Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<string>())
             .Returns(new CachedAccessPermission("toletus-litenet2",
                 AccessCredentialType.PinExternalId, "0007", true, "Eligible",
                 now.AddMinutes(20), ageMinutes < 0
@@ -84,7 +84,8 @@ public class AccessDecisionServiceTests
             Arg.Any<AgentCredentials>(), Arg.Any<CancellationToken>());
         await offlineStore.DidNotReceive().GetPermissionAsync(
             Arg.Any<string>(), Arg.Any<AccessCredentialType>(),
-            Arg.Any<string>(), Arg.Any<DateTime>(), Arg.Any<CancellationToken>());
+            Arg.Any<string>(), Arg.Any<DateTime>(), Arg.Any<CancellationToken>(),
+            Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<string>());
     }
 
     [Fact]
@@ -108,7 +109,7 @@ public class AccessDecisionServiceTests
                 throw new HttpRequestException("Synthetic network outage"));
         offlineStore.GetPermissionAsync("toletus-litenet2",
                 AccessCredentialType.PinExternalId, "0007", Arg.Any<DateTime>(),
-                Arg.Any<CancellationToken>())
+                Arg.Any<CancellationToken>(), Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<string>())
             .Returns((CachedAccessPermission?)null);
         limiter.TryConsumeAsync(credentials.GymId, Arg.Any<CancellationToken>())
             .Returns(false);
@@ -597,7 +598,10 @@ public class AccessDecisionServiceTests
                 AccessCredentialType.Card,
                 "12345",
                 Arg.Any<DateTime>(),
-                Arg.Any<CancellationToken>())
+                Arg.Any<CancellationToken>(),
+                credentials.GymId,
+                credentials.AgentId,
+                attempt.DeviceKey)
             .Returns((CachedAccessPermission?)null);
 
         var options =
@@ -706,7 +710,10 @@ Substitute.For<IPinAttemptLimiter>());
                 AccessCredentialType.Card,
                 "12345",
                 Arg.Any<DateTime>(),
-                Arg.Any<CancellationToken>())
+                Arg.Any<CancellationToken>(),
+                credentials.GymId,
+                credentials.AgentId,
+                attempt.DeviceKey)
             .Returns(
                 new CachedAccessPermission(
                     "toletus-litenet2",

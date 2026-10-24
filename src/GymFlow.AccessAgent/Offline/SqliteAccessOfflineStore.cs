@@ -70,6 +70,9 @@ public sealed class SqliteAccessOfflineStore :
                     Reason TEXT NOT NULL,
                     ValidUntil TEXT NOT NULL,
                     UpdatedAt TEXT NOT NULL,
+                    GymId TEXT NOT NULL DEFAULT '',
+                    AgentId TEXT NOT NULL DEFAULT '',
+                    DeviceKey TEXT NOT NULL DEFAULT '',
                     PRIMARY KEY
                     (
                         ProviderKey,
@@ -90,7 +93,9 @@ public sealed class SqliteAccessOfflineStore :
                      Reason TEXT NOT NULL,
                     Source INTEGER NOT NULL,
                     CreatedAt TEXT NOT NULL,
-                     SyncedAt TEXT NULL
+                    SyncedAt TEXT NULL,
+                    DeviceKey TEXT NOT NULL DEFAULT '',
+                    AgentId TEXT NOT NULL DEFAULT ''
                 );
 
                 CREATE INDEX IF NOT EXISTS
@@ -104,6 +109,10 @@ public sealed class SqliteAccessOfflineStore :
 
             await command.ExecuteNonQueryAsync(
                 cancellationToken);
+
+            await EnsureDeviceKeyColumnAsync(connection, cancellationToken);
+            await EnsureAgentIdColumnAsync(connection, "PendingAccessEvents", cancellationToken);
+            await EnsureCacheScopeColumnsAsync(connection, cancellationToken);
 
             _initialized = true;
         }
@@ -119,16 +128,17 @@ public sealed class SqliteAccessOfflineStore :
             AccessCredentialType credentialType,
             string externalIdentifier,
             DateTime utcNow,
-            CancellationToken cancellationToken)
+            CancellationToken cancellationToken,
+            Guid gymId = default,
+            Guid agentId = default,
+            string deviceKey = "")
     {
         await InitializeAsync(
             cancellationToken);
 
-        var lookupHash =
-            _protector.ComputeLookupHash(
-                providerKey,
-                (int)credentialType,
-                externalIdentifier);
+        var lookupHash = ComputeScopedLookupHash(
+            gymId, agentId, deviceKey, providerKey,
+            credentialType, externalIdentifier);
 
         await using var connection =
             await OpenConnectionAsync(
@@ -144,11 +154,17 @@ public sealed class SqliteAccessOfflineStore :
                 Allowed,
                 Reason,
                 ValidUntil,
-                UpdatedAt
+                UpdatedAt,
+                GymId,
+                AgentId,
+                DeviceKey
             FROM CachedPermissions
             WHERE ProviderKey = $providerKey
               AND CredentialType = $credentialType
               AND LookupHash = $lookupHash
+              AND GymId = $gymId
+              AND AgentId = $agentId
+              AND DeviceKey = $deviceKey
               AND ValidUntil > $utcNow
             LIMIT 1;
             """;
@@ -164,6 +180,10 @@ public sealed class SqliteAccessOfflineStore :
         command.Parameters.AddWithValue(
             "$lookupHash",
             lookupHash);
+
+        command.Parameters.AddWithValue("$gymId", gymId.ToString());
+        command.Parameters.AddWithValue("$agentId", agentId.ToString());
+        command.Parameters.AddWithValue("$deviceKey", deviceKey);
 
         command.Parameters.AddWithValue(
             "$utcNow",
@@ -204,7 +224,10 @@ public sealed class SqliteAccessOfflineStore :
             reader.GetString(2),
             ParseDatabaseDateTime(
                 reader.GetString(3)),
-            updatedAt);
+            updatedAt,
+            Guid.Parse(reader.GetString(5)),
+            Guid.Parse(reader.GetString(6)),
+            reader.GetString(7));
     }
 
     public async Task UpsertPermissionAsync(
@@ -214,11 +237,10 @@ public sealed class SqliteAccessOfflineStore :
         await InitializeAsync(
             cancellationToken);
 
-        var lookupHash =
-            _protector.ComputeLookupHash(
-                permission.ProviderKey,
-                (int)permission.CredentialType,
-                permission.ExternalIdentifier);
+        var lookupHash = ComputeScopedLookupHash(
+            permission.GymId, permission.AgentId, permission.DeviceKey,
+            permission.ProviderKey, permission.CredentialType,
+            permission.ExternalIdentifier);
 
         var protectedIdentifier =
             _protector.Protect(
@@ -242,7 +264,10 @@ public sealed class SqliteAccessOfflineStore :
                 Allowed,
                 Reason,
                 ValidUntil,
-                UpdatedAt
+                UpdatedAt,
+                GymId,
+                AgentId,
+                DeviceKey
             )
             VALUES
             (
@@ -253,7 +278,10 @@ public sealed class SqliteAccessOfflineStore :
                 $allowed,
                 $reason,
                 $validUntil,
-                $updatedAt
+                $updatedAt,
+                $gymId,
+                $agentId,
+                $deviceKey
             )
             ON CONFLICT
             (
@@ -271,7 +299,10 @@ public sealed class SqliteAccessOfflineStore :
                 ValidUntil =
                     excluded.ValidUntil,
                 UpdatedAt =
-                    excluded.UpdatedAt;
+                    excluded.UpdatedAt,
+                GymId = excluded.GymId,
+                AgentId = excluded.AgentId,
+                DeviceKey = excluded.DeviceKey;
             """;
 
         command.Parameters.AddWithValue(
@@ -307,6 +338,10 @@ public sealed class SqliteAccessOfflineStore :
             "$updatedAt",
             ToDatabaseDateTime(
                 permission.UpdatedAt));
+
+        command.Parameters.AddWithValue("$gymId", permission.GymId.ToString());
+        command.Parameters.AddWithValue("$agentId", permission.AgentId.ToString());
+        command.Parameters.AddWithValue("$deviceKey", permission.DeviceKey);
 
         await command.ExecuteNonQueryAsync(
             cancellationToken);
@@ -350,7 +385,9 @@ public sealed class SqliteAccessOfflineStore :
             Reason,
             Source,
             CreatedAt,
-            SyncedAt
+                SyncedAt,
+                DeviceKey,
+                AgentId
             )
             VALUES
             (
@@ -364,7 +401,9 @@ public sealed class SqliteAccessOfflineStore :
             $reason,
             $source,
             $createdAt,
-            $syncedAt
+                $syncedAt,
+            $deviceKey,
+            $agentId
             );
             """;
 
@@ -417,6 +456,13 @@ public sealed class SqliteAccessOfflineStore :
                 : ToDatabaseDateTime(
                     accessEvent.SyncedAt.Value));
 
+        command.Parameters.AddWithValue(
+            "$deviceKey",
+            accessEvent.DeviceKey);
+        command.Parameters.AddWithValue(
+            "$agentId",
+            accessEvent.AgentId?.ToString() ?? "");
+
         await command.ExecuteNonQueryAsync(
             cancellationToken);
     }
@@ -448,9 +494,13 @@ public sealed class SqliteAccessOfflineStore :
             Reason,
             Source,
             CreatedAt,
-            SyncedAt
+                SyncedAt,
+                DeviceKey,
+                AgentId
             FROM PendingAccessEvents
             WHERE SyncedAt IS NULL
+              AND length(trim(DeviceKey)) > 0
+              AND length(trim(AgentId)) > 0
             ORDER BY CreatedAt
             LIMIT $limit;
             """;
@@ -489,7 +539,11 @@ public sealed class SqliteAccessOfflineStore :
         reader.IsDBNull(9)
             ? null
             : ParseDatabaseDateTime(
-                reader.GetString(9))));
+                reader.GetString(9)),
+        reader.GetString(10),
+        Guid.TryParse(reader.GetString(11), out var agentId)
+            ? agentId
+            : null));
         }
 
         return events;
@@ -580,6 +634,64 @@ public sealed class SqliteAccessOfflineStore :
         return connection;
     }
 
+    private static async Task EnsureDeviceKeyColumnAsync(
+        SqliteConnection connection,
+        CancellationToken cancellationToken)
+    {
+        await using var command = connection.CreateCommand();
+        command.CommandText = "PRAGMA table_info(PendingAccessEvents);";
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        var found = false;
+        while (await reader.ReadAsync(cancellationToken))
+            found |= string.Equals(reader.GetString(1), "DeviceKey", StringComparison.OrdinalIgnoreCase);
+        await reader.DisposeAsync();
+
+        if (found)
+            return;
+
+        await using var alter = connection.CreateCommand();
+        alter.CommandText = "ALTER TABLE PendingAccessEvents ADD COLUMN DeviceKey TEXT NOT NULL DEFAULT '';";
+        await alter.ExecuteNonQueryAsync(cancellationToken);
+    }
+
+    private static async Task EnsureAgentIdColumnAsync(
+        SqliteConnection connection,
+        string tableName,
+        CancellationToken cancellationToken)
+    {
+        await using var command = connection.CreateCommand();
+        command.CommandText = $"PRAGMA table_info({tableName});";
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        var found = false;
+        while (await reader.ReadAsync(cancellationToken))
+            found |= string.Equals(reader.GetString(1), "AgentId", StringComparison.OrdinalIgnoreCase);
+        await reader.DisposeAsync();
+        if (found) return;
+        await using var alter = connection.CreateCommand();
+        alter.CommandText = $"ALTER TABLE {tableName} ADD COLUMN AgentId TEXT NOT NULL DEFAULT '';";
+        await alter.ExecuteNonQueryAsync(cancellationToken);
+    }
+
+    private static async Task EnsureCacheScopeColumnsAsync(
+        SqliteConnection connection,
+        CancellationToken cancellationToken)
+    {
+        foreach (var column in new[] { "GymId", "AgentId", "DeviceKey" })
+        {
+            await using var command = connection.CreateCommand();
+            command.CommandText = "PRAGMA table_info(CachedPermissions);";
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+            var found = false;
+            while (await reader.ReadAsync(cancellationToken))
+                found |= string.Equals(reader.GetString(1), column, StringComparison.OrdinalIgnoreCase);
+            await reader.DisposeAsync();
+            if (found) continue;
+            await using var alter = connection.CreateCommand();
+            alter.CommandText = $"ALTER TABLE CachedPermissions ADD COLUMN {column} TEXT NOT NULL DEFAULT '';";
+            await alter.ExecuteNonQueryAsync(cancellationToken);
+        }
+    }
+
     private static string ToDatabaseDateTime(
         DateTime value)
     {
@@ -589,6 +701,18 @@ public sealed class SqliteAccessOfflineStore :
                 "O",
                 CultureInfo.InvariantCulture);
     }
+
+    private string ComputeScopedLookupHash(
+        Guid gymId,
+        Guid agentId,
+        string deviceKey,
+        string providerKey,
+        AccessCredentialType credentialType,
+        string externalIdentifier) =>
+        _protector.ComputeLookupHash(
+            $"{gymId:N}|{agentId:N}|{deviceKey}|{providerKey}",
+            (int)credentialType,
+            externalIdentifier);
 
     private static DateTime ParseDatabaseDateTime(
         string value)

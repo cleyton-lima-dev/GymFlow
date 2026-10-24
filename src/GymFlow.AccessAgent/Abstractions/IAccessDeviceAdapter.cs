@@ -33,7 +33,8 @@ public sealed record DeviceAccessAttempt(
     Guid RequestId,
     string ExternalIdentifier,
     AccessCredentialType CredentialType,
-    DateTime OccurredAt);
+    DateTime OccurredAt,
+    string DeviceKey = "primary");
 
 public enum AccessCredentialType
 {

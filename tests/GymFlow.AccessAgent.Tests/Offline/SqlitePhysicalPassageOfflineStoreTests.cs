@@ -26,7 +26,8 @@ public class SqlitePhysicalPassageOfflineStoreTests
                     Guid.NewGuid(),
                     now.AddSeconds(-2),
                     now,
-                    null);
+                    null,
+                    "door-a");
 
             await store.EnqueueAsync(
                 passage,
@@ -106,14 +107,16 @@ public class SqlitePhysicalPassageOfflineStoreTests
                     requestId,
                     now,
                     now,
-                    null);
+                    null,
+                    "door-a");
 
             var duplicate =
                 new PendingPhysicalPassage(
                     requestId,
                     now.AddMinutes(5),
                     now.AddMinutes(5),
-                    null);
+                    null,
+                    "door-b");
 
             await store.EnqueueAsync(
                 first,

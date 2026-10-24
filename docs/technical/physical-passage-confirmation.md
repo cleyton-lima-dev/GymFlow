@@ -19,3 +19,19 @@ Na sincronização, o Agent continua enviando apenas `RequestId` e horário à r
 A opção continua desligada até teste no equipamento, porque a versão de firmware, o repasse do evento 0x0304 pelo callback do SDK, o repasse de 0x0305 por `OnResponse` e a operação em fluxo controlado ainda não foram observados neste equipamento real. Antes de habilitar, confirmar: firmware >= V2.0.0 R0; cada liberação permite no máximo um giro; `OnGyre` acontece somente após o giro físico; `Direction` coincide com o sentido real; `GyreTimeout` chega quando não há giro; uma desconexão encerra o vínculo pendente; e um giro livre/manualmente iniciado sem autorização não gera check-in.
 
 O callback `OnGyre` omite RequestId, aluno, contador cumulativo e horário de origem. A associação com autorização depende de haver no máximo um giro aguardando, da ordem TCP callback e de a mesma instância ativa do board emitir o evento. O horário salvo é o instante local de recebimento do callback, não um timestamp fornecido pelo hardware. Por isso, um evento antigo que só seja entregue depois de uma nova autorização não pode ser distinguido de um evento atual pelo contrato do SDK. A validação no equipamento precisa comprovar que o timeout encerra e drena o ciclo anterior antes de uma nova liberação; se isso não for demonstrado, a confirmação automática deve continuar desligada. Sem teste físico não há homologação, e a confirmação automática permanece desativada por padrão.
+
+# Limite de confiança da sincronização offline
+
+O Agent pode liberar acesso offline com uma permissão em cache válida. A decisão,
+o motivo e os horários dessa decisão permanecem dados locais enviados pelo Agent;
+o servidor não recebe prova criptográfica de que o cache foi consultado ou de que
+o hardware efetivamente liberou a passagem. Por isso, o servidor valida a
+consistência do payload e vincula a fila ao agente e dispositivo conhecidos, mas
+mantém a origem `OfflineCache` como não atestada. Esses eventos são preservados
+para histórico e revisão, e não podem gerar check-in automático. A presença
+automática exige uma decisão online e uma confirmação física correlacionada.
+
+O cache local agora é isolado por academia, AgentId e DeviceKey. Filas históricas
+sem AgentId ou DeviceKey continuam armazenadas, mas são omitidas da sincronização
+automática e permanecem pendentes para revisão controlada. Retries legítimos
+reutilizam os timestamps e o payload original persistidos no SQLite.

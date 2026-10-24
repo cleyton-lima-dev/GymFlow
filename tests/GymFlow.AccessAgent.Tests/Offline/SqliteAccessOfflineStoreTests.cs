@@ -139,6 +139,74 @@ public class SqliteAccessOfflineStoreTests
     }
 
     [Fact]
+    public async Task CachedPermission_IsScopedToGymAgentAndDevice()
+    {
+        var path = CreateDatabasePath();
+        try
+        {
+            var store = CreateStore(path);
+            var now = DateTime.UtcNow;
+            var gymId = Guid.NewGuid();
+            var agentId = Guid.NewGuid();
+            var permission = new CachedAccessPermission("toletus-litenet2",
+                AccessCredentialType.Card, "scoped-card", true, "Eligible",
+                now.AddMinutes(20), now, gymId, agentId, "door-a");
+            await store.UpsertPermissionAsync(permission, CancellationToken.None);
+
+            Assert.NotNull(await store.GetPermissionAsync(permission.ProviderKey,
+                permission.CredentialType, permission.ExternalIdentifier, now,
+                CancellationToken.None, gymId, agentId, "door-a"));
+            Assert.Null(await store.GetPermissionAsync(permission.ProviderKey,
+                permission.CredentialType, permission.ExternalIdentifier, now,
+                CancellationToken.None, Guid.NewGuid(), agentId, "door-a"));
+            Assert.Null(await store.GetPermissionAsync(permission.ProviderKey,
+                permission.CredentialType, permission.ExternalIdentifier, now,
+                CancellationToken.None, gymId, Guid.NewGuid(), "door-a"));
+            Assert.Null(await store.GetPermissionAsync(permission.ProviderKey,
+                permission.CredentialType, permission.ExternalIdentifier, now,
+                CancellationToken.None, gymId, agentId, "door-b"));
+        }
+        finally { Cleanup(path); }
+    }
+
+    [Fact]
+    public async Task LegacyPendingQueue_IsPreservedButNotIncludedInSyncBatch()
+    {
+        var path = CreateDatabasePath();
+        try
+        {
+            await using (var connection = new SqliteConnection($"Data Source={path}"))
+            {
+                await connection.OpenAsync();
+                await using var command = connection.CreateCommand();
+                command.CommandText = """
+                    CREATE TABLE PendingAccessEvents (
+                        RequestId TEXT NOT NULL PRIMARY KEY, ProviderKey TEXT NOT NULL,
+                        CredentialType INTEGER NOT NULL, LookupHash TEXT NOT NULL,
+                        EncryptedExternalIdentifier TEXT NOT NULL, OccurredAt TEXT NOT NULL,
+                        Allowed INTEGER NOT NULL, Reason TEXT NOT NULL, Source INTEGER NOT NULL,
+                        CreatedAt TEXT NOT NULL, SyncedAt TEXT NULL);
+                    INSERT INTO PendingAccessEvents VALUES
+                        ('legacy-request','toletus-litenet2',1,'hash','protected:12345',
+                         '2026-10-24T10:00:00.0000000Z',1,'Eligible',2,
+                         '2026-10-24T10:00:00.0000000Z',NULL);
+                    """;
+                await command.ExecuteNonQueryAsync();
+            }
+
+            var store = CreateStore(path);
+            Assert.Equal(1, await store.CountPendingEventsAsync(CancellationToken.None));
+            Assert.Empty(await store.GetPendingEventsAsync(100, CancellationToken.None));
+            await using var verify = new SqliteConnection($"Data Source={path}");
+            await verify.OpenAsync();
+            await using var count = verify.CreateCommand();
+            count.CommandText = "SELECT COUNT(*) FROM PendingAccessEvents WHERE RequestId='legacy-request';";
+            Assert.Equal(1L, await count.ExecuteScalarAsync());
+        }
+        finally { Cleanup(path); }
+    }
+
+    [Fact]
     public async Task EnqueueAndMarkSyncedAsync_HandlesPendingEventAndCount()
     {
         var databasePath =
@@ -164,7 +232,9 @@ public class SqliteAccessOfflineStoreTests
                     "Eligible",
                     AccessDecisionSource.OfflineCache,
                     now,
-                    null);
+                    null,
+                    "door-a",
+                    Guid.NewGuid());
 
             await store.EnqueueEventAsync(
                 accessEvent,
@@ -175,8 +245,9 @@ public class SqliteAccessOfflineStoreTests
                 await store.CountPendingEventsAsync(
                     CancellationToken.None));
 
+            var restarted = CreateStore(databasePath);
             var pending =
-                await store.GetPendingEventsAsync(
+                await restarted.GetPendingEventsAsync(
                     100,
                     CancellationToken.None);
 
@@ -191,6 +262,13 @@ public class SqliteAccessOfflineStoreTests
             Assert.Equal(
                 accessEvent.ExternalIdentifier,
                 result.ExternalIdentifier);
+            Assert.Equal(accessEvent.OccurredAt, result.OccurredAt);
+            Assert.Equal(accessEvent.CreatedAt, result.CreatedAt);
+            Assert.Equal(accessEvent.Allowed, result.Allowed);
+            Assert.Equal(accessEvent.Reason, result.Reason);
+            Assert.Equal(accessEvent.Source, result.Source);
+            Assert.Equal(accessEvent.AgentId, result.AgentId);
+            Assert.Equal(accessEvent.DeviceKey, result.DeviceKey);
 
             Assert.Null(
                 result.SyncedAt);
@@ -198,7 +276,7 @@ public class SqliteAccessOfflineStoreTests
             var syncedAt =
                 now.AddMinutes(1);
 
-            await store.MarkEventSyncedAsync(
+            await restarted.MarkEventSyncedAsync(
                 accessEvent.RequestId,
                 syncedAt,
                 CancellationToken.None);

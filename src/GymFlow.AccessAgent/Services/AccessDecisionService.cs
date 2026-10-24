@@ -149,6 +149,7 @@ public class AccessDecisionService : IAccessDecisionService
             }
 
             await CacheOnlineDecisionAsync(
+                credentials,
                 providerKey,
                 attempt,
                 decision,
@@ -166,7 +167,7 @@ public class AccessDecisionService : IAccessDecisionService
             when (IsConnectivityFailure(ex))
         {
             return await DecideOfflineAsync(
-                credentials.GymId,
+                credentials,
                 providerKey,
                 attempt,
                 cancellationToken);
@@ -175,7 +176,7 @@ public class AccessDecisionService : IAccessDecisionService
             when (!cancellationToken.IsCancellationRequested)
         {
             return await DecideOfflineAsync(
-                credentials.GymId,
+                credentials,
                 providerKey,
                 attempt,
                 cancellationToken);
@@ -204,6 +205,7 @@ public class AccessDecisionService : IAccessDecisionService
     }
 
     private async Task CacheOnlineDecisionAsync(
+        AgentCredentials credentials,
         string providerKey,
         DeviceAccessAttempt attempt,
         AccessDeviceDecision decision,
@@ -226,7 +228,10 @@ public class AccessDecisionService : IAccessDecisionService
                 decision.Reason,
                 now.AddMinutes(
                     cacheMinutes),
-                now);
+                now,
+                credentials.GymId,
+                credentials.AgentId,
+                attempt.DeviceKey);
 
         await _offlineStore.UpsertPermissionAsync(
             permission,
@@ -234,7 +239,7 @@ public class AccessDecisionService : IAccessDecisionService
     }
 
     private async Task<AccessDeviceDecision> DecideOfflineAsync(
-        Guid gymId,
+        AgentCredentials credentials,
         string providerKey,
         DeviceAccessAttempt attempt,
         CancellationToken cancellationToken)
@@ -247,7 +252,10 @@ public class AccessDecisionService : IAccessDecisionService
                 attempt.CredentialType,
                 attempt.ExternalIdentifier,
                 now,
-                cancellationToken);
+                cancellationToken,
+                credentials.GymId,
+                credentials.AgentId,
+                attempt.DeviceKey);
 
         // Older Agent builds could persist a PIN permission for 30 minutes.
         // Its original timestamp, not only ValidUntil, bounds offline use.
@@ -273,7 +281,7 @@ public class AccessDecisionService : IAccessDecisionService
             try
             {
                 if (!await _pinAttemptLimiter.TryConsumeAsync(
-                        gymId, cancellationToken))
+                        credentials.GymId, cancellationToken))
                     return new AccessDeviceDecision(false, "PinRateLimited");
             }
             catch (Exception) when (!cancellationToken.IsCancellationRequested)
@@ -295,7 +303,9 @@ public class AccessDecisionService : IAccessDecisionService
                     ? AccessDecisionSource.OfflineFailClosed
                     : AccessDecisionSource.OfflineCache,
                  now,
-                 null);
+                 null,
+                 attempt.DeviceKey,
+                 credentials.AgentId);
 
         await _offlineStore.EnqueueEventAsync(
             pendingEvent,

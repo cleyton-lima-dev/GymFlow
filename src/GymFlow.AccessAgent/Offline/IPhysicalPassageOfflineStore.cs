@@ -27,4 +27,5 @@ public sealed record PendingPhysicalPassage(
     Guid RequestId,
     DateTime OccurredAt,
     DateTime CreatedAt,
-    DateTime? SyncedAt);
+    DateTime? SyncedAt,
+    string DeviceKey = "");

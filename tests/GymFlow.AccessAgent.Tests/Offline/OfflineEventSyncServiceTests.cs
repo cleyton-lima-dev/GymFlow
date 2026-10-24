@@ -52,7 +52,7 @@ public class OfflineEventSyncServiceTests
             CreateDependencies();
 
         var pendingEvent =
-            CreatePendingEvent();
+            CreatePendingEvent(dependencies.Credentials.AgentId);
 
         ConfigurePendingEvent(
             dependencies,
@@ -103,13 +103,31 @@ public class OfflineEventSyncServiceTests
     }
 
     [Fact]
+    public async Task SyncPendingAsync_WhenAgentIdentityDoesNotMatch_ShouldPreservePendingEvent()
+    {
+        var dependencies = CreateDependencies();
+        var pendingEvent = CreatePendingEvent(Guid.NewGuid());
+        ConfigurePendingEvent(dependencies, pendingEvent);
+
+        var result = await dependencies.Service.SyncPendingAsync(CancellationToken.None);
+
+        Assert.Equal(0, result);
+        await dependencies.ApiClient.DidNotReceiveWithAnyArgs().SyncOfflineEventAsync(
+            default!, default!, default!, default!);
+        await dependencies.OfflineStore.DidNotReceive().MarkEventSyncedAsync(
+            Arg.Any<Guid>(), Arg.Any<DateTime>(), Arg.Any<CancellationToken>());
+        dependencies.OperationalHealthStore.Received(1).RecordFailure(
+            "OfflineSync.UnverifiedLegacyEvent", Arg.Any<DateTime>());
+    }
+
+    [Fact]
     public async Task SyncPendingAsync_WhenApiFails_ShouldKeepPendingAndRecordFailure()
     {
         var dependencies =
             CreateDependencies();
 
         var pendingEvent =
-            CreatePendingEvent();
+            CreatePendingEvent(dependencies.Credentials.AgentId);
 
         ConfigurePendingEvent(
             dependencies,
@@ -162,7 +180,7 @@ public class OfflineEventSyncServiceTests
             CreateDependencies();
 
         var pendingEvent =
-            CreatePendingEvent();
+            CreatePendingEvent(dependencies.Credentials.AgentId);
 
         ConfigurePendingEvent(
             dependencies,
@@ -229,7 +247,7 @@ public class OfflineEventSyncServiceTests
             CreateDependencies();
 
         var pendingEvent =
-            CreatePendingEvent();
+            CreatePendingEvent(dependencies.Credentials.AgentId);
 
         ConfigurePendingEvent(
             dependencies,
@@ -297,7 +315,7 @@ public class OfflineEventSyncServiceTests
             CreateDependencies();
 
         var pendingEvent =
-            CreatePendingEvent();
+            CreatePendingEvent(dependencies.Credentials.AgentId);
 
         ConfigurePendingEvent(
             dependencies,
@@ -339,7 +357,7 @@ public class OfflineEventSyncServiceTests
     }
 
     private static PendingAccessEvent
-        CreatePendingEvent()
+        CreatePendingEvent(Guid agentId)
     {
         var now =
             DateTime.UtcNow;
@@ -354,7 +372,9 @@ public class OfflineEventSyncServiceTests
             "Eligible",
             AccessDecisionSource.OfflineCache,
             now.AddMinutes(-1),
-            null);
+            null,
+            "door-a",
+            agentId);
     }
 
     private static Dependencies

@@ -97,6 +97,14 @@ public class OfflineEventSyncService :
             cancellationToken
                 .ThrowIfCancellationRequested();
 
+            if (accessEvent.AgentId != credentials.AgentId ||
+                accessEvent.AgentId == Guid.Empty ||
+                string.IsNullOrWhiteSpace(accessEvent.DeviceKey))
+            {
+                RecordFailure("OfflineSync.UnverifiedLegacyEvent");
+                continue;
+            }
+
             try
             {
                 await _apiClient
