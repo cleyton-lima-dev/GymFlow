@@ -1,10 +1,15 @@
 using GymFlow.Application.DTOs.Common;
+using GymFlow.Application.DTOs.AccessAgents;
 using GymFlow.Application.DTOs.PhysicalAccess;
+using GymFlow.Application.Exceptions;
 using GymFlow.Application.Interfaces.Repositories;
 using GymFlow.Application.Interfaces.Security;
 using GymFlow.Application.Interfaces.Time;
 using GymFlow.Domain.Entities;
 using GymFlow.Domain.Enums;
+using System.Text.Json;
+using System.Security.Cryptography;
+using System.Text;
 
 namespace GymFlow.Application.Services;
 
@@ -12,6 +17,8 @@ public class PhysicalAccessService
 {
     private readonly IPhysicalAccessCredentialRepository
         _credentialRepository;
+
+    private readonly IAccessAgentRepository _accessAgentRepository;
 
     private readonly IPhysicalAccessOverrideRepository
         _overrideRepository;
@@ -34,6 +41,7 @@ public class PhysicalAccessService
     private readonly IPhysicalAccessPinAttemptLimiter _pinAttemptLimiter;
 
     public PhysicalAccessService(
+        IAccessAgentRepository accessAgentRepository,
         IPhysicalAccessCredentialRepository credentialRepository,
         IPhysicalAccessOverrideRepository overrideRepository,
         IPhysicalAccessEventRepository eventRepository,
@@ -44,6 +52,7 @@ public class PhysicalAccessService
         IPhysicalAccessPinProtector pinProtector,
         IPhysicalAccessPinAttemptLimiter pinAttemptLimiter)
     {
+        _accessAgentRepository = accessAgentRepository;
         _credentialRepository = credentialRepository;
         _overrideRepository = overrideRepository;
         _eventRepository = eventRepository;
@@ -55,8 +64,21 @@ public class PhysicalAccessService
         _pinAttemptLimiter = pinAttemptLimiter;
     }
 
-    public async Task<PhysicalAccessDecisionResponse> DecideAsync(
+    public Task<PhysicalAccessDecisionResponse> DecideAsync(
         Guid gymId,
+        PhysicalAccessDecisionRequest request) =>
+        DecideCoreAsync(gymId, null, null, request);
+
+    public Task<PhysicalAccessDecisionResponse> DecideAsync(
+        Guid gymId,
+        Guid accessAgentId,
+        PhysicalAccessDecisionRequest request) =>
+        DecideCoreAsync(gymId, accessAgentId, request.DeviceKey, request);
+
+    private async Task<PhysicalAccessDecisionResponse> DecideCoreAsync(
+        Guid gymId,
+        Guid? accessAgentId,
+        string? deviceKey,
         PhysicalAccessDecisionRequest request)
     {
         if (request.RequestId == Guid.Empty)
@@ -89,6 +111,18 @@ public class PhysicalAccessService
                 "A data da tentativa de acesso é obrigatória.");
         }
 
+        if (accessAgentId.HasValue)
+            deviceKey = await ResolveConfiguredDeviceKeyAsync(
+                gymId, accessAgentId.Value, deviceKey, request.ProviderKey,
+                requireEnabled: true);
+
+        var requestFingerprint = CreateRequestFingerprint(
+            gymId, request.RequestId, accessAgentId,
+            accessAgentId.HasValue ? deviceKey : request.DeviceKey,
+            request.ProviderKey, request.CredentialType,
+            request.ExternalIdentifier, request.OccurredAt,
+            PhysicalAccessDecisionSource.Online, null, null, null);
+
         var existingEvent =
             await _eventRepository.GetByRequestIdAsync(
                 gymId,
@@ -96,6 +130,9 @@ public class PhysicalAccessService
 
         if (existingEvent is not null)
         {
+            EnsureEventIdentity(existingEvent, gymId, request.RequestId);
+            EnsureSameOrigin(existingEvent, accessAgentId, deviceKey);
+            EnsureSameFingerprint(existingEvent, requestFingerprint);
             return ToResponse(existingEvent);
         }
 
@@ -115,7 +152,8 @@ public class PhysicalAccessService
             {
                 return await RegisterDecisionAsync(gymId, request, null, null,
                     PhysicalAccessDecision.Denied,
-                    PhysicalAccessDecisionReason.PinRateLimited);
+                    PhysicalAccessDecisionReason.PinRateLimited,
+                    accessAgentId, deviceKey, requestFingerprint);
             }
 
         }
@@ -143,7 +181,8 @@ public class PhysicalAccessService
                 null,
                 null,
                 PhysicalAccessDecision.Denied,
-                PhysicalAccessDecisionReason.CredentialNotFound);
+                PhysicalAccessDecisionReason.CredentialNotFound,
+                accessAgentId, deviceKey, requestFingerprint);
         }
 
         if (!credential.IsActive)
@@ -154,7 +193,8 @@ public class PhysicalAccessService
                 credential.StudentId,
                 credential.Id,
                 PhysicalAccessDecision.Denied,
-                PhysicalAccessDecisionReason.CredentialInactive);
+                PhysicalAccessDecisionReason.CredentialInactive,
+                accessAgentId, deviceKey, requestFingerprint);
         }
 
         var student = credential.Student;
@@ -167,7 +207,8 @@ public class PhysicalAccessService
                 student.Id,
                 credential.Id,
                 PhysicalAccessDecision.Denied,
-                PhysicalAccessDecisionReason.StudentArchived);
+                PhysicalAccessDecisionReason.StudentArchived,
+                accessAgentId, deviceKey, requestFingerprint);
         }
 
         if (!student.IsActive)
@@ -178,7 +219,8 @@ public class PhysicalAccessService
                 student.Id,
                 credential.Id,
                 PhysicalAccessDecision.Denied,
-                PhysicalAccessDecisionReason.StudentInactive);
+                PhysicalAccessDecisionReason.StudentInactive,
+                accessAgentId, deviceKey, requestFingerprint);
         }
 
         var accessOverride =
@@ -195,7 +237,8 @@ public class PhysicalAccessService
                 student.Id,
                 credential.Id,
                 PhysicalAccessDecision.Denied,
-                PhysicalAccessDecisionReason.ManualBlock);
+                PhysicalAccessDecisionReason.ManualBlock,
+                accessAgentId, deviceKey, requestFingerprint);
         }
 
         if (accessOverride?.Type ==
@@ -207,7 +250,8 @@ public class PhysicalAccessService
                 student.Id,
                 credential.Id,
                 PhysicalAccessDecision.Allowed,
-                PhysicalAccessDecisionReason.ManualOverride);
+                PhysicalAccessDecisionReason.ManualOverride,
+                accessAgentId, deviceKey, requestFingerprint);
         }
 
         // Shared physical access does not require ERP enrollment or payment.
@@ -220,7 +264,8 @@ public class PhysicalAccessService
                 student.Id,
                 credential.Id,
                 PhysicalAccessDecision.Allowed,
-                PhysicalAccessDecisionReason.Eligible);
+                PhysicalAccessDecisionReason.Eligible,
+                accessAgentId, deviceKey, requestFingerprint);
         }
 
         var today = GetToday(gymId);
@@ -240,7 +285,8 @@ public class PhysicalAccessService
                 student.Id,
                 credential.Id,
                 PhysicalAccessDecision.Denied,
-                PhysicalAccessDecisionReason.NoValidEnrollment);
+                PhysicalAccessDecisionReason.NoValidEnrollment,
+                accessAgentId, deviceKey, requestFingerprint);
         }
 
         var charge =
@@ -258,7 +304,8 @@ public class PhysicalAccessService
                 student.Id,
                 credential.Id,
                 PhysicalAccessDecision.Denied,
-                PhysicalAccessDecisionReason.FinancialRestriction);
+                PhysicalAccessDecisionReason.FinancialRestriction,
+                accessAgentId, deviceKey, requestFingerprint);
         }
 
         return await RegisterDecisionAsync(
@@ -267,7 +314,8 @@ public class PhysicalAccessService
             student.Id,
             credential.Id,
             PhysicalAccessDecision.Allowed,
-            PhysicalAccessDecisionReason.Eligible);
+            PhysicalAccessDecisionReason.Eligible,
+            accessAgentId, deviceKey, requestFingerprint);
         }
         finally
         {
@@ -278,6 +326,7 @@ public class PhysicalAccessService
 
     public async Task<PhysicalAccessDecisionResponse> SyncOfflineEventAsync(
     Guid gymId,
+    Guid accessAgentId,
     SyncOfflinePhysicalAccessEventRequest request)
     {
         if (request.RequestId == Guid.Empty)
@@ -285,6 +334,9 @@ public class PhysicalAccessService
             throw new ArgumentException(
                 "O identificador da requisição é obrigatório.");
         }
+
+        if (accessAgentId == Guid.Empty)
+            throw new PhysicalAccessOriginConflictException();
 
         if (string.IsNullOrWhiteSpace(request.ProviderKey))
         {
@@ -345,6 +397,27 @@ public class PhysicalAccessService
                 "Uma decisão OfflineFailClosed deve ser negada por ausência de permissão em cache.");
         }
 
+        var isGrantReason = request.Reason is
+            PhysicalAccessDecisionReason.Eligible or
+            PhysicalAccessDecisionReason.ManualOverride;
+        if (request.Source == PhysicalAccessDecisionSource.OfflineCache &&
+            (request.Reason == PhysicalAccessDecisionReason.OfflineNoCachedPermission ||
+             (request.Decision == PhysicalAccessDecision.Allowed) != isGrantReason))
+        {
+            throw new ArgumentException(
+                "A decisão e o motivo são inconsistentes para uma decisão OfflineCache.");
+        }
+
+        var deviceKey = await ResolveConfiguredDeviceKeyAsync(
+            gymId, accessAgentId, request.DeviceKey, request.ProviderKey,
+            requireEnabled: false);
+        var requestFingerprint = CreateRequestFingerprint(
+            gymId, request.RequestId, accessAgentId, deviceKey,
+            request.ProviderKey, request.CredentialType,
+            request.ExternalIdentifier, request.OccurredAt,
+            request.Source, request.Decision, request.Reason,
+            request.ProcessedAt);
+
         var existingEvent =
             await _eventRepository.GetByRequestIdAsync(
                 gymId,
@@ -352,6 +425,9 @@ public class PhysicalAccessService
 
         if (existingEvent is not null)
         {
+            EnsureEventIdentity(existingEvent, gymId, request.RequestId);
+            EnsureSameOrigin(existingEvent, accessAgentId, deviceKey);
+            EnsureSameFingerprint(existingEvent, requestFingerprint);
             return ToResponse(existingEvent);
         }
 
@@ -372,6 +448,9 @@ public class PhysicalAccessService
                 Id = Guid.NewGuid(),
                 GymId = gymId,
                 RequestId = request.RequestId,
+                AccessAgentId = accessAgentId,
+                DeviceKey = deviceKey,
+                RequestFingerprint = requestFingerprint,
                 StudentId = credential?.StudentId,
                 CredentialId = credential?.Id,
                 Decision = request.Decision,
@@ -384,6 +463,10 @@ public class PhysicalAccessService
         var persistedEvent =
             await _eventRepository.AddAsync(
                 accessEvent);
+
+        EnsureEventIdentity(persistedEvent, gymId, request.RequestId);
+        EnsureSameOrigin(persistedEvent, accessAgentId, deviceKey);
+        EnsureSameFingerprint(persistedEvent, requestFingerprint);
 
         return ToResponse(persistedEvent);
     }
@@ -495,13 +578,19 @@ public class PhysicalAccessService
             Guid? studentId,
             Guid? credentialId,
             PhysicalAccessDecision decision,
-            PhysicalAccessDecisionReason reason)
+            PhysicalAccessDecisionReason reason,
+            Guid? accessAgentId,
+            string? deviceKey,
+            string requestFingerprint)
     {
         var accessEvent = new PhysicalAccessEvent
         {
             Id = Guid.NewGuid(),
             GymId = gymId,
             RequestId = request.RequestId,
+            AccessAgentId = accessAgentId,
+            DeviceKey = deviceKey,
+            RequestFingerprint = requestFingerprint,
             StudentId = studentId,
             CredentialId = credentialId,
             Decision = decision,
@@ -514,7 +603,132 @@ public class PhysicalAccessService
             await _eventRepository.AddAsync(
             accessEvent);
 
+        EnsureEventIdentity(persistedEvent, gymId, request.RequestId);
+        EnsureSameOrigin(persistedEvent, accessAgentId, deviceKey);
+        EnsureSameFingerprint(persistedEvent, requestFingerprint);
+
         return ToResponse(persistedEvent);
+    }
+
+    private async Task<string> ResolveConfiguredDeviceKeyAsync(
+        Guid gymId,
+        Guid accessAgentId,
+        string? requestedDeviceKey,
+        string providerKey,
+        bool requireEnabled)
+    {
+        if (gymId == Guid.Empty || accessAgentId == Guid.Empty ||
+            string.IsNullOrWhiteSpace(requestedDeviceKey))
+            throw new PhysicalAccessOriginConflictException();
+
+        var agent = await _accessAgentRepository.GetByIdAsync(accessAgentId, gymId);
+        if (agent is null || !agent.IsActive)
+            throw new PhysicalAccessOriginConflictException();
+
+        List<AccessAgentDeviceConfigurationDto> configuredDevices;
+        try
+        {
+            configuredDevices = JsonSerializer.Deserialize<
+                List<AccessAgentDeviceConfigurationDto>>(
+                agent.DeviceConfigurationJson ?? "[]",
+                new JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true
+                }) ?? [];
+        }
+        catch (JsonException)
+        {
+            throw new PhysicalAccessOriginConflictException();
+        }
+
+        var configuredDevice = configuredDevices.FirstOrDefault(device =>
+            string.Equals(device.DeviceKey?.Trim(), requestedDeviceKey.Trim(),
+                StringComparison.OrdinalIgnoreCase) &&
+            string.Equals(device.ProviderKey?.Trim(), providerKey.Trim(),
+                StringComparison.OrdinalIgnoreCase) &&
+            (!requireEnabled || device.Enabled));
+
+        return configuredDevice?.DeviceKey.Trim()
+            ?? throw new PhysicalAccessOriginConflictException();
+    }
+
+    private static void EnsureSameOrigin(
+        PhysicalAccessEvent accessEvent,
+        Guid? accessAgentId,
+        string? deviceKey)
+    {
+        var sameDevice = accessEvent.DeviceKey is null
+            ? deviceKey is null
+            : string.Equals(accessEvent.DeviceKey, deviceKey?.Trim(),
+                StringComparison.OrdinalIgnoreCase);
+
+        if (accessEvent.AccessAgentId != accessAgentId || !sameDevice)
+            throw new PhysicalAccessOriginConflictException();
+    }
+
+    private static void EnsureEventIdentity(
+        PhysicalAccessEvent accessEvent,
+        Guid gymId,
+        Guid requestId)
+    {
+        if (accessEvent.GymId != gymId || accessEvent.RequestId != requestId)
+            throw new PhysicalAccessOriginConflictException();
+    }
+
+    private static void EnsureSameFingerprint(
+        PhysicalAccessEvent accessEvent,
+        string requestFingerprint)
+    {
+        if (accessEvent.RequestFingerprint is null)
+            throw new PhysicalAccessOriginConflictException();
+
+        try
+        {
+            if (!CryptographicOperations.FixedTimeEquals(
+                    Convert.FromHexString(accessEvent.RequestFingerprint),
+                    Convert.FromHexString(requestFingerprint)))
+                throw new PhysicalAccessOriginConflictException();
+        }
+        catch (FormatException)
+        {
+            throw new PhysicalAccessOriginConflictException();
+        }
+    }
+
+    private string CreateRequestFingerprint(
+        Guid gymId,
+        Guid requestId,
+        Guid? accessAgentId,
+        string? deviceKey,
+        string providerKey,
+        PhysicalAccessCredentialType credentialType,
+        string externalIdentifier,
+        DateTime occurredAt,
+        PhysicalAccessDecisionSource source,
+        PhysicalAccessDecision? decision,
+        PhysicalAccessDecisionReason? reason,
+        DateTime? processedAt)
+    {
+        var normalizedIdentifier = externalIdentifier.Trim();
+        var credentialDigest = credentialType == PhysicalAccessCredentialType.PinExternalId
+            ? _pinProtector.ComputeLookupHash(gymId, normalizedIdentifier)
+            : Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(normalizedIdentifier)));
+        var canonicalPayload = JsonSerializer.SerializeToUtf8Bytes(new
+        {
+            GymId = gymId,
+            RequestId = requestId,
+            AccessAgentId = accessAgentId,
+            DeviceKey = deviceKey?.Trim().ToUpperInvariant(),
+            ProviderKey = providerKey.Trim(),
+            CredentialType = (int)credentialType,
+            CredentialDigest = credentialDigest,
+            OccurredAtTicks = occurredAt.ToUniversalTime().Ticks,
+            Source = (int)source,
+            Decision = decision.HasValue ? (int?)decision.Value : null,
+            Reason = reason.HasValue ? (int?)reason.Value : null,
+            ProcessedAtTicks = processedAt?.ToUniversalTime().Ticks
+        });
+        return Convert.ToHexString(SHA256.HashData(canonicalPayload));
     }
 
     private static PhysicalAccessDecisionResponse ToResponse(

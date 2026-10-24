@@ -1,4 +1,5 @@
-﻿using GymFlow.Application.DTOs.PhysicalAccess;
+using GymFlow.Application.DTOs.PhysicalAccess;
+using GymFlow.Application.DTOs.AccessAgents;
 using GymFlow.Application.Interfaces.Repositories;
 using GymFlow.Application.Interfaces.Security;
 using GymFlow.Application.Interfaces.Time;
@@ -6,11 +7,13 @@ using GymFlow.Application.Services;
 using GymFlow.Domain.Entities;
 using GymFlow.Domain.Enums;
 using NSubstitute;
+using System.Text.Json;
 
 namespace GymFlow.Application.Tests.Services;
 
 public class PhysicalAccessServiceTests
 {
+    private readonly IAccessAgentRepository _accessAgentRepository;
     private readonly IPhysicalAccessCredentialRepository
         _credentialRepository;
 
@@ -30,6 +33,7 @@ public class PhysicalAccessServiceTests
         _gymTimeZoneProvider;
 
     private readonly IGymErpPolicy _erpPolicy;
+    private readonly IPhysicalAccessPinProtector _pinProtector;
 
     private readonly PhysicalAccessService _service;
 
@@ -37,6 +41,8 @@ public class PhysicalAccessServiceTests
     {
         _credentialRepository =
             Substitute.For<IPhysicalAccessCredentialRepository>();
+
+        _accessAgentRepository = Substitute.For<IAccessAgentRepository>();
 
         _overrideRepository =
             Substitute.For<IPhysicalAccessOverrideRepository>();
@@ -52,10 +58,15 @@ public class PhysicalAccessServiceTests
 
         _gymTimeZoneProvider =
             Substitute.For<IGymTimeZoneProvider>();
+        _gymTimeZoneProvider.GetTimeZone(Arg.Any<Guid>())
+            .Returns(TimeZoneInfo.Utc);
 
         // Existing enrollment/payment cases explicitly represent an ERP tenant.
         _erpPolicy = Substitute.For<IGymErpPolicy>();
         _erpPolicy.IsEnabled(Arg.Any<Guid>()).Returns(true);
+        _pinProtector = Substitute.For<IPhysicalAccessPinProtector>();
+        _pinProtector.ComputeLookupHash(Arg.Any<Guid>(), Arg.Any<string>())
+            .Returns(call => "HMAC:" + call.ArgAt<string>(1));
 
         _eventRepository
             .AddAsync(
@@ -64,6 +75,7 @@ public class PhysicalAccessServiceTests
             call.Arg<PhysicalAccessEvent>());
 
         _service = new PhysicalAccessService(
+            _accessAgentRepository,
             _credentialRepository,
             _overrideRepository,
             _eventRepository,
@@ -71,7 +83,7 @@ public class PhysicalAccessServiceTests
             _chargeRepository,
             _gymTimeZoneProvider,
             _erpPolicy,
-            Substitute.For<IPhysicalAccessPinProtector>(),
+            _pinProtector,
             Substitute.For<IPhysicalAccessPinAttemptLimiter>());
     }
 
@@ -163,7 +175,7 @@ public class PhysicalAccessServiceTests
     }
 
     [Fact]
-    public async Task DecideAsync_WhenRequestWasAlreadyProcessed_ShouldReturnPreviousDecision()
+    public async Task DecideAsync_WhenHistoricalRequestHasNoFingerprint_ShouldRejectUnsafeReplay()
     {
         var gymId = Guid.NewGuid();
         var requestId = Guid.NewGuid();
@@ -197,22 +209,8 @@ public class PhysicalAccessServiceTests
             OccurredAt = DateTime.UtcNow
         };
 
-        var result =
-            await _service.DecideAsync(
-                gymId,
-                request);
-
-        Assert.Equal(
-            PhysicalAccessDecision.Allowed,
-            result.Decision);
-
-        Assert.Equal(
-            PhysicalAccessDecisionReason.Eligible,
-            result.Reason);
-
-        Assert.Equal(
-            existingEvent.StudentId,
-            result.StudentId);
+        await Assert.ThrowsAsync<GymFlow.Application.Exceptions.PhysicalAccessOriginConflictException>(
+            () => _service.DecideAsync(gymId, request));
 
         await _credentialRepository
             .DidNotReceiveWithAnyArgs()
@@ -225,6 +223,55 @@ public class PhysicalAccessServiceTests
         await _eventRepository
             .DidNotReceiveWithAnyArgs()
             .AddAsync(default!);
+    }
+
+    [Fact]
+    public async Task DecideAsync_WhenPayloadIsIdentical_ShouldReturnOriginalDecision()
+    {
+        var gymId = Guid.NewGuid();
+        var (request, _) = ConfigureG6PhysicalCredential(gymId);
+        PhysicalAccessEvent? stored = null;
+        _eventRepository.GetByRequestIdAsync(gymId, request.RequestId)
+            .Returns(_ => stored);
+        _eventRepository.AddAsync(Arg.Any<PhysicalAccessEvent>())
+            .Returns(call => stored = call.Arg<PhysicalAccessEvent>());
+
+        var first = await _service.DecideAsync(gymId, request);
+        var retry = await _service.DecideAsync(gymId, request);
+
+        Assert.Equal(first.Decision, retry.Decision);
+        Assert.Equal(first.StudentId, retry.StudentId);
+        Assert.NotNull(stored?.RequestFingerprint);
+        await _eventRepository.Received(1).AddAsync(Arg.Any<PhysicalAccessEvent>());
+    }
+
+    [Theory]
+    [InlineData("provider")]
+    [InlineData("type")]
+    [InlineData("identifier")]
+    [InlineData("occurredAt")]
+    public async Task DecideAsync_WhenSameRequestIdHasDifferentPayload_ShouldConflict(string changedField)
+    {
+        var gymId = Guid.NewGuid();
+        var (request, _) = ConfigureG6PhysicalCredential(gymId);
+        PhysicalAccessEvent? stored = null;
+        _eventRepository.GetByRequestIdAsync(gymId, request.RequestId)
+            .Returns(_ => stored);
+        _eventRepository.AddAsync(Arg.Any<PhysicalAccessEvent>())
+            .Returns(call => stored = call.Arg<PhysicalAccessEvent>());
+        await _service.DecideAsync(gymId, request);
+
+        switch (changedField)
+        {
+            case "provider": request.ProviderKey += "-other"; break;
+            case "type": request.CredentialType = PhysicalAccessCredentialType.BiometricExternalId; break;
+            case "identifier": request.ExternalIdentifier += "-other"; break;
+            case "occurredAt": request.OccurredAt = request.OccurredAt.AddSeconds(1); break;
+        }
+
+        await Assert.ThrowsAsync<GymFlow.Application.Exceptions.PhysicalAccessOriginConflictException>(
+            () => _service.DecideAsync(gymId, request));
+        await _eventRepository.Received(1).AddAsync(Arg.Any<PhysicalAccessEvent>());
     }
 
     [Fact]
@@ -1102,7 +1149,7 @@ public class PhysicalAccessServiceTests
     }
 
     [Fact]
-    public async Task DecideAsync_WhenConcurrentRequestWasAlreadyPersisted_ShouldReturnPersistedDecision()
+    public async Task DecideAsync_WhenConcurrentWinnerHasDifferentFingerprint_ShouldConflict()
     {
         var gymId = Guid.NewGuid();
         var requestId = Guid.NewGuid();
@@ -1131,6 +1178,7 @@ public class PhysicalAccessServiceTests
                 Id = Guid.NewGuid(),
                 GymId = gymId,
                 RequestId = requestId,
+                RequestFingerprint = new string('A', 64),
                 Decision = PhysicalAccessDecision.Allowed,
                 Reason =
                     PhysicalAccessDecisionReason.ManualOverride,
@@ -1143,22 +1191,71 @@ public class PhysicalAccessServiceTests
                 Arg.Any<PhysicalAccessEvent>())
             .Returns(persistedEvent);
 
-        var result =
-            await _service.DecideAsync(
-                gymId,
-                request);
+        await Assert.ThrowsAsync<GymFlow.Application.Exceptions.PhysicalAccessOriginConflictException>(
+            () => _service.DecideAsync(gymId, request));
+    }
 
-        Assert.Equal(
-            PhysicalAccessDecision.Allowed,
-            result.Decision);
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task DecideAsync_WhenRequestsRaceAtInsert_ShouldApplyStrictIdempotency(bool samePayload)
+    {
+        var gymId = Guid.NewGuid();
+        var requestId = Guid.NewGuid();
+        var arrived = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var lookupCount = 0;
+        PhysicalAccessEvent? persisted = null;
+        var persistLock = new object();
+        _eventRepository.GetByRequestIdAsync(gymId, requestId).Returns(async _ =>
+        {
+            if (Interlocked.Increment(ref lookupCount) == 2)
+                arrived.TrySetResult(true);
+            await arrived.Task;
+            return null;
+        });
+        _credentialRepository.GetByExternalIdentifierAsync(
+                gymId, Arg.Any<string>(), Arg.Any<PhysicalAccessCredentialType>(), Arg.Any<string>())
+            .Returns((PhysicalAccessCredential?)null);
+        _eventRepository.AddAsync(Arg.Any<PhysicalAccessEvent>()).Returns(call =>
+        {
+            lock (persistLock)
+                return persisted ??= call.Arg<PhysicalAccessEvent>();
+        });
 
-        Assert.Equal(
-            PhysicalAccessDecisionReason.ManualOverride,
-            result.Reason);
+        var first = new PhysicalAccessDecisionRequest
+        {
+            RequestId = requestId, ProviderKey = "synthetic", CredentialType = PhysicalAccessCredentialType.Card,
+            ExternalIdentifier = "card-one", OccurredAt = DateTime.UtcNow
+        };
+        var second = new PhysicalAccessDecisionRequest
+        {
+            RequestId = requestId, ProviderKey = "synthetic", CredentialType = PhysicalAccessCredentialType.Card,
+            ExternalIdentifier = samePayload ? first.ExternalIdentifier : "card-two", OccurredAt = first.OccurredAt
+        };
 
-        Assert.Equal(
-            requestId,
-            result.RequestId);
+        async Task<(PhysicalAccessDecisionResponse? Response, Exception? Error)> Capture(
+            PhysicalAccessDecisionRequest request)
+        {
+            try { return (await _service.DecideAsync(gymId, request), null); }
+            catch (Exception ex) { return (null, ex); }
+        }
+
+        var outcomes = await Task.WhenAll(Capture(first), Capture(second));
+
+        Assert.NotNull(persisted?.RequestFingerprint);
+        if (samePayload)
+        {
+            Assert.All(outcomes, outcome => Assert.Null(outcome.Error));
+            Assert.All(outcomes, outcome => Assert.NotNull(outcome.Response));
+            Assert.Equal(outcomes[0].Response!.Decision, outcomes[1].Response!.Decision);
+        }
+        else
+        {
+            Assert.Single(outcomes, outcome => outcome.Response is not null);
+            var conflict = Assert.Single(outcomes, outcome => outcome.Error is not null);
+            Assert.IsType<GymFlow.Application.Exceptions.PhysicalAccessOriginConflictException>(conflict.Error);
+        }
+        await _eventRepository.Received(2).AddAsync(Arg.Any<PhysicalAccessEvent>());
     }
 
     [Fact]
@@ -1170,6 +1267,7 @@ public class PhysicalAccessServiceTests
         var credentialId = Guid.NewGuid();
         var occurredAt = DateTime.UtcNow.AddMinutes(-2);
         var processedAt = DateTime.UtcNow;
+        var agentId = ConfigureOfflineAgent(gymId, "door-a");
 
         var credential = new PhysicalAccessCredential
         {
@@ -1211,11 +1309,13 @@ public class PhysicalAccessServiceTests
                     PhysicalAccessDecisionReason.Eligible,
                 Source =
                     PhysicalAccessDecisionSource.OfflineCache,
-                ProcessedAt = processedAt
+                ProcessedAt = processedAt,
+                DeviceKey = "door-a"
             };
 
         await _service.SyncOfflineEventAsync(
             gymId,
+            agentId,
             request);
 
         await _eventRepository
@@ -1224,6 +1324,8 @@ public class PhysicalAccessServiceTests
                 Arg.Is<PhysicalAccessEvent>(
                     accessEvent =>
                         accessEvent.GymId == gymId &&
+                        accessEvent.AccessAgentId == agentId &&
+                        accessEvent.DeviceKey == "door-a" &&
                         accessEvent.RequestId == requestId &&
                         accessEvent.StudentId == studentId &&
                         accessEvent.CredentialId == credentialId &&
@@ -1244,6 +1346,7 @@ public class PhysicalAccessServiceTests
         var requestId = Guid.NewGuid();
         var occurredAt = DateTime.UtcNow.AddMinutes(-2);
         var processedAt = DateTime.UtcNow;
+        var agentId = ConfigureOfflineAgent(gymId, "door-a");
 
         _eventRepository
             .GetByRequestIdAsync(
@@ -1276,11 +1379,13 @@ public class PhysicalAccessServiceTests
                 Source =
                     PhysicalAccessDecisionSource
                         .OfflineFailClosed,
-                ProcessedAt = processedAt
+                ProcessedAt = processedAt,
+                DeviceKey = "door-a"
             };
 
         await _service.SyncOfflineEventAsync(
             gymId,
+            agentId,
             request);
 
         await _eventRepository
@@ -1289,6 +1394,8 @@ public class PhysicalAccessServiceTests
                 Arg.Is<PhysicalAccessEvent>(
                     accessEvent =>
                         accessEvent.GymId == gymId &&
+                        accessEvent.AccessAgentId == agentId &&
+                        accessEvent.DeviceKey == "door-a" &&
                         accessEvent.RequestId == requestId &&
                         accessEvent.StudentId == null &&
                         accessEvent.CredentialId == null &&
@@ -1305,16 +1412,43 @@ public class PhysicalAccessServiceTests
     }
 
     [Fact]
-    public async Task SyncOfflineEventAsync_WhenRequestWasAlreadySynced_ShouldNotCreateDuplicateEvent()
+    public async Task SyncOfflineEventAsync_WhenOfflineCacheDecisionAndReasonAreInconsistent_ShouldReject()
+    {
+        var gymId = Guid.NewGuid();
+        var agentId = ConfigureOfflineAgent(gymId, "door-a");
+        var request = new SyncOfflinePhysicalAccessEventRequest
+        {
+            RequestId = Guid.NewGuid(),
+            ProviderKey = "toletus-litenet2",
+            CredentialType = PhysicalAccessCredentialType.Card,
+            ExternalIdentifier = "synthetic-card",
+            OccurredAt = DateTime.UtcNow.AddMinutes(-1),
+            Decision = PhysicalAccessDecision.Allowed,
+            Reason = PhysicalAccessDecisionReason.FinancialRestriction,
+            Source = PhysicalAccessDecisionSource.OfflineCache,
+            ProcessedAt = DateTime.UtcNow,
+            DeviceKey = "door-a"
+        };
+
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            _service.SyncOfflineEventAsync(gymId, agentId, request));
+        await _eventRepository.DidNotReceiveWithAnyArgs().AddAsync(default!);
+    }
+
+    [Fact]
+    public async Task SyncOfflineEventAsync_WhenHistoricalEventHasNoFingerprint_ShouldRejectUnsafeReplay()
     {
         var gymId = Guid.NewGuid();
         var requestId = Guid.NewGuid();
+        var agentId = Guid.NewGuid();
 
         var existingEvent = new PhysicalAccessEvent
         {
             Id = Guid.NewGuid(),
             GymId = gymId,
             RequestId = requestId,
+            AccessAgentId = agentId,
+            DeviceKey = "door-a",
             Decision = PhysicalAccessDecision.Allowed,
             Reason = PhysicalAccessDecisionReason.Eligible,
             Source = PhysicalAccessDecisionSource.OfflineCache,
@@ -1343,12 +1477,12 @@ public class PhysicalAccessServiceTests
                     PhysicalAccessDecisionReason.Eligible,
                 Source =
                     PhysicalAccessDecisionSource.OfflineCache,
-                ProcessedAt = DateTime.UtcNow.AddMinutes(-4)
+                ProcessedAt = DateTime.UtcNow.AddMinutes(-4),
+                DeviceKey = "door-a"
             };
 
-        await _service.SyncOfflineEventAsync(
-            gymId,
-            request);
+        await Assert.ThrowsAsync<GymFlow.Application.Exceptions.PhysicalAccessOriginConflictException>(
+            () => _service.SyncOfflineEventAsync(gymId, agentId, request));
 
         await _credentialRepository
             .DidNotReceiveWithAnyArgs()
@@ -1361,6 +1495,73 @@ public class PhysicalAccessServiceTests
         await _eventRepository
             .DidNotReceiveWithAnyArgs()
             .AddAsync(default!);
+    }
+
+    [Fact]
+    public async Task SyncOfflineEventAsync_WhenPayloadIsIdentical_ShouldBeIdempotent()
+    {
+        var gymId = Guid.NewGuid();
+        var requestId = Guid.NewGuid();
+        var occurredAt = DateTime.UtcNow.AddMinutes(-2);
+        var processedAt = DateTime.UtcNow;
+        var agentId = ConfigureOfflineAgent(gymId, "door-a");
+        PhysicalAccessEvent? stored = null;
+        _eventRepository.GetByRequestIdAsync(gymId, requestId)
+            .Returns(_ => stored);
+        _eventRepository.AddAsync(Arg.Any<PhysicalAccessEvent>())
+            .Returns(call => stored = call.Arg<PhysicalAccessEvent>());
+        var request = new SyncOfflinePhysicalAccessEventRequest
+        {
+            RequestId = requestId,
+            DeviceKey = "door-a",
+            ProviderKey = "toletus-litenet2",
+            CredentialType = PhysicalAccessCredentialType.Card,
+            ExternalIdentifier = "same-offline-card",
+            OccurredAt = occurredAt,
+            Decision = PhysicalAccessDecision.Denied,
+            Reason = PhysicalAccessDecisionReason.OfflineNoCachedPermission,
+            Source = PhysicalAccessDecisionSource.OfflineFailClosed,
+            ProcessedAt = processedAt
+        };
+
+        var first = await _service.SyncOfflineEventAsync(gymId, agentId, request);
+        var retry = await _service.SyncOfflineEventAsync(gymId, agentId, request);
+
+        Assert.Equal(first.Decision, retry.Decision);
+        Assert.NotNull(stored?.RequestFingerprint);
+        await _eventRepository.Received(1).AddAsync(Arg.Any<PhysicalAccessEvent>());
+    }
+
+    [Fact]
+    public async Task SyncOfflineEventAsync_WhenCredentialPayloadChanges_ShouldConflict()
+    {
+        var gymId = Guid.NewGuid();
+        var requestId = Guid.NewGuid();
+        var agentId = ConfigureOfflineAgent(gymId, "door-a");
+        PhysicalAccessEvent? stored = null;
+        _eventRepository.GetByRequestIdAsync(gymId, requestId)
+            .Returns(_ => stored);
+        _eventRepository.AddAsync(Arg.Any<PhysicalAccessEvent>())
+            .Returns(call => stored = call.Arg<PhysicalAccessEvent>());
+        var request = new SyncOfflinePhysicalAccessEventRequest
+        {
+            RequestId = requestId,
+            DeviceKey = "door-a",
+            ProviderKey = "toletus-litenet2",
+            CredentialType = PhysicalAccessCredentialType.Card,
+            ExternalIdentifier = "offline-card-one",
+            OccurredAt = DateTime.UtcNow.AddMinutes(-1),
+            Decision = PhysicalAccessDecision.Allowed,
+            Reason = PhysicalAccessDecisionReason.Eligible,
+            Source = PhysicalAccessDecisionSource.OfflineCache,
+            ProcessedAt = DateTime.UtcNow
+        };
+        await _service.SyncOfflineEventAsync(gymId, agentId, request);
+        request.ExternalIdentifier = "offline-card-two";
+
+        await Assert.ThrowsAsync<GymFlow.Application.Exceptions.PhysicalAccessOriginConflictException>(
+            () => _service.SyncOfflineEventAsync(gymId, agentId, request));
+        await _eventRepository.Received(1).AddAsync(Arg.Any<PhysicalAccessEvent>());
     }
 
     [Fact]
@@ -1389,10 +1590,32 @@ public class PhysicalAccessServiceTests
         await Assert.ThrowsAsync<ArgumentException>(
             () => _service.SyncOfflineEventAsync(
                 gymId,
+                Guid.NewGuid(),
                 request));
 
         await _eventRepository
             .DidNotReceiveWithAnyArgs()
             .AddAsync(default!);
+    }
+
+    private Guid ConfigureOfflineAgent(Guid gymId, string deviceKey)
+    {
+        var agentId = Guid.NewGuid();
+        _accessAgentRepository.GetByIdAsync(agentId, gymId).Returns(new AccessAgent
+        {
+            Id = agentId,
+            GymId = gymId,
+            IsActive = true,
+            DeviceConfigurationJson = JsonSerializer.Serialize(new[]
+            {
+                new AccessAgentDeviceConfigurationDto
+                {
+                    DeviceKey = deviceKey,
+                    ProviderKey = "toletus-litenet2",
+                    Enabled = true
+                }
+            })
+        });
+        return agentId;
     }
 }

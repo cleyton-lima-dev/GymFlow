@@ -42,6 +42,7 @@ public sealed class PhysicalAccessPinLimiterBypassTests
         limiter.TryReserveAsync(Arg.Any<Guid>())
             .Returns((PhysicalAccessPinReservation?)null);
         var service = new PhysicalAccessService(
+            Substitute.For<IAccessAgentRepository>(),
             credentials,
             Substitute.For<IPhysicalAccessOverrideRepository>(),
             events,

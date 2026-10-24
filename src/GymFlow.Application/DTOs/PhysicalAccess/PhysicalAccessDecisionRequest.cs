@@ -6,6 +6,8 @@ public class PhysicalAccessDecisionRequest
 {
     public Guid RequestId { get; set; }
 
+    public string DeviceKey { get; set; } = string.Empty;
+
     public string ProviderKey { get; set; } = string.Empty;
 
     public PhysicalAccessCredentialType CredentialType { get; set; }
