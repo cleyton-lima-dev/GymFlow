@@ -723,8 +723,19 @@ namespace GymFlow.Infrastructure.Migrations
                     b.Property<Guid?>("CredentialId")
                         .HasColumnType("uuid");
 
+                    b.Property<Guid?>("AccessAgentId")
+                        .HasColumnType("uuid");
+
                     b.Property<int>("Decision")
                         .HasColumnType("integer");
+
+                    b.Property<string>("DeviceKey")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("RequestFingerprint")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
 
                     b.Property<Guid>("GymId")
                         .HasColumnType("uuid");
@@ -750,6 +761,8 @@ namespace GymFlow.Infrastructure.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("CredentialId");
+
+                    b.HasIndex("AccessAgentId");
 
                     b.HasIndex("GymId", "OccurredAt");
 
@@ -1710,6 +1723,11 @@ namespace GymFlow.Infrastructure.Migrations
 
             modelBuilder.Entity("GymFlow.Domain.Entities.PhysicalAccessEvent", b =>
                 {
+                    b.HasOne("GymFlow.Domain.Entities.AccessAgent", null)
+                        .WithMany()
+                        .HasForeignKey("AccessAgentId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("GymFlow.Domain.Entities.PhysicalAccessCredential", "Credential")
                         .WithMany()
                         .HasForeignKey("CredentialId")

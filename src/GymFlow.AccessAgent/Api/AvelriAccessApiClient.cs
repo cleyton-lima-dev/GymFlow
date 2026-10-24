@@ -65,6 +65,7 @@ public class AvelriAccessApiClient :
             new AccessDecisionRequest(
                 attempt.RequestId,
                 providerKey,
+                attempt.DeviceKey,
                 (int)attempt.CredentialType,
                 attempt.ExternalIdentifier,
                 attempt.OccurredAt);
@@ -112,6 +113,7 @@ public class AvelriAccessApiClient :
         AgentCredentials credentials,
         string token,
         Guid requestId,
+        string deviceKey,
         DateTime occurredAt,
         CancellationToken cancellationToken)
     {
@@ -121,6 +123,7 @@ public class AvelriAccessApiClient :
         var requestBody =
             new PhysicalPassageConfirmationRequest(
                 requestId,
+                deviceKey,
                 occurredAt);
 
         using var request =
@@ -158,6 +161,7 @@ public class AvelriAccessApiClient :
             new SyncOfflineAccessEventRequest(
                 accessEvent.RequestId,
                 accessEvent.ProviderKey,
+            accessEvent.DeviceKey,
                 (int)accessEvent.CredentialType,
                 accessEvent.ExternalIdentifier,
                 accessEvent.OccurredAt,
@@ -294,6 +298,7 @@ public class AvelriAccessApiClient :
     private sealed record AccessDecisionRequest(
         Guid RequestId,
         string ProviderKey,
+        string DeviceKey,
         int CredentialType,
         string ExternalIdentifier,
         DateTime OccurredAt);
@@ -313,11 +318,13 @@ public class AvelriAccessApiClient :
 
     private sealed record PhysicalPassageConfirmationRequest(
         Guid RequestId,
+        string DeviceKey,
         DateTime OccurredAt);
 
     private sealed record SyncOfflineAccessEventRequest(
         Guid RequestId,
         string ProviderKey,
+        string DeviceKey,
         int CredentialType,
         string ExternalIdentifier,
         DateTime OccurredAt,

@@ -113,7 +113,8 @@ internal sealed class PhysicalPassageConfirmationCoordinator
                 authorization.RequestId,
                 passageTime,
                 _clock.GetUtcNow().UtcDateTime,
-                null),
+                null,
+                authorization.DeviceKey),
             cancellationToken);
 
         return true;

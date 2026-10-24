@@ -64,7 +64,8 @@ public sealed class SqlitePhysicalPassageOfflineStore :
                     RequestId TEXT NOT NULL PRIMARY KEY,
                     OccurredAt TEXT NOT NULL,
                     CreatedAt TEXT NOT NULL,
-                    SyncedAt TEXT NULL
+                    SyncedAt TEXT NULL,
+                    DeviceKey TEXT NOT NULL DEFAULT ''
                 );
 
                 CREATE INDEX IF NOT EXISTS
@@ -78,6 +79,8 @@ public sealed class SqlitePhysicalPassageOfflineStore :
 
             await command.ExecuteNonQueryAsync(
                 cancellationToken);
+
+            await EnsureDeviceKeyColumnAsync(connection, cancellationToken);
 
             _initialized = true;
         }
@@ -108,14 +111,16 @@ public sealed class SqlitePhysicalPassageOfflineStore :
                 RequestId,
                 OccurredAt,
                 CreatedAt,
-                SyncedAt
+                SyncedAt,
+                DeviceKey
             )
             VALUES
             (
                 $requestId,
                 $occurredAt,
                 $createdAt,
-                $syncedAt
+                $syncedAt,
+                $deviceKey
             );
             """;
 
@@ -139,6 +144,10 @@ public sealed class SqlitePhysicalPassageOfflineStore :
                 ? DBNull.Value
                 : ToDatabaseDateTime(
                     passage.SyncedAt.Value));
+
+        command.Parameters.AddWithValue(
+            "$deviceKey",
+            passage.DeviceKey);
 
         await command.ExecuteNonQueryAsync(
             cancellationToken);
@@ -165,9 +174,11 @@ public sealed class SqlitePhysicalPassageOfflineStore :
                 RequestId,
                 OccurredAt,
                 CreatedAt,
-                SyncedAt
+                SyncedAt,
+                DeviceKey
             FROM PendingPhysicalPassages
             WHERE SyncedAt IS NULL
+              AND length(trim(DeviceKey)) > 0
             ORDER BY CreatedAt
             LIMIT $limit;
             """;
@@ -197,7 +208,8 @@ public sealed class SqlitePhysicalPassageOfflineStore :
                     reader.IsDBNull(3)
                         ? null
                         : ParseDatabaseDateTime(
-                            reader.GetString(3))));
+                            reader.GetString(3)),
+                    reader.GetString(4)));
         }
 
         return passages;
@@ -290,6 +302,26 @@ public sealed class SqlitePhysicalPassageOfflineStore :
             cancellationToken);
 
         return connection;
+    }
+
+    private static async Task EnsureDeviceKeyColumnAsync(
+        SqliteConnection connection,
+        CancellationToken cancellationToken)
+    {
+        await using var command = connection.CreateCommand();
+        command.CommandText = "PRAGMA table_info(PendingPhysicalPassages);";
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        var found = false;
+        while (await reader.ReadAsync(cancellationToken))
+            found |= string.Equals(reader.GetString(1), "DeviceKey", StringComparison.OrdinalIgnoreCase);
+        await reader.DisposeAsync();
+
+        if (found)
+            return;
+
+        await using var alter = connection.CreateCommand();
+        alter.CommandText = "ALTER TABLE PendingPhysicalPassages ADD COLUMN DeviceKey TEXT NOT NULL DEFAULT '';";
+        await alter.ExecuteNonQueryAsync(cancellationToken);
     }
 
     private static string ToDatabaseDateTime(

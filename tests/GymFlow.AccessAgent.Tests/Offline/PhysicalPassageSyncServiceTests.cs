@@ -46,6 +46,7 @@ public class PhysicalPassageSyncServiceTests
                 dependencies.Credentials,
                 "agent-token",
                 passage.RequestId,
+                passage.DeviceKey,
                 passage.OccurredAt,
                 Arg.Any<CancellationToken>());
 
@@ -83,6 +84,7 @@ public class PhysicalPassageSyncServiceTests
                 dependencies.Credentials,
                 "agent-token",
                 passage.RequestId,
+                passage.DeviceKey,
                 passage.OccurredAt,
                 Arg.Any<CancellationToken>())
             .Returns<Task>(
@@ -142,6 +144,7 @@ public class PhysicalPassageSyncServiceTests
                 dependencies.Credentials,
                 "expired-token",
                 passage.RequestId,
+                passage.DeviceKey,
                 passage.OccurredAt,
                 Arg.Any<CancellationToken>())
             .Returns<Task>(
@@ -169,6 +172,7 @@ public class PhysicalPassageSyncServiceTests
                 dependencies.Credentials,
                 "new-token",
                 passage.RequestId,
+                passage.DeviceKey,
                 passage.OccurredAt,
                 Arg.Any<CancellationToken>());
 
@@ -206,6 +210,7 @@ public class PhysicalPassageSyncServiceTests
                 dependencies.Credentials,
                 "agent-token",
                 passage.RequestId,
+                passage.DeviceKey,
                 passage.OccurredAt,
                 Arg.Any<CancellationToken>())
             .Returns<Task>(
@@ -245,7 +250,8 @@ public class PhysicalPassageSyncServiceTests
             Guid.NewGuid(),
             now.AddSeconds(-2),
             now,
-            null);
+            null,
+            "door-a");
     }
 
     private static Dependencies

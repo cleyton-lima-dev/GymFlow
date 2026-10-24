@@ -1,5 +1,6 @@
 using GymFlow.Domain.Enums;
 using GymFlow.Application.DTOs.PhysicalAccess;
+using GymFlow.Application.Exceptions;
 using GymFlow.Application.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -71,6 +72,13 @@ public class PhysicalAccessController : ControllerBase
                     request);
 
             return Ok(response);
+        }
+        catch (PhysicalAccessOriginConflictException)
+        {
+            return Conflict(new
+            {
+                message = "O RequestId já está associado a outra tentativa de acesso."
+            });
         }
         catch (ArgumentException ex)
         {

@@ -12,7 +12,10 @@ public interface IAccessOfflineStore
         AccessCredentialType credentialType,
         string externalIdentifier,
         DateTime utcNow,
-        CancellationToken cancellationToken);
+        CancellationToken cancellationToken,
+        Guid gymId = default,
+        Guid agentId = default,
+        string deviceKey = "");
 
     Task UpsertPermissionAsync(
         CachedAccessPermission permission,
@@ -43,7 +46,10 @@ public sealed record CachedAccessPermission(
     bool Allowed,
     string Reason,
     DateTime ValidUntil,
-    DateTime UpdatedAt);
+    DateTime UpdatedAt,
+    Guid GymId = default,
+    Guid AgentId = default,
+    string DeviceKey = "");
 
 public sealed record PendingAccessEvent(
     Guid RequestId,
@@ -55,7 +61,9 @@ public sealed record PendingAccessEvent(
     string Reason,
     AccessDecisionSource Source,
     DateTime CreatedAt,
-    DateTime? SyncedAt);
+    DateTime? SyncedAt,
+    string DeviceKey = "",
+    Guid? AgentId = null);
 
 public enum AccessDecisionSource
 {

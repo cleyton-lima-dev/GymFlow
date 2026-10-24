@@ -304,6 +304,8 @@ public class CheckInServiceTests
         var requestId = Guid.NewGuid();
         var passageAt =
             DateTime.UtcNow;
+        var agentId = Guid.NewGuid();
+        const string deviceKey = "door-a";
 
         var student =
             CreateStudent(
@@ -316,6 +318,8 @@ public class CheckInServiceTests
                 Id = Guid.NewGuid(),
                 GymId = gymId,
                 RequestId = requestId,
+                AccessAgentId = agentId,
+                DeviceKey = deviceKey,
                 StudentId = student.Id,
                 Decision =
                     PhysicalAccessDecision.Allowed,
@@ -345,10 +349,12 @@ public class CheckInServiceTests
             await _service
                 .CreateFromPhysicalPassageAsync(
                     gymId,
+                    agentId,
                     new ConfirmPhysicalPassageRequest
                     {
                         RequestId = requestId,
-                        OccurredAt = passageAt
+                        OccurredAt = passageAt,
+                        DeviceKey = deviceKey
                     });
 
         Assert.NotNull(result);
@@ -395,6 +401,8 @@ public class CheckInServiceTests
     {
         var gymId = Guid.NewGuid();
         var requestId = Guid.NewGuid();
+        var agentId = Guid.NewGuid();
+        const string deviceKey = "door-a";
 
         _physicalAccessEventRepository
             .GetByRequestIdAsync(
@@ -406,6 +414,8 @@ public class CheckInServiceTests
                     Id = Guid.NewGuid(),
                     GymId = gymId,
                     RequestId = requestId,
+                    AccessAgentId = agentId,
+                    DeviceKey = deviceKey,
                     StudentId = Guid.NewGuid(),
                     Decision =
                         PhysicalAccessDecision.Denied,
@@ -424,17 +434,48 @@ public class CheckInServiceTests
                     _service
                         .CreateFromPhysicalPassageAsync(
                             gymId,
+                            agentId,
                             new ConfirmPhysicalPassageRequest
                             {
                                 RequestId =
                                     requestId,
                                 OccurredAt =
-                                    DateTime.UtcNow
+                                    DateTime.UtcNow,
+                                DeviceKey = deviceKey
                             }));
 
         await _checkInRepository
             .DidNotReceiveWithAnyArgs()
             .AddAsync(default!);
+    }
+
+    [Theory]
+    [InlineData(PhysicalAccessDecisionSource.OfflineCache)]
+    [InlineData(PhysicalAccessDecisionSource.OfflineFailClosed)]
+    public async Task CreateFromPhysicalPassageAsync_WhenAuthorizationWasOffline_ShouldNeverCreateCheckIn(
+        PhysicalAccessDecisionSource source)
+    {
+        var gymId = Guid.NewGuid();
+        var requestId = Guid.NewGuid();
+        var agentId = Guid.NewGuid();
+        const string deviceKey = "door-a";
+        _physicalAccessEventRepository.GetByRequestIdAsync(gymId, requestId)
+            .Returns(new PhysicalAccessEvent
+            {
+                Id = Guid.NewGuid(), GymId = gymId, RequestId = requestId,
+                AccessAgentId = agentId, DeviceKey = deviceKey,
+                StudentId = Guid.NewGuid(), Decision = PhysicalAccessDecision.Allowed,
+                Reason = PhysicalAccessDecisionReason.Eligible, Source = source,
+                OccurredAt = DateTime.UtcNow.AddMinutes(-1), ProcessedAt = DateTime.UtcNow
+            });
+
+        await Assert.ThrowsAsync<GymFlow.Application.Exceptions.PhysicalAccessOriginConflictException>(
+            () => _service.CreateFromPhysicalPassageAsync(gymId, agentId,
+                new ConfirmPhysicalPassageRequest
+                {
+                    RequestId = requestId, DeviceKey = deviceKey, OccurredAt = DateTime.UtcNow
+                }));
+        await _checkInRepository.DidNotReceiveWithAnyArgs().AddAsync(default!);
     }
 
     [Fact]
@@ -454,12 +495,14 @@ public class CheckInServiceTests
             await _service
                 .CreateFromPhysicalPassageAsync(
                     gymId,
+                    Guid.NewGuid(),
                     new ConfirmPhysicalPassageRequest
                     {
                         RequestId =
                             requestId,
                         OccurredAt =
-                            DateTime.UtcNow
+                            DateTime.UtcNow,
+                        DeviceKey = "door-a"
                     });
 
         Assert.Null(result);
@@ -474,11 +517,28 @@ public class CheckInServiceTests
     {
         var gymId = Guid.NewGuid();
         var requestId = Guid.NewGuid();
+        var agentId = Guid.NewGuid();
+        const string deviceKey = "door-a";
 
         var student =
             CreateStudent(
                 gymId,
                 "Aluno Catraca");
+
+        var accessEvent =
+            new PhysicalAccessEvent
+            {
+                Id = Guid.NewGuid(),
+                GymId = gymId,
+                RequestId = requestId,
+                AccessAgentId = agentId,
+                DeviceKey = deviceKey,
+                Decision = PhysicalAccessDecision.Allowed,
+                StudentId = student.Id,
+                Reason = PhysicalAccessDecisionReason.Eligible,
+                OccurredAt = DateTime.UtcNow.AddMinutes(-2),
+                ProcessedAt = DateTime.UtcNow.AddMinutes(-1)
+            };
 
         var existing =
             new CheckIn
@@ -487,10 +547,9 @@ public class CheckInServiceTests
                 GymId = gymId,
                 StudentId = student.Id,
                 RequestId = requestId,
+                PhysicalAccessEventId = accessEvent.Id,
                 Source =
                     CheckInSource.PhysicalAccess,
-                PhysicalAccessEventId =
-                    Guid.NewGuid(),
                 OccurredAt =
                     DateTime.UtcNow.AddMinutes(-1),
                 CreatedAt =
@@ -503,6 +562,10 @@ public class CheckInServiceTests
                 requestId)
             .Returns(existing);
 
+        _physicalAccessEventRepository
+            .GetByRequestIdAsync(gymId, requestId)
+            .Returns(accessEvent);
+
         _studentRepository
             .GetByIdAndGymIdAsync(
                 student.Id,
@@ -513,12 +576,14 @@ public class CheckInServiceTests
             await _service
                 .CreateFromPhysicalPassageAsync(
                     gymId,
+                    agentId,
                     new ConfirmPhysicalPassageRequest
                     {
                         RequestId =
                             requestId,
                         OccurredAt =
-                            DateTime.UtcNow
+                            DateTime.UtcNow,
+                        DeviceKey = deviceKey
                     });
 
         Assert.NotNull(result);
@@ -532,10 +597,8 @@ public class CheckInServiceTests
             result.OccurredAt);
 
         await _physicalAccessEventRepository
-            .DidNotReceiveWithAnyArgs()
-            .GetByRequestIdAsync(
-                default,
-                default);
+            .Received(1)
+            .GetByRequestIdAsync(gymId, requestId);
 
         await _checkInRepository
             .DidNotReceiveWithAnyArgs()

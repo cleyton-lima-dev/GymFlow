@@ -425,7 +425,8 @@ public partial class TenantEnrollmentAccessTests
         var agent = new AccessAgent
         {
             Id = Guid.NewGuid(), GymId = gym, Name = "G6 Shared Physical Agent",
-            SecretHash = "unused-synthetic", IsActive = true
+            SecretHash = "unused-synthetic", IsActive = true,
+            DeviceConfigurationJson = "[{\"deviceKey\":\"door-a\",\"providerKey\":\"synthetic\",\"enabled\":true}]"
         };
         factory.WithDb(db =>
         {
@@ -458,7 +459,8 @@ public partial class TenantEnrollmentAccessTests
             {
                 RequestId = Guid.NewGuid(), ProviderKey = "synthetic", CredentialType = PhysicalAccessCredentialType.Card,
                 ExternalIdentifier = identifier, OccurredAt = DateTime.UtcNow,
-                GymId = factory.OtherEnabledGym, StudentId = foreignStudentId, ErpEnabled = false
+                GymId = factory.OtherEnabledGym, StudentId = foreignStudentId, ErpEnabled = false,
+                DeviceKey = "door-a"
             });
             Assert.Equal(HttpStatusCode.OK, response.StatusCode);
             var result = (await response.Content.ReadFromJsonAsync<PhysicalAccessDecisionResponse>())!;

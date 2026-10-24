@@ -494,6 +494,11 @@ public sealed class ToletusLiteNet2Adapter :
         RecordCredentialRead(
             attempt);
 
+        attempt = attempt with
+        {
+            DeviceKey = GetConfiguredDeviceKey()
+        };
+
         _ = ProcessAttemptAsync(
             attempt,
             _stoppingToken);

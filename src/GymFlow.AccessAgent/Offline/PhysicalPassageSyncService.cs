@@ -218,6 +218,7 @@ public sealed class PhysicalPassageSyncService :
                 credentials,
                 token,
                 passage.RequestId,
+                passage.DeviceKey,
                 passage.OccurredAt,
                 cancellationToken);
     }

@@ -4,6 +4,8 @@ using System.Text.Json;
 using GymFlow.Application.Interfaces.Security;
 using GymFlow.Domain.Entities;
 using GymFlow.Domain.Enums;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace GymFlow.IntegrationTests.Security;
@@ -369,7 +371,7 @@ public partial class TenantEnrollmentAccessTests
     [InlineData(true)]
     public async Task PostgreSql_ConcurrentManualAndPhysicalRequestsWithSameRequestId_ConflictWithoutCrossLinking(bool postgres)
     {
-        await using var factory = new TestApi(postgres);
+        await using var factory = new TestApi(postgres, migrateSchema: postgres);
         var admin = factory.AddUser(factory.LegacyGym, UserRole.Admin);
         var manualStudent = factory.AddUser(factory.LegacyGym);
         var physicalStudent = factory.AddUser(factory.LegacyGym);
@@ -385,11 +387,13 @@ public partial class TenantEnrollmentAccessTests
         var agent = new AccessAgent
         {
             Id = Guid.NewGuid(), GymId = factory.LegacyGym, Name = "Synthetic race agent",
-            MachineName = "isolated-test", SecretHash = "unused", CredentialVersion = 1
+            MachineName = "isolated-test", SecretHash = "unused", CredentialVersion = 1,
+            DeviceConfigurationJson = "[{\"deviceKey\":\"door-a\",\"providerKey\":\"toletus-litenet2\",\"enabled\":true}]"
         };
         var accessEvent = new PhysicalAccessEvent
         {
             Id = Guid.NewGuid(), GymId = factory.LegacyGym, RequestId = requestId,
+            AccessAgentId = agent.Id, DeviceKey = "door-a",
             StudentId = physicalStudentId, Decision = PhysicalAccessDecision.Allowed,
             Reason = PhysicalAccessDecisionReason.Eligible, OccurredAt = occurredAt
         };
@@ -411,7 +415,7 @@ public partial class TenantEnrollmentAccessTests
             manualClient.PostAsJsonAsync("/api/check-ins/manual",
                 new { studentId = manualStudentId, requestId }),
             physicalClient.PostAsJsonAsync("/api/access-agent/check-ins/physical-passage",
-                new { requestId, occurredAt }));
+                new { requestId, occurredAt, deviceKey = "door-a" }));
 
         try
         {
@@ -455,6 +459,108 @@ public partial class TenantEnrollmentAccessTests
                 barrier.TrySetResult(true);
             await barrier.Task.WaitAsync(TimeSpan.FromSeconds(10));
         };
+    }
+
+    [PostgresTheory]
+    [InlineData(true)]
+    public async Task PostgreSql_ConcurrentAccessDecisionsWithSameRequestIdAndDifferentCredentials_ReturnOneDecisionAndOneConflict(bool postgres)
+    {
+        await using var factory = new TestApi(postgres, migrateSchema: postgres);
+        var firstStudent = factory.AddUser(factory.LegacyGym);
+        var secondStudent = factory.AddUser(factory.LegacyGym);
+        Guid firstStudentId = default, secondStudentId = default;
+        var agent = new AccessAgent
+        {
+            Id = Guid.NewGuid(), GymId = factory.LegacyGym, Name = "Synthetic decision race",
+            MachineName = "isolated-test", SecretHash = "unused", CredentialVersion = 1,
+            DeviceConfigurationJson = "[{\"deviceKey\":\"door-a\",\"providerKey\":\"toletus-litenet2\",\"enabled\":true}]"
+        };
+        factory.WithDb(db =>
+        {
+            firstStudentId = db.Students.Single(s => s.UserId == firstStudent.Id).Id;
+            secondStudentId = db.Students.Single(s => s.UserId == secondStudent.Id).Id;
+            db.AccessAgents.Add(agent);
+            db.PhysicalAccessCredentials.AddRange(
+                new PhysicalAccessCredential
+                {
+                    Id = Guid.NewGuid(), GymId = factory.LegacyGym, StudentId = firstStudentId,
+                    Type = PhysicalAccessCredentialType.Card, ProviderKey = "toletus-litenet2",
+                    ExternalIdentifier = "race-card-one", IsActive = true
+                },
+                new PhysicalAccessCredential
+                {
+                    Id = Guid.NewGuid(), GymId = factory.LegacyGym, StudentId = secondStudentId,
+                    Type = PhysicalAccessCredentialType.Card, ProviderKey = "toletus-litenet2",
+                    ExternalIdentifier = "race-card-two", IsActive = true
+                });
+        });
+
+        using var scope = factory.Services.CreateScope();
+        using var client = factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new("Bearer",
+            scope.ServiceProvider.GetRequiredService<IAccessAgentTokenService>().GenerateToken(agent));
+        var requestId = Guid.NewGuid();
+        var occurredAt = DateTime.UtcNow;
+        object Body(string credential) => new
+        {
+            requestId, deviceKey = "door-a", providerKey = "toletus-litenet2",
+            credentialType = (int)PhysicalAccessCredentialType.Card,
+            externalIdentifier = credential, occurredAt
+        };
+
+        SynchronizeNextTwoSaves(factory);
+        var responses = await Task.WhenAll(
+            client.PostAsJsonAsync("/api/access-agent/physical-access/decisions", Body("race-card-one")),
+            client.PostAsJsonAsync("/api/access-agent/physical-access/decisions", Body("race-card-two")));
+
+        try
+        {
+            Assert.Equal(1, responses.Count(response => response.StatusCode == HttpStatusCode.OK));
+            Assert.Equal(1, responses.Count(response => response.StatusCode == HttpStatusCode.Conflict));
+            var success = Assert.Single(responses, response => response.StatusCode == HttpStatusCode.OK);
+            var winnerStudentId = (await success.Content.ReadFromJsonAsync<JsonElement>())
+                .GetProperty("studentId").GetGuid();
+            Assert.Contains(winnerStudentId, new[] { firstStudentId, secondStudentId });
+            factory.WithDb(db =>
+            {
+                var decision = Assert.Single(db.PhysicalAccessEvents.Where(e => e.RequestId == requestId));
+                Assert.Equal(winnerStudentId, decision.StudentId);
+                Assert.Equal(agent.Id, decision.AccessAgentId);
+                Assert.Equal("door-a", decision.DeviceKey);
+                Assert.NotNull(decision.RequestFingerprint);
+                Assert.Empty(db.CheckIns);
+            });
+
+            requestId = Guid.NewGuid();
+            var identicalBody = Body("race-card-one");
+            SynchronizeNextTwoSaves(factory);
+            var identicalResponses = await Task.WhenAll(
+                client.PostAsJsonAsync("/api/access-agent/physical-access/decisions", identicalBody),
+                client.PostAsJsonAsync("/api/access-agent/physical-access/decisions", identicalBody));
+            try
+            {
+                Assert.All(identicalResponses, response => Assert.Equal(HttpStatusCode.OK, response.StatusCode));
+                var decisionIds = await Task.WhenAll(identicalResponses.Select(async response =>
+                    (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("requestId").GetGuid()));
+                Assert.All(decisionIds, id => Assert.Equal(requestId, id));
+                factory.WithDb(db =>
+                {
+                    var persisted = Assert.Single(db.PhysicalAccessEvents.Where(e => e.RequestId == requestId));
+                    Assert.Equal(agent.Id, persisted.AccessAgentId);
+                    Assert.Equal("door-a", persisted.DeviceKey);
+                    Assert.NotNull(persisted.RequestFingerprint);
+                    Assert.Empty(db.CheckIns);
+                });
+            }
+            finally
+            {
+                foreach (var response in identicalResponses) response.Dispose();
+            }
+        }
+        finally
+        {
+            foreach (var response in responses) response.Dispose();
+        }
     }
 
     private static async Task CheckIntegratedAdmin(bool postgres)
@@ -510,50 +616,212 @@ public partial class TenantEnrollmentAccessTests
 
     private static async Task CheckIntegratedAgent(bool postgres)
     {
-        await using var factory = new TestApi(postgres);
+        await using var factory = new TestApi(postgres, migrateSchema: postgres);
         var student = factory.AddUser(factory.LegacyGym);
         var foreign = factory.AddUser(factory.EnabledGym);
+        if (postgres)
+        {
+            factory.WithDb(db =>
+            {
+                var applied = db.Database.GetAppliedMigrations().ToHashSet(StringComparer.Ordinal);
+                Assert.Contains("20261024190000_BindPhysicalAccessEventsToAgentDevices", applied);
+                Assert.Contains("20261024200000_AddPhysicalAccessRequestFingerprint", applied);
+                Assert.Empty(db.Database.GetPendingMigrations());
+
+                db.Database.OpenConnection();
+                try
+                {
+                    var connection = db.Database.GetDbConnection();
+                    string ScalarString(string sql)
+                    {
+                        using var command = connection.CreateCommand();
+                        command.CommandText = sql;
+                        return (string)command.ExecuteScalar()!;
+                    }
+                    Assert.Equal("YES", ScalarString("SELECT is_nullable FROM information_schema.columns WHERE table_schema='public' AND table_name='PhysicalAccessEvents' AND column_name='AccessAgentId'"));
+                    Assert.Equal("YES", ScalarString("SELECT is_nullable FROM information_schema.columns WHERE table_schema='public' AND table_name='PhysicalAccessEvents' AND column_name='DeviceKey'"));
+                    Assert.Equal("YES", ScalarString("SELECT is_nullable FROM information_schema.columns WHERE table_schema='public' AND table_name='PhysicalAccessEvents' AND column_name='RequestFingerprint'"));
+                    Assert.Equal("IX_PhysicalAccessEvents_AccessAgentId", ScalarString("SELECT indexname FROM pg_indexes WHERE schemaname='public' AND tablename='PhysicalAccessEvents' AND indexname='IX_PhysicalAccessEvents_AccessAgentId'"));
+                    Assert.Equal("r", ScalarString("SELECT confdeltype::text FROM pg_constraint WHERE conname='FK_PhysicalAccessEvents_AccessAgents_AccessAgentId'"));
+                }
+                finally
+                {
+                    db.Database.CloseConnection();
+                }
+            });
+        }
         var ownRequest = Guid.NewGuid();
         var foreignRequest = Guid.NewGuid();
         var deniedRequest = Guid.NewGuid();
+        var historicalRequest = Guid.NewGuid();
         var now = DateTime.UtcNow;
+        const string cardIdentifier = "synthetic-card-83";
         var agent = new AccessAgent
         {
             Id = Guid.NewGuid(), GymId = factory.LegacyGym, Name = "Synthetic integrated agent",
-            MachineName = "isolated-test", SecretHash = "unused", CredentialVersion = 1
+            MachineName = "isolated-test", SecretHash = "unused", CredentialVersion = 1,
+            DeviceConfigurationJson = "[{\"deviceKey\":\"door-a\",\"providerKey\":\"toletus-litenet2\",\"enabled\":true},{\"deviceKey\":\"door-b\",\"providerKey\":\"toletus-litenet2\",\"enabled\":true}]"
+        };
+        var otherAgent = new AccessAgent
+        {
+            Id = Guid.NewGuid(), GymId = factory.LegacyGym, Name = "Second synthetic agent",
+            MachineName = "isolated-test-2", SecretHash = "unused", CredentialVersion = 1,
+            DeviceConfigurationJson = "[{\"deviceKey\":\"door-a\",\"providerKey\":\"toletus-litenet2\",\"enabled\":true}]"
+        };
+        var otherGymAgent = new AccessAgent
+        {
+            Id = Guid.NewGuid(), GymId = factory.EnabledGym, Name = "Other gym synthetic agent",
+            MachineName = "isolated-test-other-gym", SecretHash = "unused", CredentialVersion = 1,
+            DeviceConfigurationJson = "[{\"deviceKey\":\"door-f\",\"providerKey\":\"toletus-litenet2\",\"enabled\":true}]"
         };
         factory.WithDb(db =>
         {
-            db.AccessAgents.Add(agent);
+            db.AccessAgents.AddRange(agent, otherAgent, otherGymAgent);
+            db.PhysicalAccessCredentials.Add(new PhysicalAccessCredential
+            {
+                Id = Guid.NewGuid(),
+                GymId = factory.LegacyGym,
+                StudentId = db.Students.Single(s => s.UserId == student.Id).Id,
+                Type = PhysicalAccessCredentialType.Card,
+                ProviderKey = "toletus-litenet2",
+                ExternalIdentifier = cardIdentifier,
+                IsActive = true
+            });
             foreach (var (user, request, decision) in new[]
             {
-                (student, ownRequest, PhysicalAccessDecision.Allowed),
                 (foreign, foreignRequest, PhysicalAccessDecision.Allowed),
-                (student, deniedRequest, PhysicalAccessDecision.Denied)
+                (student, deniedRequest, PhysicalAccessDecision.Denied),
+                (student, historicalRequest, PhysicalAccessDecision.Allowed)
             })
                 db.PhysicalAccessEvents.Add(new PhysicalAccessEvent
                 {
                     Id = Guid.NewGuid(), GymId = user.GymId, RequestId = request,
                     StudentId = db.Students.Single(s => s.UserId == user.Id).Id,
+                    AccessAgentId = user == foreign || request == historicalRequest ? null : agent.Id,
+                    DeviceKey = user == foreign || request == historicalRequest ? null : "door-a",
                     Decision = decision, Reason = PhysicalAccessDecisionReason.Eligible, OccurredAt = now
                 });
+            var historical = db.PhysicalAccessEvents.Local.Single(e => e.RequestId == historicalRequest);
+            Assert.Null(historical.AccessAgentId);
+            Assert.Null(historical.DeviceKey);
+            Assert.Null(historical.RequestFingerprint);
             Assert.Empty(db.CheckIns);
         });
         using var scope = factory.Services.CreateScope();
         using var client = factory.CreateClient();
         client.DefaultRequestHeaders.Authorization = new("Bearer",
             scope.ServiceProvider.GetRequiredService<IAccessAgentTokenService>().GenerateToken(agent));
+        var otherAgentToken = scope.ServiceProvider.GetRequiredService<IAccessAgentTokenService>().GenerateToken(otherAgent);
         foreach (var endpoint in new[] { "/api/check-ins", "/api/physical-access/events", "/api/dashboard" })
             Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync(endpoint)).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await client.PostAsJsonAsync("/api/check-ins/manual", new { })).StatusCode);
+        var decisionBody = new
+        {
+            requestId = ownRequest,
+            deviceKey = "door-a",
+            providerKey = "toletus-litenet2",
+            credentialType = (int)PhysicalAccessCredentialType.Card,
+            externalIdentifier = cardIdentifier,
+            occurredAt = now
+        };
+        Assert.Equal(HttpStatusCode.Conflict, (await client.PostAsJsonAsync(
+            "/api/access-agent/physical-access/decisions",
+            new { requestId = Guid.NewGuid(), deviceKey = "unconfigured-door",
+                decisionBody.providerKey, decisionBody.credentialType,
+                decisionBody.externalIdentifier, decisionBody.occurredAt })).StatusCode);
+        var decisionResponse = await client.PostAsJsonAsync(
+            "/api/access-agent/physical-access/decisions",
+            decisionBody);
+        Assert.Equal(HttpStatusCode.OK, decisionResponse.StatusCode);
+        var decision = await decisionResponse.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal((int)PhysicalAccessDecision.Allowed, decision.GetProperty("decision").GetInt32());
+        Assert.Equal(HttpStatusCode.OK, (await client.PostAsJsonAsync(
+            "/api/access-agent/physical-access/decisions", decisionBody)).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await client.PostAsJsonAsync(
+            "/api/access-agent/physical-access/decisions",
+            new { decisionBody.requestId, decisionBody.deviceKey, decisionBody.providerKey,
+                decisionBody.credentialType, externalIdentifier = "different-card", decisionBody.occurredAt })).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await client.PostAsJsonAsync(
+            "/api/access-agent/physical-access/decisions",
+            new { decisionBody.requestId, decisionBody.deviceKey, decisionBody.providerKey,
+                credentialType = (int)PhysicalAccessCredentialType.BiometricExternalId,
+                decisionBody.externalIdentifier, decisionBody.occurredAt })).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await client.PostAsJsonAsync(
+            "/api/access-agent/physical-access/decisions",
+            new { decisionBody.requestId, deviceKey = "door-b", decisionBody.providerKey,
+                decisionBody.credentialType, decisionBody.externalIdentifier, decisionBody.occurredAt })).StatusCode);
+
+        var offlineRequestId = Guid.NewGuid();
+        var offlineOccurredAt = now.AddMinutes(-3);
+        var offlineProcessedAt = now.AddMinutes(-2);
+        var offlineBody = new
+        {
+            requestId = offlineRequestId,
+            deviceKey = "door-a",
+            providerKey = "toletus-litenet2",
+            credentialType = (int)PhysicalAccessCredentialType.Card,
+            externalIdentifier = cardIdentifier,
+            occurredAt = offlineOccurredAt,
+            decision = (int)PhysicalAccessDecision.Allowed,
+            reason = (int)PhysicalAccessDecisionReason.Eligible,
+            source = (int)PhysicalAccessDecisionSource.OfflineCache,
+            processedAt = offlineProcessedAt
+        };
+        const string offlineSync = "/api/access-agent/physical-access/offline-events";
+        Assert.Equal(HttpStatusCode.OK,
+            (await client.PostAsJsonAsync(offlineSync, offlineBody)).StatusCode);
+        // Retry the exact persisted queue payload, including both timestamps.
+        Assert.Equal(HttpStatusCode.OK,
+            (await client.PostAsJsonAsync(offlineSync, offlineBody)).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict,
+            (await client.PostAsJsonAsync("/api/access-agent/check-ins/physical-passage",
+                new { requestId = offlineRequestId, occurredAt = now, deviceKey = "door-a" })).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict,
+            (await client.PostAsJsonAsync(offlineSync,
+                new { offlineBody.requestId, offlineBody.deviceKey, offlineBody.providerKey,
+                    offlineBody.credentialType, externalIdentifier = "tampered-card",
+                    offlineBody.occurredAt, offlineBody.decision, offlineBody.reason,
+                    offlineBody.source, offlineBody.processedAt })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest,
+            (await client.PostAsJsonAsync(offlineSync,
+                new { requestId = Guid.NewGuid(), offlineBody.deviceKey, offlineBody.providerKey,
+                    offlineBody.credentialType, offlineBody.externalIdentifier,
+                    offlineBody.occurredAt, offlineBody.decision,
+                    reason = (int)PhysicalAccessDecisionReason.FinancialRestriction,
+                    offlineBody.source, offlineBody.processedAt })).StatusCode);
+        client.DefaultRequestHeaders.Authorization = new("Bearer", otherAgentToken);
+        Assert.Equal(HttpStatusCode.Conflict, (await client.PostAsJsonAsync(
+            "/api/access-agent/physical-access/decisions",
+            new { decisionBody.requestId, deviceKey = "door-a", decisionBody.providerKey,
+                decisionBody.credentialType, decisionBody.externalIdentifier, decisionBody.occurredAt })).StatusCode);
+        client.DefaultRequestHeaders.Authorization = new("Bearer",
+            scope.ServiceProvider.GetRequiredService<IAccessAgentTokenService>().GenerateToken(agent));
+        factory.WithDb(db =>
+        {
+            var authorization = Assert.Single(db.PhysicalAccessEvents.Where(e => e.RequestId == ownRequest));
+            Assert.Equal(agent.Id, authorization.AccessAgentId);
+            Assert.Equal("door-a", authorization.DeviceKey);
+            Assert.Equal(db.Students.Single(s => s.UserId == student.Id).Id, authorization.StudentId);
+            Assert.Empty(db.CheckIns);
+        });
         const string passage = "/api/access-agent/check-ins/physical-passage";
         Assert.Equal(HttpStatusCode.NotFound, (await client.PostAsJsonAsync(passage,
-            new { requestId = foreignRequest, occurredAt = now })).StatusCode);
+            new { requestId = foreignRequest, occurredAt = now, deviceKey = "door-a" })).StatusCode);
         Assert.Equal(HttpStatusCode.Conflict, (await client.PostAsJsonAsync(passage,
-            new { requestId = deniedRequest, occurredAt = now })).StatusCode);
+            new { requestId = deniedRequest, occurredAt = now, deviceKey = "door-a" })).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await client.PostAsJsonAsync(passage,
+            new { requestId = historicalRequest, occurredAt = now, deviceKey = "door-a" })).StatusCode);
+        // Same gym, wrong agent and same agent with wrong device cannot claim the authorization.
+        client.DefaultRequestHeaders.Authorization = new("Bearer", otherAgentToken);
+        Assert.Equal(HttpStatusCode.Conflict, (await client.PostAsJsonAsync(passage,
+            new { requestId = ownRequest, occurredAt = now, deviceKey = "door-a" })).StatusCode);
+        client.DefaultRequestHeaders.Authorization = new("Bearer",
+            scope.ServiceProvider.GetRequiredService<IAccessAgentTokenService>().GenerateToken(agent));
+        Assert.Equal(HttpStatusCode.Conflict, (await client.PostAsJsonAsync(passage,
+            new { requestId = ownRequest, occurredAt = now, deviceKey = "door-b" })).StatusCode);
         for (var i = 0; i < 2; i++)
             Assert.Equal(HttpStatusCode.OK, (await client.PostAsJsonAsync(passage,
-                new { requestId = ownRequest, occurredAt = now })).StatusCode);
+                new { requestId = ownRequest, occurredAt = now, deviceKey = "door-a" })).StatusCode);
         factory.WithDb(db =>
         {
             var checkIn = Assert.Single(db.CheckIns);
@@ -565,13 +833,51 @@ public partial class TenantEnrollmentAccessTests
         var admin = factory.AddUser(factory.LegacyGym, UserRole.Admin);
         client.DefaultRequestHeaders.Authorization = new("Bearer", factory.Token(admin));
         var ownEvents = await client.GetFromJsonAsync<JsonElement>("/api/physical-access/events");
-        Assert.Equal(2, ownEvents.GetProperty("totalCount").GetInt32());
+        Assert.Equal(4, ownEvents.GetProperty("totalCount").GetInt32());
         Assert.All(ownEvents.GetProperty("items").EnumerateArray(), item =>
             Assert.NotEqual(foreignRequest, item.GetProperty("requestId").GetGuid()));
+        var adminDecisionBody = new
+        {
+            requestId = Guid.NewGuid(), deviceKey = "admin-origin-request",
+            providerKey = "toletus-litenet2",
+            credentialType = (int)PhysicalAccessCredentialType.Card,
+            externalIdentifier = cardIdentifier, occurredAt = now
+        };
+        Assert.Equal(HttpStatusCode.OK, (await client.PostAsJsonAsync(
+            "/api/physical-access/decisions", adminDecisionBody)).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await client.PostAsJsonAsync(
+            "/api/physical-access/decisions",
+            new { adminDecisionBody.requestId, adminDecisionBody.deviceKey,
+                adminDecisionBody.providerKey, adminDecisionBody.credentialType,
+                externalIdentifier = "different-admin-card", adminDecisionBody.occurredAt })).StatusCode);
         var otherAdmin = factory.AddUser(factory.EnabledGym, UserRole.Admin);
+        client.DefaultRequestHeaders.Authorization = new("Bearer",
+            scope.ServiceProvider.GetRequiredService<IAccessAgentTokenService>().GenerateToken(otherGymAgent));
+        var sameRequestInOtherGym = await client.PostAsJsonAsync(
+            "/api/access-agent/physical-access/decisions",
+            new
+            {
+                requestId = ownRequest, deviceKey = "door-f", providerKey = "toletus-litenet2",
+                credentialType = (int)PhysicalAccessCredentialType.Card,
+                externalIdentifier = cardIdentifier, occurredAt = now
+            });
+        Assert.Equal(HttpStatusCode.OK, sameRequestInOtherGym.StatusCode);
+        Assert.Equal((int)PhysicalAccessDecision.Denied,
+            (await sameRequestInOtherGym.Content.ReadFromJsonAsync<JsonElement>())
+            .GetProperty("decision").GetInt32());
         client.DefaultRequestHeaders.Authorization = new("Bearer", factory.Token(otherAdmin));
         var foreignEvents = await client.GetFromJsonAsync<JsonElement>("/api/physical-access/events");
-        Assert.Equal(1, foreignEvents.GetProperty("totalCount").GetInt32());
-        Assert.Equal(foreignRequest, foreignEvents.GetProperty("items")[0].GetProperty("requestId").GetGuid());
+        Assert.Equal(2, foreignEvents.GetProperty("totalCount").GetInt32());
+        Assert.Contains(foreignEvents.GetProperty("items").EnumerateArray(), item =>
+            item.GetProperty("requestId").GetGuid() == foreignRequest);
+        Assert.Contains(foreignEvents.GetProperty("items").EnumerateArray(), item =>
+            item.GetProperty("requestId").GetGuid() == ownRequest);
+        factory.WithDb(db =>
+        {
+            var sameRequestEvents = db.PhysicalAccessEvents.Where(e => e.RequestId == ownRequest).ToArray();
+            Assert.Equal(2, sameRequestEvents.Length);
+            Assert.Contains(sameRequestEvents, e => e.GymId == factory.LegacyGym && e.Decision == PhysicalAccessDecision.Allowed);
+            Assert.Contains(sameRequestEvents, e => e.GymId == factory.EnabledGym && e.Decision == PhysicalAccessDecision.Denied);
+        });
     }
 }
