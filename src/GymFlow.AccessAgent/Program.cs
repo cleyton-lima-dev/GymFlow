@@ -52,6 +52,11 @@ builder.Services
 
 builder.Services
     .AddSingleton<
+        ILocalAgentStateProbe,
+        FileSystemLocalAgentStateProbe>();
+
+builder.Services
+    .AddSingleton<
         ILocalSensitiveDataProtector,
         WindowsLocalSensitiveDataProtector>();
 
@@ -142,6 +147,11 @@ if (pairingMode)
             .GetRequiredService<
                 IAccessAgentPairingClient>();
 
+    var localStateProbe =
+        host.Services
+            .GetRequiredService<
+                ILocalAgentStateProbe>();
+
     var apiBaseUrl =
         builder.Configuration[
             "AvelriApi:BaseUrl"];
@@ -151,6 +161,7 @@ if (pairingMode)
             .RunAsync(
                 pairingClient,
                 credentialStore,
+                localStateProbe,
                 apiBaseUrl,
                 CancellationToken.None);
 
