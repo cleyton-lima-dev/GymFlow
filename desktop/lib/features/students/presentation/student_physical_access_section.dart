@@ -1,6 +1,8 @@
 import 'package:avelri_gestao/features/students/models/physical_access_credential.dart';
 import 'package:avelri_gestao/features/students/models/physical_access_override.dart';
 import 'package:flutter/material.dart';
+import 'package:avelri_gestao/app/theme/semantic_colors.dart';
+import 'package:avelri_gestao/app/theme/app_button_styles.dart';
 
 class StudentPhysicalAccessSection extends StatelessWidget {
   const StudentPhysicalAccessSection({
@@ -29,9 +31,8 @@ class StudentPhysicalAccessSection extends StatelessWidget {
   final VoidCallback onAddCredential;
   final VoidCallback onIssuePin;
 
-  final Future<void> Function(
-      PhysicalAccessCredential credential,
-      ) onToggleCredential;
+  final Future<void> Function(PhysicalAccessCredential credential)
+  onToggleCredential;
 
   final VoidCallback onAllowAccess;
   final VoidCallback onBlockAccess;
@@ -48,13 +49,10 @@ class StudentPhysicalAccessSection extends StatelessWidget {
       decoration: BoxDecoration(
         color: colorScheme.surface,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: theme.dividerColor,
-        ),
+        border: Border.all(color: theme.dividerColor),
       ),
       child: Column(
-        crossAxisAlignment:
-        CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
@@ -62,11 +60,8 @@ class StudentPhysicalAccessSection extends StatelessWidget {
                 width: 38,
                 height: 38,
                 decoration: BoxDecoration(
-                  color: primaryColor.withValues(
-                    alpha: 0.10,
-                  ),
-                  borderRadius:
-                  BorderRadius.circular(10),
+                  color: primaryColor.withValues(alpha: 0.10),
+                  borderRadius: BorderRadius.circular(10),
                 ),
                 child: Icon(
                   Icons.door_front_door_outlined,
@@ -87,30 +82,23 @@ class StudentPhysicalAccessSection extends StatelessWidget {
               ),
               IconButton(
                 tooltip: 'Atualizar controle de acesso',
-                onPressed:
-                isLoading ? null : onRefresh,
-                icon: Icon(
-                  Icons.refresh_rounded,
-                  color: primaryColor,
-                ),
+                onPressed: isLoading ? null : onRefresh,
+                icon: Icon(Icons.refresh_rounded, color: primaryColor),
               ),
             ],
           ),
           const SizedBox(height: 8),
           Text(
             'Gerencie credenciais da catraca e exceções manuais de entrada.',
-            style: TextStyle(
-              color: colorScheme.onSurfaceVariant,
-              fontSize: 13,
-            ),
+            style: TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 13),
           ),
           const SizedBox(height: 24),
 
           if (errorMessage != null) ...[
             Text(
               errorMessage!,
-              style: const TextStyle(
-                color: Color(0xFFB54752),
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.error,
                 fontSize: 12,
               ),
             ),
@@ -141,21 +129,18 @@ class StudentPhysicalAccessSection extends StatelessWidget {
                 ),
               ),
               OutlinedButton.icon(
-                onPressed:
-                isLoading ? null : onAddCredential,
-                icon: const Icon(
-                  Icons.add_rounded,
-                  size: 18,
-                ),
-                label: const Text(
-                  'Adicionar credencial',
-                ),
+                onPressed: isLoading ? null : onAddCredential,
+                icon: const Icon(Icons.add_rounded, size: 18),
+                label: const Text('Adicionar credencial'),
               ),
               OutlinedButton.icon(
                 onPressed: isLoading ? null : onIssuePin,
                 icon: const Icon(Icons.pin_outlined, size: 18),
-                label: Text(credentials.any((item) => item.type == 5)
-                    ? 'Redefinir PIN' : 'Gerar PIN'),
+                label: Text(
+                  credentials.any((item) => item.type == 5)
+                      ? 'Redefinir PIN'
+                      : 'Gerar PIN',
+                ),
               ),
             ],
           ),
@@ -163,41 +148,28 @@ class StudentPhysicalAccessSection extends StatelessWidget {
 
           if (isLoading && credentials.isEmpty)
             const Padding(
-              padding: EdgeInsets.symmetric(
-                vertical: 24,
-              ),
-              child: Center(
-                child: CircularProgressIndicator(),
-              ),
+              padding: EdgeInsets.symmetric(vertical: 24),
+              child: Center(child: CircularProgressIndicator()),
             )
           else if (credentials.isEmpty)
             Padding(
-              padding: const EdgeInsets.symmetric(
-                vertical: 22,
-              ),
+              padding: const EdgeInsets.symmetric(vertical: 22),
               child: Center(
                 child: Text(
                   'Nenhuma credencial cadastrada.',
-                  style: TextStyle(
-                    color:
-                    colorScheme.onSurfaceVariant,
-                  ),
+                  style: TextStyle(color: colorScheme.onSurfaceVariant),
                 ),
               ),
             )
           else
             ...credentials.map(
-                  (credential) => Padding(
-                padding:
-                const EdgeInsets.only(bottom: 12),
+              (credential) => Padding(
+                padding: const EdgeInsets.only(bottom: 12),
                 child: _CredentialCard(
                   credential: credential,
                   isLoading: isLoading,
                   primaryColor: primaryColor,
-                  onToggle: () =>
-                      onToggleCredential(
-                        credential,
-                      ),
+                  onToggle: () => onToggleCredential(credential),
                 ),
               ),
             ),
@@ -237,13 +209,10 @@ class _OverrideCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: colorScheme.surfaceContainerHighest,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: theme.dividerColor,
-        ),
+        border: Border.all(color: theme.dividerColor),
       ),
       child: Column(
-        crossAxisAlignment:
-        CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             'Exceção manual',
@@ -260,10 +229,7 @@ class _OverrideCard extends StatelessWidget {
                 : current.type == 1
                 ? 'Entrada liberada manualmente.'
                 : 'Entrada bloqueada manualmente.',
-            style: TextStyle(
-              color: colorScheme.onSurfaceVariant,
-              fontSize: 13,
-            ),
+            style: TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 13),
           ),
           if (current?.reason != null) ...[
             const SizedBox(height: 6),
@@ -281,40 +247,21 @@ class _OverrideCard extends StatelessWidget {
             runSpacing: 10,
             children: [
               OutlinedButton.icon(
-                onPressed:
-                isLoading ? null : onAllowAccess,
-                icon: const Icon(
-                  Icons.lock_open_outlined,
-                  size: 18,
-                ),
-                label: const Text(
-                  'Liberar manualmente',
-                ),
+                onPressed: isLoading ? null : onAllowAccess,
+                icon: const Icon(Icons.lock_open_outlined, size: 18),
+                label: const Text('Liberar manualmente'),
               ),
               OutlinedButton.icon(
-                onPressed:
-                isLoading ? null : onBlockAccess,
-                icon: const Icon(
-                  Icons.block_outlined,
-                  size: 18,
-                ),
-                label: const Text(
-                  'Bloquear manualmente',
-                ),
+                onPressed: isLoading ? null : onBlockAccess,
+                icon: const Icon(Icons.block_outlined, size: 18),
+                label: const Text('Bloquear manualmente'),
               ),
               if (current != null)
                 TextButton.icon(
-                  onPressed:
-                  isLoading
-                      ? null
-                      : onRemoveOverride,
-                  icon: const Icon(
-                    Icons.close_rounded,
-                    size: 18,
-                  ),
-                  label: const Text(
-                    'Remover exceção',
-                  ),
+                  style: AppButtonStyles.destructiveText(context),
+                  onPressed: isLoading ? null : onRemoveOverride,
+                  icon: const Icon(Icons.close_rounded, size: 18),
+                  label: const Text('Remover exceção'),
                 ),
             ],
           ),
@@ -358,9 +305,7 @@ class _CredentialCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: colorScheme.surfaceContainerHighest,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: theme.dividerColor,
-        ),
+        border: Border.all(color: theme.dividerColor),
       ),
       child: Row(
         children: [
@@ -373,13 +318,10 @@ class _CredentialCard extends StatelessWidget {
           const SizedBox(width: 14),
           Expanded(
             child: Column(
-              crossAxisAlignment:
-              CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  _credentialTypeLabel(
-                    credential.type,
-                  ),
+                  _credentialTypeLabel(credential.type),
                   style: TextStyle(
                     color: colorScheme.onSurface,
                     fontSize: 13,
@@ -416,13 +358,11 @@ class _CredentialCard extends StatelessWidget {
           ),
           const SizedBox(width: 16),
           Text(
-            credential.isActive
-                ? 'Ativa'
-                : 'Inativa',
+            credential.isActive ? 'Ativa' : 'Inativa',
             style: TextStyle(
               color: credential.isActive
-                  ? const Color(0xFF2CB67D)
-                  : const Color(0xFF8A8F98),
+                  ? AvelriSemanticColors.success
+                  : AvelriSemanticColors.inactive,
               fontSize: 12,
               fontWeight: FontWeight.w700,
             ),
@@ -430,9 +370,7 @@ class _CredentialCard extends StatelessWidget {
           const SizedBox(width: 12),
           Switch(
             value: credential.isActive,
-            onChanged: isLoading
-                ? null
-                : (_) => onToggle(),
+            onChanged: isLoading ? null : (_) => onToggle(),
           ),
         ],
       ),

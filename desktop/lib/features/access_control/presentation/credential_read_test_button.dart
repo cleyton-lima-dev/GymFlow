@@ -5,6 +5,7 @@ import 'package:avelri_gestao/features/access_control/data/access_agents_service
 import 'package:avelri_gestao/features/access_control/models/access_agent_summary.dart';
 import 'package:avelri_gestao/features/access_control/presentation/credential_read_probe.dart';
 import 'package:flutter/material.dart';
+import 'package:avelri_gestao/app/theme/semantic_colors.dart';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 
@@ -300,7 +301,7 @@ class _SuccessState extends StatelessWidget {
       children: [
         const Icon(
           Icons.check_circle_outline_rounded,
-          color: Color(0xFF2CB67D),
+          color: AvelriSemanticColors.success,
         ),
         const SizedBox(width: 10),
         Expanded(
@@ -323,7 +324,7 @@ class _TimeoutState extends StatelessWidget {
     return const Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Icon(Icons.schedule_rounded, color: Color(0xFFF3A712)),
+        Icon(Icons.schedule_rounded, color: AvelriSemanticColors.warning),
         SizedBox(width: 10),
         Expanded(
           child: Text(

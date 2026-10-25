@@ -21,13 +21,13 @@ public class ChargesController : ControllerBase
     }
 
     [HttpGet]
-    public async Task<IActionResult> GetAll()
+    public async Task<IActionResult> GetAll([FromQuery] DateOnly? paidMonth)
     {
         if (!TryGetGymId(out var gymId))
             return Unauthorized();
 
         var charges = await _chargeService
-            .ListAsync(gymId);
+            .ListAsync(gymId, paidMonth);
 
         return Ok(charges);
     }

@@ -8,6 +8,7 @@ import 'package:avelri_gestao/app/session/erp_feature_controller.dart';
 import 'package:avelri_gestao/app/session/session_controller.dart';
 import 'package:avelri_gestao/app/session/session_user.dart';
 import 'package:avelri_gestao/app/theme/branding_controller.dart';
+import 'package:avelri_gestao/app/theme/branding_preview.dart';
 import 'package:avelri_gestao/app/theme/default_branding.dart';
 import 'package:avelri_gestao/app/theme/local_branding_repository.dart';
 import 'package:avelri_gestao/core/network/api_client.dart';
@@ -54,6 +55,8 @@ class _Harness {
     bool enabled = false,
     int featureStatus = 200,
     bool loadFeatures = true,
+    BrandingPreview? preview,
+    bool startAuthenticated = true,
   }) async {
     final paths = <String>[];
     final api = ApiClient(
@@ -136,15 +139,22 @@ class _Harness {
       AuthService(api),
       api,
     );
-    await session.startSession(user: _admin, token: 'synthetic-token');
+    if (startAuthenticated) {
+      await session.startSession(user: _admin, token: 'synthetic-token');
+    } else {
+      await session.invalidateSession();
+    }
     final features = ErpFeatureController(api);
     api.setErpAccessDeniedHandler(features.denyCurrentSession);
     final branding = BrandingController(
       const LocalBrandingRepository({}),
       defaultBranding: avelriDefaultBranding,
+      preview: preview,
     );
-    await branding.loadForGym(_admin.gymId);
-    if (loadFeatures) await features.loadForGym(_admin.gymId);
+    if (startAuthenticated) {
+      await branding.loadForGym(_admin.gymId);
+      if (loadFeatures) await features.loadForGym(_admin.gymId);
+    }
     return _Harness(
       api,
       session,
@@ -193,6 +203,132 @@ void main() {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
   }
+
+  test('branding previews preserve the authenticated session, entitlements, and API calls', () async {
+    for (final preview in BrandingPreview.values) {
+      final harness = await _Harness.create(enabled: true, preview: preview);
+
+      expect(harness.session.user, _admin);
+      expect(harness.session.user!.gymId, _admin.gymId);
+      expect(harness.branding.isLoadedForGym(_admin.gymId), isTrue);
+      expect(harness.branding.branding, preview.branding);
+      expect(harness.features.isEnabledForGym(_admin.gymId), isTrue);
+      expect(harness.paths, ['/api/gym-features']);
+
+      harness.dispose();
+    }
+  });
+
+  testWidgets('login remains Avelri neutral with and without an AC preview', (
+    tester,
+  ) async {
+    desktopSize(tester);
+    for (final preview in <BrandingPreview?>[
+      BrandingPreview.acPowerGym,
+      null,
+    ]) {
+      final harness = await _Harness.create(
+        preview: preview,
+        startAuthenticated: false,
+      );
+      await tester.pumpWidget(harness.app);
+      await tester.pumpAndSettle();
+
+      final loginContext = tester.element(find.text('Bem-vindo de volta'));
+      expect(
+        Theme.of(loginContext).colorScheme.primary,
+        avelriDefaultBranding.primaryColor,
+      );
+      expect(Theme.of(loginContext).brightness, Brightness.light);
+      expect(
+        tester.widget<MaterialApp>(find.byType(MaterialApp)).title,
+        avelriDefaultBranding.displayName,
+      );
+      expect(
+        find.textContaining('Pré-visualização local do tema:'),
+        findsNothing,
+      );
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      harness.dispose();
+    }
+  });
+
+  testWidgets('logout returns to the neutral login despite an AC preview', (
+    tester,
+  ) async {
+    desktopSize(tester);
+    final harness = await _Harness.create(
+      enabled: true,
+      preview: BrandingPreview.acPowerGym,
+    );
+    await tester.pumpWidget(harness.app);
+    await tester.pumpAndSettle();
+    expect(
+      Theme.of(tester.element(find.text('Dashboard gerencial'))).brightness,
+      Brightness.dark,
+    );
+
+    await harness.session.logout();
+    await tester.pumpAndSettle();
+
+    final loginContext = tester.element(find.text('Bem-vindo de volta'));
+    expect(
+      Theme.of(loginContext).colorScheme.primary,
+      avelriDefaultBranding.primaryColor,
+    );
+    expect(Theme.of(loginContext).brightness, Brightness.light);
+    expect(
+      tester.widget<MaterialApp>(find.byType(MaterialApp)).title,
+      avelriDefaultBranding.displayName,
+    );
+    expect(
+      find.textContaining('Pré-visualização local do tema:'),
+      findsNothing,
+    );
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    harness.dispose();
+  });
+
+  testWidgets('preview notice appears only when a preview is selected', (
+    tester,
+  ) async {
+    desktopSize(tester);
+    for (final preview in <BrandingPreview?>[
+      BrandingPreview.acPowerGym,
+      BrandingPreview.avelri,
+      null,
+    ]) {
+      final harness = await _Harness.create(preview: preview);
+      await tester.pumpWidget(harness.app);
+      await tester.pumpAndSettle();
+
+      if (preview == null) {
+        expect(
+          find.textContaining('Pré-visualização local do tema:'),
+          findsNothing,
+        );
+      } else {
+        expect(
+          find.text('Pré-visualização local do tema: ${preview.label}'),
+          findsOneWidget,
+        );
+        final dashboardContext = tester.element(
+          find.text('Dashboard gerencial'),
+        );
+        expect(
+          Theme.of(dashboardContext).brightness,
+          preview == BrandingPreview.acPowerGym
+              ? Brightness.dark
+              : Brightness.light,
+        );
+      }
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      harness.dispose();
+    }
+  });
 
   for (final featureStatus in [200, 404, 500]) {
     testWidgets(

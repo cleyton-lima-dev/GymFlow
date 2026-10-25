@@ -1,4 +1,3 @@
-import 'package:avelri_gestao/app/theme/branding_controller.dart';
 import 'package:avelri_gestao/core/network/api_client.dart';
 import 'package:avelri_gestao/features/enrollments/data/enrollments_service.dart';
 import 'package:avelri_gestao/features/enrollments/presentation/create_enrollment_view_model.dart';
@@ -10,7 +9,6 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:avelri_gestao/features/students/models/student_summary.dart';
 import 'package:avelri_gestao/features/charges/models/payment_details.dart';
-
 
 class CreateEnrollmentPage extends StatelessWidget {
   const CreateEnrollmentPage({super.key});
@@ -34,27 +32,22 @@ class _CreateEnrollmentView extends StatefulWidget {
   const _CreateEnrollmentView();
 
   @override
-  State<_CreateEnrollmentView> createState() =>
-      _CreateEnrollmentViewState();
+  State<_CreateEnrollmentView> createState() => _CreateEnrollmentViewState();
 }
 
-class _CreateEnrollmentViewState
-    extends State<_CreateEnrollmentView> {
+class _CreateEnrollmentViewState extends State<_CreateEnrollmentView> {
   final _formKey = GlobalKey<FormState>();
 
   String? _studentId;
   String? _planId;
 
   final _paidAmountController = TextEditingController();
-  final _discountController = TextEditingController(
-    text: '0.00',
-  );
+  final _discountController = TextEditingController(text: '0.00');
 
   PaymentMethod? _paymentMethod;
   DateTime _paidAt = DateTime.now();
 
-  DateTime _startDate =
-  DateUtils.dateOnly(DateTime.now());
+  DateTime _startDate = DateUtils.dateOnly(DateTime.now());
 
   @override
   void dispose() {
@@ -79,9 +72,7 @@ class _CreateEnrollmentViewState
       _startDate = DateUtils.dateOnly(selectedDate);
     });
 
-    context
-        .read<CreateEnrollmentViewModel>()
-        .clearError();
+    context.read<CreateEnrollmentViewModel>().clearError();
   }
 
   Future<void> _selectPaymentDate() async {
@@ -107,9 +98,7 @@ class _CreateEnrollmentViewState
       );
     });
 
-    context
-        .read<CreateEnrollmentViewModel>()
-        .clearError();
+    context.read<CreateEnrollmentViewModel>().clearError();
   }
 
   Future<void> _submit() async {
@@ -121,18 +110,14 @@ class _CreateEnrollmentViewState
     final planId = _planId;
     final paymentMethod = _paymentMethod;
 
-    if (studentId == null ||
-        planId == null ||
-        paymentMethod == null) {
+    if (studentId == null || planId == null || paymentMethod == null) {
       return;
     }
 
     final selectedPlan = context
         .read<CreateEnrollmentViewModel>()
         .plans
-        .firstWhere(
-          (plan) => plan.id == planId,
-    );
+        .firstWhere((plan) => plan.id == planId);
 
     final paidAmount = double.parse(
       _paidAmountController.text.replaceAll(',', '.'),
@@ -142,11 +127,7 @@ class _CreateEnrollmentViewState
       _discountController.text.replaceAll(',', '.'),
     );
 
-    if ((paidAmount +
-        discountAmount -
-        selectedPlan.price)
-        .abs() >
-        0.009) {
+    if ((paidAmount + discountAmount - selectedPlan.price).abs() > 0.009) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
@@ -168,22 +149,18 @@ class _CreateEnrollmentViewState
     final created = await context
         .read<CreateEnrollmentViewModel>()
         .createEnrollment(
-      studentId: studentId,
-      planId: planId,
-      startDate: _startDate,
-      payment: payment,
-    );
+          studentId: studentId,
+          planId: planId,
+          startDate: _startDate,
+          payment: payment,
+        );
 
     if (!mounted || !created) {
       return;
     }
 
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text(
-          'Matrícula cadastrada com sucesso.',
-        ),
-      ),
+      const SnackBar(content: Text('Matrícula cadastrada com sucesso.')),
     );
 
     context.go('/enrollments');
@@ -191,13 +168,8 @@ class _CreateEnrollmentViewState
 
   @override
   Widget build(BuildContext context) {
-    final viewModel =
-    context.watch<CreateEnrollmentViewModel>();
+    final viewModel = context.watch<CreateEnrollmentViewModel>();
 
-    final branding =
-        context.watch<BrandingController>().branding;
-
-    final primaryColor = branding.primaryColor;
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final dateFormat = DateFormat('dd/MM/yyyy');
@@ -205,26 +177,20 @@ class _CreateEnrollmentViewState
     return SingleChildScrollView(
       padding: const EdgeInsets.all(30),
       child: ConstrainedBox(
-        constraints:
-        const BoxConstraints(maxWidth: 900),
+        constraints: const BoxConstraints(maxWidth: 900),
         child: Column(
-          crossAxisAlignment:
-          CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
                 IconButton(
                   tooltip: 'Voltar',
-                  onPressed: () =>
-                      context.go('/enrollments'),
-                  icon: const Icon(
-                    Icons.arrow_back_rounded,
-                  ),
+                  onPressed: () => context.go('/enrollments'),
+                  icon: const Icon(Icons.arrow_back_rounded),
                 ),
                 const SizedBox(width: 8),
                 Column(
-                  crossAxisAlignment:
-                  CrossAxisAlignment.start,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
                       'Nova matrícula',
@@ -252,317 +218,261 @@ class _CreateEnrollmentViewState
               padding: const EdgeInsets.all(26),
               decoration: BoxDecoration(
                 color: colorScheme.surface,
-                borderRadius:
-                BorderRadius.circular(18),
-                border: Border.all(
-                  color: theme.dividerColor,
-                ),
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: theme.dividerColor),
               ),
               child: viewModel.isLoading
                   ? const Padding(
-                padding:
-                EdgeInsets.symmetric(
-                  vertical: 60,
-                ),
-                child: Center(
-                  child:
-                  CircularProgressIndicator(),
-                ),
-              )
+                      padding: EdgeInsets.symmetric(vertical: 60),
+                      child: Center(child: CircularProgressIndicator()),
+                    )
                   : Form(
-                key: _formKey,
-                child: Column(
-                  crossAxisAlignment:
-                  CrossAxisAlignment.start,
-                  children: [Autocomplete<StudentSummary>(
-                    displayStringForOption: (student) => student.name,
-                    optionsBuilder: (textEditingValue) {
-                      final search =
-                      textEditingValue.text.trim().toLowerCase();
+                      key: _formKey,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Autocomplete<StudentSummary>(
+                            displayStringForOption: (student) => student.name,
+                            optionsBuilder: (textEditingValue) {
+                              final search = textEditingValue.text
+                                  .trim()
+                                  .toLowerCase();
 
-                      if (search.isEmpty) {
-                        return const Iterable<StudentSummary>.empty();
-                      }
+                              if (search.isEmpty) {
+                                return const Iterable<StudentSummary>.empty();
+                              }
 
-                      return viewModel.students.where(
-                            (student) =>
-                            student.name.toLowerCase().contains(search),
-                      );
-                    },
-                    onSelected: (student) {
-                      setState(() {
-                        _studentId = student.id;
-                      });
+                              return viewModel.students.where(
+                                (student) =>
+                                    student.name.toLowerCase().contains(search),
+                              );
+                            },
+                            onSelected: (student) {
+                              setState(() {
+                                _studentId = student.id;
+                              });
 
-                      viewModel.clearError();
-                    },
-                    fieldViewBuilder: (
-                        context,
-                        controller,
-                        focusNode,
-                        onFieldSubmitted,
-                        ) {
-                      return TextFormField(
-                        controller: controller,
-                        focusNode: focusNode,
-                        enabled: !viewModel.isSubmitting,
-                        decoration: const InputDecoration(
-                          labelText: 'Aluno',
-                          hintText: 'Digite o nome do aluno',
-                          prefixIcon: Icon(Icons.search_rounded),
-                        ),
-                        validator: (_) {
-                          if (_studentId == null) {
-                            return 'Selecione um aluno.';
-                          }
+                              viewModel.clearError();
+                            },
+                            fieldViewBuilder:
+                                (
+                                  context,
+                                  controller,
+                                  focusNode,
+                                  onFieldSubmitted,
+                                ) {
+                                  return TextFormField(
+                                    controller: controller,
+                                    focusNode: focusNode,
+                                    enabled: !viewModel.isSubmitting,
+                                    decoration: const InputDecoration(
+                                      labelText: 'Aluno',
+                                      hintText: 'Digite o nome do aluno',
+                                      prefixIcon: Icon(Icons.search_rounded),
+                                    ),
+                                    validator: (_) {
+                                      if (_studentId == null) {
+                                        return 'Selecione um aluno.';
+                                      }
 
-                          return null;
-                        },
-                        onChanged: (_) {
-                          setState(() {
-                            _studentId = null;
-                          });
+                                      return null;
+                                    },
+                                    onChanged: (_) {
+                                      setState(() {
+                                        _studentId = null;
+                                      });
 
-                          viewModel.clearError();
-                        },
-                      );
-                    },
-                  ),
-                    const SizedBox(height: 20),
-                    DropdownButtonFormField<String>(
-                      decoration:
-                      const InputDecoration(
-                        labelText: 'Plano',
-                        prefixIcon: Icon(
-                          Icons.sell_outlined,
-                        ),
-                      ),
-                      items: viewModel.plans
-                          .map(
-                            (plan) =>
-                            DropdownMenuItem(
-                              value: plan.id,
-                              child: Text(
-                                plan.name,
+                                      viewModel.clearError();
+                                    },
+                                  );
+                                },
+                          ),
+                          const SizedBox(height: 20),
+                          DropdownButtonFormField<String>(
+                            decoration: const InputDecoration(
+                              labelText: 'Plano',
+                              prefixIcon: Icon(Icons.sell_outlined),
+                            ),
+                            items: viewModel.plans
+                                .map(
+                                  (plan) => DropdownMenuItem(
+                                    value: plan.id,
+                                    child: Text(plan.name),
+                                  ),
+                                )
+                                .toList(),
+                            validator: (value) {
+                              if (value == null) {
+                                return 'Selecione um plano.';
+                              }
+
+                              return null;
+                            },
+                            onChanged: viewModel.isSubmitting
+                                ? null
+                                : (value) {
+                                    setState(() {
+                                      _planId = value;
+
+                                      if (value != null) {
+                                        final selectedPlan = viewModel.plans
+                                            .firstWhere(
+                                              (plan) => plan.id == value,
+                                            );
+
+                                        _paidAmountController.text =
+                                            selectedPlan.price.toStringAsFixed(
+                                              2,
+                                            );
+
+                                        _discountController.text = '0.00';
+                                      }
+                                    });
+
+                                    viewModel.clearError();
+                                  },
+                          ),
+                          const SizedBox(height: 20),
+                          InkWell(
+                            onTap: viewModel.isSubmitting
+                                ? null
+                                : _selectStartDate,
+                            child: InputDecorator(
+                              decoration: const InputDecoration(
+                                labelText: 'Data de início',
+                                prefixIcon: Icon(Icons.calendar_today_outlined),
+                              ),
+                              child: Text(dateFormat.format(_startDate)),
+                            ),
+                          ),
+
+                          const SizedBox(height: 20),
+                          TextFormField(
+                            controller: _paidAmountController,
+                            enabled: !viewModel.isSubmitting,
+                            keyboardType: const TextInputType.numberWithOptions(
+                              decimal: true,
+                            ),
+                            decoration: const InputDecoration(
+                              labelText: 'Valor pago',
+                              prefixText: 'R\$ ',
+                              prefixIcon: Icon(Icons.payments_outlined),
+                            ),
+                            validator: (value) {
+                              final amount = double.tryParse(
+                                (value ?? '').replaceAll(',', '.'),
+                              );
+
+                              if (amount == null || amount <= 0) {
+                                return 'Informe um valor pago válido.';
+                              }
+
+                              return null;
+                            },
+                            onChanged: (_) => viewModel.clearError(),
+                          ),
+                          const SizedBox(height: 20),
+                          TextFormField(
+                            controller: _discountController,
+                            enabled: !viewModel.isSubmitting,
+                            keyboardType: const TextInputType.numberWithOptions(
+                              decimal: true,
+                            ),
+                            decoration: const InputDecoration(
+                              labelText: 'Desconto',
+                              prefixText: 'R\$ ',
+                              prefixIcon: Icon(Icons.discount_outlined),
+                            ),
+                            validator: (value) {
+                              final discount = double.tryParse(
+                                (value ?? '').replaceAll(',', '.'),
+                              );
+
+                              if (discount == null || discount < 0) {
+                                return 'Informe um desconto válido.';
+                              }
+
+                              return null;
+                            },
+                            onChanged: (_) => viewModel.clearError(),
+                          ),
+                          const SizedBox(height: 20),
+                          DropdownButtonFormField<PaymentMethod>(
+                            initialValue: _paymentMethod,
+                            decoration: const InputDecoration(
+                              labelText: 'Forma de pagamento',
+                              prefixIcon: Icon(Icons.credit_card_outlined),
+                            ),
+                            items: PaymentMethod.values
+                                .map(
+                                  (method) => DropdownMenuItem(
+                                    value: method,
+                                    child: Text(method.label),
+                                  ),
+                                )
+                                .toList(),
+                            validator: (value) {
+                              if (value == null) {
+                                return 'Selecione a forma de pagamento.';
+                              }
+
+                              return null;
+                            },
+                            onChanged: viewModel.isSubmitting
+                                ? null
+                                : (value) {
+                                    setState(() {
+                                      _paymentMethod = value;
+                                    });
+
+                                    viewModel.clearError();
+                                  },
+                          ),
+                          const SizedBox(height: 20),
+                          InkWell(
+                            onTap: viewModel.isSubmitting
+                                ? null
+                                : _selectPaymentDate,
+                            child: InputDecorator(
+                              decoration: const InputDecoration(
+                                labelText: 'Data do pagamento',
+                                prefixIcon: Icon(Icons.calendar_month_outlined),
+                              ),
+                              child: Text(dateFormat.format(_paidAt)),
+                            ),
+                          ),
+                          if (viewModel.errorMessage != null) ...[
+                            const SizedBox(height: 20),
+                            Text(
+                              viewModel.errorMessage!,
+                              style: TextStyle(
+                                color: colorScheme.error,
+                                fontWeight: FontWeight.w600,
                               ),
                             ),
-                      )
-                          .toList(),
-                      validator: (value) {
-                        if (value == null) {
-                          return 'Selecione um plano.';
-                        }
-
-                        return null;
-                      },
-                      onChanged:
-                      viewModel.isSubmitting
-                          ? null
-                          : (value) {
-                        setState(() {
-                          _planId = value;
-
-                          if (value != null) {
-                            final selectedPlan = viewModel.plans.firstWhere(
-                                  (plan) => plan.id == value,
-                            );
-
-                            _paidAmountController.text =
-                                selectedPlan.price.toStringAsFixed(2);
-
-                            _discountController.text = '0.00';
-                          }
-                        });
-
-                        viewModel.clearError();
-                      },
-                    ),
-                    const SizedBox(height: 20),
-                    InkWell(
-                      onTap:
-                      viewModel.isSubmitting
-                          ? null
-                          : _selectStartDate,
-                      child: InputDecorator(
-                        decoration:
-                        const InputDecoration(
-                          labelText:
-                          'Data de início',
-                          prefixIcon: Icon(
-                            Icons
-                                .calendar_today_outlined,
+                          ],
+                          const SizedBox(height: 28),
+                          Align(
+                            alignment: Alignment.centerRight,
+                            child: FilledButton.icon(
+                              onPressed: viewModel.isSubmitting
+                                  ? null
+                                  : _submit,
+                              icon: viewModel.isSubmitting
+                                  ? const SizedBox(
+                                      width: 18,
+                                      height: 18,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                      ),
+                                    )
+                                  : const Icon(Icons.check_rounded),
+                              label: const Text('Cadastrar matrícula'),
+                            ),
                           ),
-                        ),
-                        child: Text(
-                          dateFormat.format(
-                            _startDate,
-                          ),
-                        ),
+                        ],
                       ),
                     ),
-
-                    const SizedBox(height: 20),
-                    TextFormField(
-                      controller: _paidAmountController,
-                      enabled: !viewModel.isSubmitting,
-                      keyboardType:
-                      const TextInputType.numberWithOptions(
-                        decimal: true,
-                      ),
-                      decoration: const InputDecoration(
-                        labelText: 'Valor pago',
-                        prefixText: 'R\$ ',
-                        prefixIcon: Icon(
-                          Icons.payments_outlined,
-                        ),
-                      ),
-                      validator: (value) {
-                        final amount = double.tryParse(
-                          (value ?? '').replaceAll(',', '.'),
-                        );
-
-                        if (amount == null || amount <= 0) {
-                          return 'Informe um valor pago válido.';
-                        }
-
-                        return null;
-                      },
-                      onChanged: (_) => viewModel.clearError(),
-                    ),
-                    const SizedBox(height: 20),
-                    TextFormField(
-                      controller: _discountController,
-                      enabled: !viewModel.isSubmitting,
-                      keyboardType:
-                      const TextInputType.numberWithOptions(
-                        decimal: true,
-                      ),
-                      decoration: const InputDecoration(
-                        labelText: 'Desconto',
-                        prefixText: 'R\$ ',
-                        prefixIcon: Icon(
-                          Icons.discount_outlined,
-                        ),
-                      ),
-                      validator: (value) {
-                        final discount = double.tryParse(
-                          (value ?? '').replaceAll(',', '.'),
-                        );
-
-                        if (discount == null || discount < 0) {
-                          return 'Informe um desconto válido.';
-                        }
-
-                        return null;
-                      },
-                      onChanged: (_) => viewModel.clearError(),
-                    ),
-                    const SizedBox(height: 20),
-                    DropdownButtonFormField<PaymentMethod>(
-                      initialValue: _paymentMethod,
-                      decoration: const InputDecoration(
-                        labelText: 'Forma de pagamento',
-                        prefixIcon: Icon(
-                          Icons.credit_card_outlined,
-                        ),
-                      ),
-                      items: PaymentMethod.values
-                          .map(
-                            (method) => DropdownMenuItem(
-                          value: method,
-                          child: Text(method.label),
-                        ),
-                      )
-                          .toList(),
-                      validator: (value) {
-                        if (value == null) {
-                          return 'Selecione a forma de pagamento.';
-                        }
-
-                        return null;
-                      },
-                      onChanged: viewModel.isSubmitting
-                          ? null
-                          : (value) {
-                        setState(() {
-                          _paymentMethod = value;
-                        });
-
-                        viewModel.clearError();
-                      },
-                    ),
-                    const SizedBox(height: 20),
-                    InkWell(
-                      onTap: viewModel.isSubmitting
-                          ? null
-                          : _selectPaymentDate,
-                      child: InputDecorator(
-                        decoration: const InputDecoration(
-                          labelText: 'Data do pagamento',
-                          prefixIcon: Icon(
-                            Icons.calendar_month_outlined,
-                          ),
-                        ),
-                        child: Text(
-                          dateFormat.format(_paidAt),
-                        ),
-                      ),
-                    ),
-                    if (viewModel.errorMessage !=
-                        null) ...[
-                      const SizedBox(height: 20),
-                      Text(
-                        viewModel.errorMessage!,
-                        style: const TextStyle(
-                          color: Colors.red,
-                          fontWeight:
-                          FontWeight.w600,
-                        ),
-                      ),
-                    ],
-                    const SizedBox(height: 28),
-                    Align(
-                      alignment:
-                      Alignment.centerRight,
-                      child: FilledButton.icon(
-                        onPressed:
-                        viewModel.isSubmitting
-                            ? null
-                            : _submit,
-                        icon: viewModel.isSubmitting
-                            ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child:
-                          CircularProgressIndicator(
-                            strokeWidth: 2,
-                          ),
-                        )
-                            : const Icon(
-                          Icons
-                              .check_rounded,
-                        ),
-                        label: const Text(
-                          'Cadastrar matrícula',
-                        ),
-                        style:
-                        FilledButton.styleFrom(
-                          backgroundColor:
-                          primaryColor,
-                          foregroundColor:
-                          Colors.white,
-                          padding:
-                          const EdgeInsets
-                              .symmetric(
-                            horizontal: 20,
-                            vertical: 17,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
             ),
           ],
         ),

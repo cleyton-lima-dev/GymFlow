@@ -24,14 +24,18 @@ public class ChargeService
         _financialAuditRepository = financialAuditRepository;
     }
 
-    public async Task<List<ChargeResponse>> ListAsync(Guid gymId)
+    public async Task<List<ChargeResponse>> ListAsync(Guid gymId, DateOnly? paidMonth = null)
     {
-        var charges = await _chargeRepository
-            .GetByGymAsync(gymId);
+        var timeZone = _gymTimeZoneProvider.GetTimeZone(gymId);
+        var charges = paidMonth.HasValue
+            ? await _chargeRepository.GetPaidByGymAndPeriodAsync(
+                gymId,
+                TimeZoneInfo.ConvertTimeToUtc(
+                    paidMonth.Value.ToDateTime(TimeOnly.MinValue), timeZone),
+                TimeZoneInfo.ConvertTimeToUtc(
+                    paidMonth.Value.AddMonths(1).ToDateTime(TimeOnly.MinValue), timeZone))
+            : await _chargeRepository.GetByGymAsync(gymId);
         var now = DateTime.UtcNow;
-
-        var timeZone =
-            _gymTimeZoneProvider.GetTimeZone(gymId);
 
         var today = DateOnly.FromDateTime(
             TimeZoneInfo.ConvertTimeFromUtc(now, timeZone));

@@ -35,7 +35,8 @@ public class StudentRepository : IStudentRepository
     StudentArchiveFilter archiveFilter,
     DateOnly referenceDate,
     int skip,
-    int take)
+    int take,
+    StudentAssessmentFilter? assessmentFilter = null)
     {
         var query = _context.Students
             .AsNoTracking()
@@ -83,6 +84,22 @@ public class StudentRepository : IStudentRepository
         {
             query = query.Where(student =>
                 student.IsActive == isActive.Value);
+        }
+        if (assessmentFilter.HasValue)
+        {
+            query = assessmentFilter.Value switch
+            {
+                StudentAssessmentFilter.Missing => query.Where(student =>
+                    !_context.PhysicalAssessments.Any(assessment =>
+                        assessment.StudentId == student.Id)),
+                StudentAssessmentFilter.ReassessmentDue => query.Where(student =>
+                    _context.PhysicalAssessments.Any(assessment =>
+                        assessment.StudentId == student.Id) &&
+                    !_context.PhysicalAssessments.Any(assessment =>
+                        assessment.StudentId == student.Id &&
+                        assessment.AssessmentDate > ReassessmentDuePolicy.GetLastDueAssessmentDate(referenceDate))),
+                _ => throw new ArgumentOutOfRangeException(nameof(assessmentFilter))
+            };
         }
         if (enrollmentFilter.HasValue)
         {

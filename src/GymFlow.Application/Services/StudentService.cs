@@ -99,7 +99,8 @@ public class StudentService
     StudentArchiveFilter archiveFilter,
     int page,
     int pageSize,
-    bool includeEnrollmentMetadata = true)
+    bool includeEnrollmentMetadata = true,
+    StudentAssessmentFilter? assessmentFilter = null)
     {
         if (page < 1)
         {
@@ -138,7 +139,8 @@ public class StudentService
                 archiveFilter,
                 today,
                 skip,
-                pageSize);
+                pageSize,
+                assessmentFilter);
 
         var studentIds = students
             .Select(student => student.Id)

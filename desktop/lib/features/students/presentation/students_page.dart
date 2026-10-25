@@ -2,16 +2,20 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import 'package:avelri_gestao/app/theme/branding_controller.dart';
+import 'package:avelri_gestao/app/theme/semantic_colors.dart';
 import 'package:avelri_gestao/app/session/erp_feature_controller.dart';
 import 'package:avelri_gestao/app/session/session_controller.dart';
 import 'package:avelri_gestao/core/network/api_client.dart';
+import 'package:avelri_gestao/core/widgets/app_status_states.dart';
 import 'package:avelri_gestao/features/students/data/students_service.dart';
 import 'package:avelri_gestao/features/students/models/student_summary.dart';
 import 'package:avelri_gestao/features/students/presentation/students_view_model.dart';
 import 'package:avelri_gestao/features/enrollments/models/enrollment_summary.dart';
 
 class StudentsPage extends StatelessWidget {
-  const StudentsPage({super.key});
+  const StudentsPage({this.assessmentFilter, super.key});
+
+  final String? assessmentFilter;
 
   @override
   Widget build(BuildContext context) {
@@ -21,9 +25,14 @@ class StudentsPage extends StatelessWidget {
         context.watch<ErpFeatureController>().isEnabledForGym(gymId);
     return ChangeNotifierProvider(
       key: ValueKey(erpEnabled),
-      create: (context) =>
-          StudentsViewModel(StudentsService(context.read<ApiClient>()))
-            ..loadInitial(),
+      create: (context) => StudentsViewModel(
+        StudentsService(context.read<ApiClient>()),
+        assessmentFilter: switch (assessmentFilter) {
+          'missing' => StudentsAssessmentFilter.missing,
+          'reassessmentDue' => StudentsAssessmentFilter.reassessmentDue,
+          _ => null,
+        },
+      )..loadInitial(),
       child: const _StudentsView(),
     );
   }
@@ -51,73 +60,69 @@ class _StudentsView extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Expanded(
-                  child: Column(
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final title = Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Gestão de alunos',
+                      style: TextStyle(
+                        color: colorScheme.onSurface,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: -0.5,
+                        fontSize: 28,
+                      ),
+                    ),
+                    const SizedBox(height: 7),
+                    Text(
+                      'Consulte e gerencie os alunos cadastrados na academia.',
+                      style: TextStyle(
+                        color: colorScheme.onSurfaceVariant,
+                        fontSize: 14,
+                      ),
+                    ),
+                  ],
+                );
+                final actions = [
+                  if (erpEnabled)
+                    OutlinedButton.icon(
+                      onPressed: () => context.push('/students/import'),
+                      icon: const Icon(Icons.upload_file_outlined),
+                      label: const Text('Importar CSV/XLSX'),
+                    ),
+                  if (erpEnabled)
+                    OutlinedButton.icon(
+                      onPressed: () => context.push('/students/migration'),
+                      icon: const Icon(Icons.sync_alt),
+                      label: const Text('Migração universal'),
+                    ),
+                  FilledButton.icon(
+                    onPressed: () => context.go('/students/new'),
+                    icon: const Icon(Icons.person_add_alt_1_rounded),
+                    label: const Text('Cadastrar aluno'),
+                  ),
+                ];
+
+                if (constraints.maxWidth < 1100) {
+                  return Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        'Gestão de alunos',
-                        style: TextStyle(
-                          color: colorScheme.onSurface,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: -0.5,
-                          fontSize: 28,
-                        ),
-                      ),
-                      SizedBox(height: 7),
-                      Text(
-                        'Consulte e gerencie os alunos cadastrados na academia.',
-                        style: TextStyle(
-                          color: colorScheme.onSurfaceVariant,
-                          fontSize: 14,
-                        ),
-                      ),
+                      title,
+                      const SizedBox(height: 14),
+                      Wrap(spacing: 8, runSpacing: 8, children: actions),
                     ],
-                  ),
-                ),
-                if (erpEnabled) ...[
-                  OutlinedButton.icon(
-                    onPressed: () => context.go('/students/import'),
-                    icon: const Icon(Icons.upload_file_outlined),
-                    label: const Text('Importar CSV/XLSX'),
-                    style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 18,
-                        vertical: 17,
-                      ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(11),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  OutlinedButton.icon(
-                    onPressed: () => context.go('/students/migration'),
-                    icon: const Icon(Icons.sync_alt),
-                    label: const Text('Migração universal'),
-                  ),
-                  const SizedBox(width: 10),
-                ],
-                FilledButton.icon(
-                  onPressed: () => context.go('/students/new'),
-                  icon: const Icon(Icons.person_add_alt_1_rounded),
-                  label: const Text('Cadastrar aluno'),
-                  style: FilledButton.styleFrom(
-                    backgroundColor: primaryColor,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 18,
-                      vertical: 17,
-                    ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(11),
-                    ),
-                  ),
-                ),
-              ],
+                  );
+                }
+
+                return Row(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Expanded(child: title),
+                    Wrap(spacing: 8, runSpacing: 8, children: actions),
+                  ],
+                );
+              },
             ),
             const SizedBox(height: 26),
             Container(
@@ -174,10 +179,6 @@ class _StudentsView extends StatelessWidget {
                           size: 19,
                         ),
                         label: const Text('Filtros'),
-                        style: OutlinedButton.styleFrom(
-                          minimumSize: const Size(0, 50),
-                          padding: const EdgeInsets.symmetric(horizontal: 18),
-                        ),
                       ),
                       const SizedBox(width: 6),
                       IconButton(
@@ -189,6 +190,55 @@ class _StudentsView extends StatelessWidget {
                       ),
                     ],
                   ),
+                  if (viewModel.assessmentFilterLabel case final label?) ...[
+                    const SizedBox(height: 12),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: InputChip(
+                        key: const ValueKey('student-assessment-filter'),
+                        label: Text(label),
+                        onDeleted: viewModel.isLoading
+                            ? null
+                            : viewModel.clearAssessmentFilter,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Container(
+                      key: const ValueKey('students-assessment-guidance'),
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 10,
+                      ),
+                      decoration: BoxDecoration(
+                        color: colorScheme.surfaceContainerHighest.withValues(
+                          alpha: 0.45,
+                        ),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Icon(
+                            Icons.info_outline_rounded,
+                            size: 17,
+                            color: colorScheme.onSurfaceVariant,
+                          ),
+                          const SizedBox(width: 9),
+                          Expanded(
+                            child: Text(
+                              'Para registrar ou atualizar avaliações físicas, use o Avelri Mobile no perfil Admin ou Professor.',
+                              style: TextStyle(
+                                color: colorScheme.onSurfaceVariant,
+                                fontSize: 12,
+                                height: 1.35,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 20),
                   if (viewModel.isLoading && !viewModel.hasStudents)
                     const Padding(
@@ -212,44 +262,72 @@ class _StudentsView extends StatelessWidget {
                     const SizedBox(height: 18),
                     Divider(color: theme.dividerColor, height: 1),
                     const SizedBox(height: 16),
-                    Row(
-                      children: [
-                        Text(
+                    LayoutBuilder(
+                      builder: (context, constraints) {
+                        final count = Text(
                           '${viewModel.totalCount} aluno${viewModel.totalCount == 1 ? '' : 's'} encontrado${viewModel.totalCount == 1 ? '' : 's'}',
-                          style: const TextStyle(
-                            color: Color(0xFF74798D),
+                          style: TextStyle(
+                            color: colorScheme.onSurfaceVariant,
                             fontSize: 12,
                           ),
-                        ),
-                        const Spacer(),
-                        IconButton(
-                          tooltip: 'Página anterior',
-                          onPressed:
-                              viewModel.hasPreviousPage && !viewModel.isLoading
-                              ? viewModel.goToPreviousPage
-                              : null,
-                          icon: const Icon(Icons.chevron_left_rounded),
-                        ),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 8),
-                          child: Text(
-                            'Página ${viewModel.page} de ${viewModel.totalPages}',
-                            style: TextStyle(
-                              color: colorScheme.onSurface,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w700,
+                        );
+                        final controls = Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            IconButton(
+                              tooltip: 'Página anterior',
+                              onPressed:
+                                  viewModel.hasPreviousPage &&
+                                      !viewModel.isLoading
+                                  ? viewModel.goToPreviousPage
+                                  : null,
+                              icon: const Icon(Icons.chevron_left_rounded),
                             ),
-                          ),
-                        ),
-                        IconButton(
-                          tooltip: 'Próxima página',
-                          onPressed:
-                              viewModel.hasNextPage && !viewModel.isLoading
-                              ? viewModel.goToNextPage
-                              : null,
-                          icon: const Icon(Icons.chevron_right_rounded),
-                        ),
-                      ],
+                            Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                              ),
+                              child: Text(
+                                'Página ${viewModel.page} de ${viewModel.totalPages}',
+                                style: TextStyle(
+                                  color: colorScheme.onSurface,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ),
+                            IconButton(
+                              tooltip: 'Próxima página',
+                              onPressed:
+                                  viewModel.hasNextPage && !viewModel.isLoading
+                                  ? viewModel.goToNextPage
+                                  : null,
+                              icon: const Icon(Icons.chevron_right_rounded),
+                            ),
+                          ],
+                        );
+
+                        if (constraints.maxWidth < 600) {
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              count,
+                              const SizedBox(height: 4),
+                              Align(
+                                alignment: Alignment.centerRight,
+                                child: controls,
+                              ),
+                            ],
+                          );
+                        }
+
+                        return Row(
+                          children: [
+                            Expanded(child: count),
+                            controls,
+                          ],
+                        );
+                      },
                     ),
                   ],
                 ],
@@ -277,115 +355,236 @@ class _StudentsTable extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(12),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: DataTable(
-          showCheckboxColumn: false,
-          columnSpacing: 28,
-          horizontalMargin: 16,
-          headingRowColor: WidgetStateProperty.all(
-            colorScheme.surfaceContainerHighest,
-          ),
-          dataRowMinHeight: 64,
-          dataRowMaxHeight: 64,
-          headingTextStyle: TextStyle(
-            color: colorScheme.onSurfaceVariant,
-            fontSize: 11,
-            fontWeight: FontWeight.w800,
-          ),
-          columns: [
-            const DataColumn(label: Text('ALUNO')),
-            const DataColumn(label: Text('E-MAIL')),
-            const DataColumn(label: Text('TELEFONE')),
-            const DataColumn(label: Text('CONTA')),
-            if (erpEnabled) ...[
-              const DataColumn(label: Text('MATRÍCULA')),
-              const DataColumn(label: Text('PLANO')),
-              const DataColumn(label: Text('VENCIMENTO')),
-            ],
-          ],
-          rows: students.map((student) {
-            return DataRow(
-              onSelectChanged: (_) {
-                context.go('/students/${student.id}');
-              },
-              cells: [
-                DataCell(
-                  SizedBox(
-                    width: 190,
-                    child: Row(
-                      children: [
-                        CircleAvatar(
-                          radius: 18,
-                          backgroundColor: primaryColor.withValues(alpha: 0.10),
-                          child: Text(
-                            _initials(student.name),
-                            style: TextStyle(
-                              color: primaryColor,
-                              fontSize: 11,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 11),
-                        Expanded(
-                          child: Text(
-                            student.name,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              color: colorScheme.onSurface,
-                              fontSize: 13,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                DataCell(
-                  SizedBox(
-                    width: 200,
-                    child: Text(student.email, overflow: TextOverflow.ellipsis),
-                  ),
-                ),
-                DataCell(
-                  SizedBox(width: 110, child: Text(student.phone ?? '—')),
-                ),
-                DataCell(_StatusBadge(isActive: student.isActive)),
-                if (erpEnabled) ...[
-                  DataCell(
-                    Text(_enrollmentStatusLabel(student.enrollmentStatus)),
-                  ),
-                  DataCell(
-                    SizedBox(
-                      width: 120,
-                      child: Text(
-                        student.planName ?? '—',
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ),
-                  DataCell(
-                    SizedBox(
-                      width: 90,
-                      child: Text(
-                        student.enrollmentEndDate == null
-                            ? '—'
-                            : _formatDate(student.enrollmentEndDate!),
-                      ),
-                    ),
-                  ),
-                ],
+    return LayoutBuilder(
+      builder: (context, constraints) => constraints.maxWidth < 860
+          ? Column(
+              key: const ValueKey('students-compact-list'),
+              children: [
+                for (final student in students)
+                  _buildCompactCard(context, student, colorScheme),
               ],
-            );
-          }).toList(),
-        ),
-      ),
+            )
+          : ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: Container(
+                key: const ValueKey('students-responsive-table'),
+                decoration: BoxDecoration(
+                  border: Border.all(color: theme.dividerColor),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Column(
+                  children: [
+                    _buildTableRow(
+                      context,
+                      isHeader: true,
+                      student: const Text('ALUNO'),
+                      email: const Text('E-MAIL'),
+                      phone: const Text('TELEFONE'),
+                      account: const Text('CONTA'),
+                      enrollment: const Text('MATRÍCULA'),
+                      plan: const Text('PLANO'),
+                      endDate: const Text('VENCIMENTO'),
+                    ),
+                    for (final student in students)
+                      _buildTableRow(
+                        context,
+                        student: _studentName(context, student, colorScheme),
+                        email: _textCell(student.email),
+                        phone: _textCell(student.phone ?? '—'),
+                        account: Align(
+                          alignment: Alignment.centerLeft,
+                          child: _StatusBadge(isActive: student.isActive),
+                        ),
+                        enrollment: erpEnabled
+                            ? _textCell(
+                                _enrollmentStatusLabel(
+                                  student.enrollmentStatus,
+                                ),
+                              )
+                            : const SizedBox.shrink(),
+                        plan: erpEnabled
+                            ? _textCell(student.planName ?? '—')
+                            : const SizedBox.shrink(),
+                        endDate: erpEnabled
+                            ? _textCell(
+                                student.enrollmentEndDate == null
+                                    ? '—'
+                                    : _formatDate(student.enrollmentEndDate!),
+                              )
+                            : const SizedBox.shrink(),
+                        rowKey: ValueKey('students-table-row-${student.id}'),
+                        onTap: () => context.go('/students/${student.id}'),
+                      ),
+                  ],
+                ),
+              ),
+            ),
     );
   }
+
+  Widget _buildTableRow(
+    BuildContext context, {
+    required Widget student,
+    required Widget email,
+    required Widget phone,
+    required Widget account,
+    required Widget enrollment,
+    required Widget plan,
+    required Widget endDate,
+    bool isHeader = false,
+    Key? rowKey,
+    VoidCallback? onTap,
+  }) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final cells = erpEnabled
+        ? [
+            (18, student),
+            (20, email),
+            (11, phone),
+            (11, account),
+            (13, enrollment),
+            (16, plan),
+            (11, endDate),
+          ]
+        : [(30, student), (34, email), (20, phone), (16, account)];
+    final row = Container(
+      key: isHeader ? const ValueKey('students-table-header') : rowKey,
+      constraints: BoxConstraints(minHeight: isHeader ? 40 : 62),
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      decoration: BoxDecoration(
+        color: isHeader ? colorScheme.surfaceContainerHighest : null,
+        border: isHeader
+            ? null
+            : Border(bottom: BorderSide(color: Theme.of(context).dividerColor)),
+      ),
+      child: Row(
+        children: [
+          for (final (flex, child) in cells)
+            Expanded(
+              flex: flex,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 5),
+                child: DefaultTextStyle.merge(
+                  style: TextStyle(
+                    color: isHeader
+                        ? colorScheme.onSurfaceVariant
+                        : colorScheme.onSurface,
+                    fontSize: isHeader ? 10 : 12,
+                    fontWeight: isHeader ? FontWeight.w800 : FontWeight.w400,
+                  ),
+                  maxLines: isHeader ? 1 : 2,
+                  overflow: TextOverflow.ellipsis,
+                  child: child,
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+    if (isHeader) return row;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(onTap: onTap, child: row),
+    );
+  }
+
+  Widget _studentName(
+    BuildContext context,
+    StudentSummary student,
+    ColorScheme colorScheme,
+  ) => Tooltip(
+    message: student.name,
+    child: Row(
+      children: [
+        CircleAvatar(
+          radius: 15,
+          backgroundColor: primaryColor.withValues(alpha: 0.10),
+          child: Text(
+            _initials(student.name),
+            style: TextStyle(
+              color: primaryColor,
+              fontSize: 10,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ),
+        const SizedBox(width: 7),
+        Expanded(
+          child: Text(
+            student.name,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: colorScheme.onSurface,
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
+
+  Widget _textCell(String value) => Tooltip(
+    message: value,
+    child: Text(value, maxLines: 2, overflow: TextOverflow.ellipsis),
+  );
+
+  Widget _buildCompactCard(
+    BuildContext context,
+    StudentSummary student,
+    ColorScheme colorScheme,
+  ) => Container(
+    key: ValueKey('students-compact-card-${student.id}'),
+    width: double.infinity,
+    margin: const EdgeInsets.only(bottom: 10),
+    decoration: BoxDecoration(
+      color: colorScheme.surface,
+      border: Border.all(color: Theme.of(context).dividerColor),
+      borderRadius: BorderRadius.circular(12),
+    ),
+    child: Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: () => context.go('/students/${student.id}'),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(child: _studentName(context, student, colorScheme)),
+                  const SizedBox(width: 8),
+                  _StatusBadge(isActive: student.isActive),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 14,
+                runSpacing: 6,
+                children: [
+                  Text('E-mail: ${student.email}'),
+                  Text('Telefone: ${student.phone ?? '—'}'),
+                  if (erpEnabled) ...[
+                    Text(
+                      'Matrícula: ${_enrollmentStatusLabel(student.enrollmentStatus)}',
+                    ),
+                    Text('Plano: ${student.planName ?? '—'}'),
+                    Text(
+                      'Vencimento: ${student.enrollmentEndDate == null ? '—' : _formatDate(student.enrollmentEndDate!)}',
+                    ),
+                  ],
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    ),
+  );
 
   static String _enrollmentStatusLabel(EnrollmentStatus? status) {
     return switch (status) {
@@ -426,9 +625,10 @@ class _StatusBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     final foreground = isActive
-        ? const Color(0xFF2CB67D)
-        : const Color(0xFFE35D6A);
+        ? AvelriSemanticColors.success
+        : AvelriSemanticColors.error;
 
     final background = foreground.withValues(
       alpha: Theme.of(context).brightness == Brightness.dark ? 0.16 : 0.10,
@@ -443,7 +643,7 @@ class _StatusBadge extends StatelessWidget {
       child: Text(
         isActive ? 'Ativo' : 'Inativo',
         style: TextStyle(
-          color: foreground,
+          color: colorScheme.onSurface,
           fontSize: 11,
           fontWeight: FontWeight.w700,
         ),
@@ -457,31 +657,10 @@ class _EmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Padding(
-      padding: EdgeInsets.symmetric(vertical: 70),
-      child: Column(
-        children: [
-          Icon(
-            Icons.people_outline_rounded,
-            color: Color(0xFFAFB3C2),
-            size: 42,
-          ),
-          SizedBox(height: 14),
-          Text(
-            'Nenhum aluno encontrado',
-            style: TextStyle(
-              color: Color(0xFF343748),
-              fontSize: 15,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          SizedBox(height: 5),
-          Text(
-            'Tente alterar a busca ou os filtros.',
-            style: TextStyle(color: Color(0xFF838799), fontSize: 12),
-          ),
-        ],
-      ),
+    return const AppEmptyState(
+      icon: Icons.people_outline_rounded,
+      title: 'Nenhum aluno encontrado',
+      message: 'Tente alterar a busca ou os filtros.',
     );
   }
 }
@@ -494,29 +673,7 @@ class _ErrorState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 55),
-      child: Column(
-        children: [
-          const Icon(
-            Icons.error_outline_rounded,
-            color: Color(0xFFB54752),
-            size: 38,
-          ),
-          const SizedBox(height: 12),
-          Text(
-            message,
-            textAlign: TextAlign.center,
-            style: const TextStyle(color: Color(0xFF656A7E), fontSize: 13),
-          ),
-          const SizedBox(height: 16),
-          OutlinedButton(
-            onPressed: onRetry,
-            child: const Text('Tentar novamente'),
-          ),
-        ],
-      ),
-    );
+    return AppErrorState(message: message, onRetry: () => onRetry());
   }
 }
 

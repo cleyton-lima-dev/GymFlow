@@ -1,4 +1,5 @@
 import 'package:avelri_gestao/features/check_ins/models/physical_access_event.dart';
+import 'package:avelri_gestao/app/theme/semantic_colors.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
@@ -41,7 +42,7 @@ class PhysicalAccessEventsTable extends StatelessWidget {
                 rows: items.map((event) {
                   final isAllowed = event.decision == 1;
                   final decisionColor = isAllowed
-                      ? const Color(0xFF2CB67D)
+                      ? AvelriSemanticColors.success
                       : colors.error;
 
                   return DataRow(
@@ -72,7 +73,7 @@ class PhysicalAccessEventsTable extends StatelessWidget {
                           child: Text(
                             _decisionLabel(event.decision),
                             style: TextStyle(
-                              color: decisionColor,
+                              color: colors.onSurface,
                               fontWeight: FontWeight.w700,
                               fontSize: 12,
                             ),

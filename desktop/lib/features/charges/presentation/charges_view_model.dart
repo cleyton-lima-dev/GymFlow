@@ -1,4 +1,5 @@
 import 'dart:async';
+
 import 'package:avelri_gestao/core/network/api_exception.dart';
 import 'package:avelri_gestao/features/charges/data/charges_service.dart';
 import 'package:avelri_gestao/features/charges/models/charge_summary.dart';
@@ -6,16 +7,14 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:avelri_gestao/features/charges/models/payment_details.dart';
 
-enum ChargesStatusFilter {
-  all,
-  pending,
-  paid,
-  overdue,
-  cancelled,
-}
+enum ChargesStatusFilter { all, pending, paid, overdue, cancelled }
 
 class ChargesViewModel extends ChangeNotifier {
-  ChargesViewModel(this._chargesService);
+  ChargesViewModel(
+    this._chargesService, {
+    ChargesStatusFilter initialStatus = ChargesStatusFilter.all,
+    this.paidMonth,
+  }) : _statusFilter = initialStatus;
 
   final ChargesService _chargesService;
 
@@ -25,56 +24,51 @@ class ChargesViewModel extends ChangeNotifier {
   bool _isDisposed = false;
   String? _errorMessage;
   bool get hasCharges => _charges.isNotEmpty;
-  ChargesStatusFilter _statusFilter =
-      ChargesStatusFilter.all;
+  ChargesStatusFilter _statusFilter;
+  DateTime? paidMonth;
 
-  List<ChargeSummary> get charges =>
-      List.unmodifiable(_charges);
+  List<ChargeSummary> get charges => List.unmodifiable(_charges);
 
   bool get isLoading => _isLoading;
 
   String? get errorMessage => _errorMessage;
 
-
-  ChargesStatusFilter get statusFilter =>
-      _statusFilter;
+  ChargesStatusFilter get statusFilter => _statusFilter;
 
   List<ChargeSummary> get filteredCharges {
-    if (_statusFilter ==
-        ChargesStatusFilter.all) {
+    if (_statusFilter == ChargesStatusFilter.all) {
       return charges;
     }
 
     final status = switch (_statusFilter) {
-      ChargesStatusFilter.pending =>
-      ChargeStatus.pending,
-      ChargesStatusFilter.paid =>
-      ChargeStatus.paid,
-      ChargesStatusFilter.overdue =>
-      ChargeStatus.overdue,
-      ChargesStatusFilter.cancelled =>
-      ChargeStatus.cancelled,
-      ChargesStatusFilter.all =>
-      throw StateError('Filtro inválido.'),
+      ChargesStatusFilter.pending => ChargeStatus.pending,
+      ChargesStatusFilter.paid => ChargeStatus.paid,
+      ChargesStatusFilter.overdue => ChargeStatus.overdue,
+      ChargesStatusFilter.cancelled => ChargeStatus.cancelled,
+      ChargesStatusFilter.all => throw StateError('Filtro inválido.'),
     };
 
-    return _charges
-        .where(
-          (charge) =>
-      charge.status == status,
-    )
-        .toList();
+    return _charges.where((charge) => charge.status == status).toList();
   }
 
-  void updateStatusFilter(
-      ChargesStatusFilter filter,
-      ) {
+  Future<void> updateStatusFilter(ChargesStatusFilter filter) async {
     if (_statusFilter == filter) {
       return;
     }
 
     _statusFilter = filter;
+    if (filter != ChargesStatusFilter.paid && paidMonth != null) {
+      paidMonth = null;
+      await _load(showLoading: true);
+      return;
+    }
     _notifySafely();
+  }
+
+  Future<void> clearPaidMonth() async {
+    if (paidMonth == null) return;
+    paidMonth = null;
+    await _load(showLoading: true);
   }
 
   Future<void> loadInitial() {
@@ -90,9 +84,9 @@ class ChargesViewModel extends ChangeNotifier {
   }
 
   Future<bool> confirmPayment(
-      ChargeSummary charge,
-      PaymentDetails payment,
-      ) async {
+    ChargeSummary charge,
+    PaymentDetails payment,
+  ) async {
     try {
       await _chargesService.confirmPayment(
         chargeId: charge.id,
@@ -103,35 +97,32 @@ class ChargesViewModel extends ChangeNotifier {
 
       return true;
     } on ApiException catch (exception) {
-      _errorMessage =
-          _messageFromApiException(exception);
+      _errorMessage = _messageFromApiException(exception);
       _notifySafely();
 
       return false;
     } on TimeoutException {
       _errorMessage =
-      'A operação demorou mais que o esperado. Tente novamente.';
+          'A operação demorou mais que o esperado. Tente novamente.';
       _notifySafely();
 
       return false;
     } on http.ClientException {
       _errorMessage =
-      'Não foi possível conectar ao servidor. Verifique sua conexão.';
+          'Não foi possível conectar ao servidor. Verifique sua conexão.';
       _notifySafely();
 
       return false;
     } catch (_) {
       _errorMessage =
-      'Não foi possível confirmar o pagamento. Tente novamente.';
+          'Não foi possível confirmar o pagamento. Tente novamente.';
       _notifySafely();
 
       return false;
     }
   }
 
-  Future<void> _load({
-    required bool showLoading,
-  }) async {
+  Future<void> _load({required bool showLoading}) async {
     if (showLoading) {
       _isLoading = true;
     }
@@ -140,8 +131,7 @@ class ChargesViewModel extends ChangeNotifier {
     _notifySafely();
 
     try {
-      final charges =
-      await _chargesService.getCharges();
+      final charges = await _chargesService.getCharges(paidMonth: paidMonth);
 
       if (_isDisposed) {
         return;
@@ -155,36 +145,35 @@ class ChargesViewModel extends ChangeNotifier {
         return;
       }
 
-      _errorMessage =
-          _messageFromApiException(exception);
+      _errorMessage = _messageFromApiException(exception);
     } on TimeoutException {
       if (_isDisposed) {
         return;
       }
 
       _errorMessage =
-      'A consulta demorou mais que o esperado. Tente novamente.';
+          'A consulta demorou mais que o esperado. Tente novamente.';
     } on http.ClientException {
       if (_isDisposed) {
         return;
       }
 
       _errorMessage =
-      'Não foi possível conectar ao servidor. Verifique sua conexão.';
+          'Não foi possível conectar ao servidor. Verifique sua conexão.';
     } on FormatException {
       if (_isDisposed) {
         return;
       }
 
       _errorMessage =
-      'Não foi possível carregar as cobranças. Tente novamente.';
+          'Não foi possível carregar as cobranças. Tente novamente.';
     } catch (_) {
       if (_isDisposed) {
         return;
       }
 
       _errorMessage =
-      'Não foi possível carregar as cobranças. Tente novamente.';
+          'Não foi possível carregar as cobranças. Tente novamente.';
     } finally {
       if (!_isDisposed) {
         _isLoading = false;
@@ -193,9 +182,7 @@ class ChargesViewModel extends ChangeNotifier {
     }
   }
 
-  String _messageFromApiException(
-      ApiException exception,
-      ) {
+  String _messageFromApiException(ApiException exception) {
     if (exception.statusCode == 403) {
       return 'Você não possui permissão para acessar as cobranças.';
     }

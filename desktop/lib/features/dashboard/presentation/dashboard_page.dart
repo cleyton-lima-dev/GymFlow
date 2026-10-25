@@ -6,6 +6,7 @@ import 'package:avelri_gestao/app/session/session_controller.dart';
 import 'package:avelri_gestao/app/session/erp_feature_controller.dart';
 import 'package:avelri_gestao/app/theme/branding_controller.dart';
 
+import 'dashboard_card_grid.dart';
 import 'dashboard_metrics.dart';
 
 class DashboardPage extends StatelessWidget {
@@ -20,8 +21,38 @@ class DashboardPage extends StatelessWidget {
     final branding = context.watch<BrandingController>().branding;
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
-
-    const statusColor = Color(0xFF2CB67D);
+    final shortcuts = [
+      _QuickAccessCard(
+        title: 'Alunos',
+        description: 'Cadastros e informações dos alunos',
+        icon: Icons.people_outline_rounded,
+        accentColor: branding.primaryColor,
+        onTap: () => context.go('/students'),
+      ),
+      if (erpEnabled) ...[
+        _QuickAccessCard(
+          title: 'Planos',
+          description: 'Planos e matrículas da academia',
+          icon: Icons.sell_outlined,
+          accentColor: branding.primaryColor,
+          onTap: () => context.go('/plans'),
+        ),
+        _QuickAccessCard(
+          title: 'Financeiro',
+          description: 'Mensalidades, pagamentos e histórico',
+          icon: Icons.account_balance_wallet_outlined,
+          accentColor: branding.primaryColor,
+          onTap: () => context.go('/finance'),
+        ),
+      ],
+      _QuickAccessCard(
+        title: 'Check-in',
+        description: 'Frequência e presença dos alunos',
+        icon: Icons.how_to_reg_outlined,
+        accentColor: branding.primaryColor,
+        onTap: () => context.go('/check-in'),
+      ),
+    ];
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(30),
@@ -90,7 +121,7 @@ class DashboardPage extends StatelessWidget {
                         ),
                         const SizedBox(height: 5),
                         Text(
-                          'Sua área de gestão está conectada e pronta para uso.',
+                          'Gerencie as rotinas da academia pelo Avelri.',
                           style: TextStyle(
                             color: colorScheme.onSurfaceVariant,
                             fontSize: 13,
@@ -105,25 +136,21 @@ class DashboardPage extends StatelessWidget {
                       vertical: 8,
                     ),
                     decoration: BoxDecoration(
-                      color: statusColor.withValues(
-                        alpha: theme.brightness == Brightness.dark
-                            ? 0.16
-                            : 0.10,
-                      ),
+                      color: colorScheme.surfaceContainerHighest,
                       borderRadius: BorderRadius.circular(30),
                     ),
                     child: Row(
                       children: [
                         Icon(
-                          Icons.check_circle_rounded,
-                          color: statusColor,
+                          Icons.dashboard_outlined,
+                          color: colorScheme.onSurfaceVariant,
                           size: 16,
                         ),
-                        SizedBox(width: 6),
+                        const SizedBox(width: 6),
                         Text(
-                          'Sistema ativo',
+                          'Painel de gestão',
                           style: TextStyle(
-                            color: statusColor,
+                            color: colorScheme.onSurfaceVariant,
                             fontSize: 11,
                             fontWeight: FontWeight.w700,
                           ),
@@ -144,41 +171,12 @@ class DashboardPage extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 15),
-            Wrap(
-              spacing: 16,
-              runSpacing: 16,
-              children: [
-                _QuickAccessCard(
-                  title: 'Alunos',
-                  description: 'Cadastros e informações dos alunos',
-                  icon: Icons.people_outline_rounded,
-                  accentColor: branding.primaryColor,
-                  onTap: () => context.go('/students'),
-                ),
-                if (erpEnabled)
-                  _QuickAccessCard(
-                    title: 'Planos',
-                    description: 'Planos e matrículas da academia',
-                    icon: Icons.sell_outlined,
-                    accentColor: branding.primaryColor,
-                    onTap: () => context.go('/plans'),
-                  ),
-                if (erpEnabled)
-                  _QuickAccessCard(
-                    title: 'Financeiro',
-                    description: 'Mensalidades, pagamentos e histórico',
-                    icon: Icons.account_balance_wallet_outlined,
-                    accentColor: branding.primaryColor,
-                    onTap: () => context.go('/finance'),
-                  ),
-                _QuickAccessCard(
-                  title: 'Check-in',
-                  description: 'Frequência e presença dos alunos',
-                  icon: Icons.how_to_reg_outlined,
-                  accentColor: branding.primaryColor,
-                  onTap: () => context.go('/check-in'),
-                ),
-              ],
+            DashboardCardGrid(
+              key: const ValueKey('dashboard-shortcut-grid'),
+              itemCount: shortcuts.length,
+              minItemWidth: 268,
+              itemHeight: 150,
+              itemBuilder: (context, index) => shortcuts[index],
             ),
             const SizedBox(height: 32),
             Container(
@@ -248,38 +246,54 @@ class _QuickAccessCard extends StatefulWidget {
 
 class _QuickAccessCardState extends State<_QuickAccessCard> {
   bool _hovering = false;
+  bool _showFocusHighlight = false;
+  late final FocusNode _focusNode = FocusNode(
+    debugLabel: 'Dashboard shortcut: ${widget.title}',
+  )..addListener(_updateFocusHighlight);
+
+  void _updateFocusHighlight() {
+    if (_showFocusHighlight != _focusNode.hasFocus) {
+      setState(() => _showFocusHighlight = _focusNode.hasFocus);
+    }
+  }
+
+  @override
+  void dispose() {
+    _focusNode.removeListener(_updateFocusHighlight);
+    _focusNode.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
-    return MouseRegion(
-      cursor: SystemMouseCursors.click,
-      onEnter: (_) {
-        setState(() {
-          _hovering = true;
-        });
-      },
-      onExit: (_) {
-        setState(() {
-          _hovering = false;
-        });
-      },
-      child: GestureDetector(
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        key: ValueKey('dashboard-shortcut-${widget.title}'),
+        focusNode: _focusNode,
         onTap: widget.onTap,
+        onHover: (hovering) {
+          if (_hovering != hovering) setState(() => _hovering = hovering);
+        },
+        mouseCursor: SystemMouseCursors.click,
+        borderRadius: BorderRadius.circular(16),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 140),
-          width: 268,
-          height: 150,
           padding: const EdgeInsets.all(20),
           transform: Matrix4.translationValues(0, _hovering ? -3 : 0, 0),
           decoration: BoxDecoration(
             color: colorScheme.surface,
             borderRadius: BorderRadius.circular(16),
             border: Border.all(
-              color: _hovering
-                  ? widget.accentColor.withValues(alpha: 0.35)
+              color: _showFocusHighlight
+                  ? widget.accentColor
+                  : _hovering
+                  ? widget.accentColor.withValues(alpha: 0.45)
                   : theme.dividerColor,
+              width: _showFocusHighlight ? 2 : 1,
             ),
             boxShadow: _hovering
                 ? const [

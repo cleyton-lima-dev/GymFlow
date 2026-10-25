@@ -7,6 +7,8 @@ import 'package:avelri_gestao/app/session/erp_feature_controller.dart';
 import 'package:avelri_gestao/features/plans/data/plans_service.dart';
 import 'package:avelri_gestao/features/plans/models/plan_summary.dart';
 import 'package:avelri_gestao/app/theme/branding_controller.dart';
+import 'package:avelri_gestao/app/theme/semantic_colors.dart';
+import 'package:avelri_gestao/app/theme/app_button_styles.dart';
 import 'package:avelri_gestao/core/network/api_client.dart';
 import 'package:avelri_gestao/features/students/data/students_service.dart';
 import 'package:avelri_gestao/features/students/presentation/student_details_view_model.dart';
@@ -135,20 +137,9 @@ class _StudentDetailsView extends StatelessWidget {
                               label: const Text('Reativar aluno'),
                             )
                           : OutlinedButton.icon(
-                              style: OutlinedButton.styleFrom(
-                                foregroundColor: student.isActive
-                                    ? const Color(0xFFB54752)
-                                    : primaryColor,
-                                side: BorderSide(
-                                  color: student.isActive
-                                      ? const Color(0xFFB54752)
-                                      : primaryColor,
-                                ),
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 18,
-                                  vertical: 14,
-                                ),
-                              ),
+                              style: student.isActive
+                                  ? AppButtonStyles.destructiveOutlined(context)
+                                  : null,
                               onPressed: viewModel.isUpdatingStatus
                                   ? null
                                   : () async {
@@ -177,6 +168,11 @@ class _StudentDetailsView extends StatelessWidget {
                                                 child: const Text('Cancelar'),
                                               ),
                                               FilledButton(
+                                                style: newStatus
+                                                    ? null
+                                                    : AppButtonStyles.destructive(
+                                                        dialogContext,
+                                                      ),
                                                 onPressed: () {
                                                   Navigator.of(dialogContext)
                                                       .pop(true);
@@ -237,13 +233,6 @@ class _StudentDetailsView extends StatelessWidget {
                             ),
                     const SizedBox(width: 12),
                     FilledButton.icon(
-                      style: FilledButton.styleFrom(
-                        backgroundColor: primaryColor,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 18,
-                          vertical: 14,
-                        ),
-                      ),
                       onPressed: () {
                         context.go('/students/${student.id}/edit');
                       },
@@ -607,9 +596,14 @@ class _StudentDetailsView extends StatelessWidget {
                       mainAxisSize: MainAxisSize.min,
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text('Anote o PIN agora. Ele não poderá ser consultado depois.'),
+                        const Text(
+                          'Anote o PIN agora. Ele não poderá ser consultado depois.',
+                        ),
                         const SizedBox(height: 16),
-                        SelectableText(pin, style: const TextStyle(fontSize: 28)),
+                        SelectableText(
+                          pin,
+                          style: const TextStyle(fontSize: 28),
+                        ),
                       ],
                     ),
                     actions: [
@@ -653,6 +647,31 @@ class _StudentDetailsView extends StatelessWidget {
               },
 
               onRemoveOverride: () async {
+                final confirmed = await showDialog<bool>(
+                  context: context,
+                  builder: (dialogContext) => AlertDialog(
+                    title: const Text('Remover exceção manual?'),
+                    content: const Text(
+                      'O acesso voltará a seguir as regras padrão da academia.',
+                    ),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.of(dialogContext).pop(false),
+                        child: const Text('Voltar'),
+                      ),
+                      FilledButton(
+                        style: AppButtonStyles.destructive(dialogContext),
+                        onPressed: () => Navigator.of(dialogContext).pop(true),
+                        child: const Text('Remover exceção'),
+                      ),
+                    ],
+                  ),
+                );
+
+                if (confirmed != true || !context.mounted) {
+                  return;
+                }
+
                 final success = await viewModel.removePhysicalAccessOverride();
 
                 if (!context.mounted || !success) {
@@ -835,6 +854,9 @@ class _StudentDetailsView extends StatelessWidget {
               child: const Text('Cancelar'),
             ),
             FilledButton(
+              style: isAllow
+                  ? null
+                  : AppButtonStyles.destructive(dialogContext),
               onPressed: () {
                 Navigator.of(dialogContext).pop(true);
               },
@@ -998,8 +1020,8 @@ class _StatusBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final foreground = isActive
-        ? const Color(0xFF2CB67D)
-        : const Color(0xFFE35D6A);
+        ? AvelriSemanticColors.success
+        : AvelriSemanticColors.error;
 
     final background = foreground.withValues(
       alpha: Theme.of(context).brightness == Brightness.dark ? 0.16 : 0.10,
@@ -1014,7 +1036,7 @@ class _StatusBadge extends StatelessWidget {
       child: Text(
         isActive ? 'Ativo' : 'Inativo',
         style: TextStyle(
-          color: foreground,
+          color: Theme.of(context).colorScheme.onSurface,
           fontSize: 11,
           fontWeight: FontWeight.w700,
         ),
@@ -1037,9 +1059,9 @@ class _ErrorState extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(
+            Icon(
               Icons.error_outline_rounded,
-              color: Color(0xFFB54752),
+              color: Theme.of(context).colorScheme.error,
               size: 40,
             ),
             const SizedBox(height: 14),

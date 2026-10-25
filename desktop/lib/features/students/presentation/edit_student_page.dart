@@ -131,8 +131,9 @@ class _EditStudentViewState extends State<_EditStudentView> {
                     Text(
                       'Atualize os dados cadastrais do aluno.',
                       style: TextStyle(
-                          color: colorScheme.onSurfaceVariant,
-                          fontSize: 14),
+                        color: colorScheme.onSurfaceVariant,
+                        fontSize: 14,
+                      ),
                     ),
                   ],
                 ),
@@ -200,7 +201,9 @@ class _EditStudentViewState extends State<_EditStudentView> {
                             controller: _emailController,
                             icon: Icons.mail_outline_rounded,
                             validator: (value) {
-                              if (value != null && value.trim().isNotEmpty && !value.contains('@')) {
+                              if (value != null &&
+                                  value.trim().isNotEmpty &&
+                                  !value.contains('@')) {
                                 return 'Informe um e-mail válido.';
                               }
 
@@ -236,8 +239,8 @@ class _EditStudentViewState extends State<_EditStudentView> {
                       const SizedBox(height: 20),
                       Text(
                         viewModel.errorMessage!,
-                        style: const TextStyle(
-                          color: Color(0xFFB54752),
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.error,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
@@ -257,21 +260,16 @@ class _EditStudentViewState extends State<_EditStudentView> {
                         ),
                         const SizedBox(width: 12),
                         FilledButton.icon(
-                          style: FilledButton.styleFrom(
-                            backgroundColor: primaryColor,
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 22,
-                              vertical: 16,
-                            ),
-                          ),
                           onPressed: viewModel.isSaving ? null : _save,
                           icon: viewModel.isSaving
-                              ? const SizedBox(
+                              ? SizedBox(
                                   width: 16,
                                   height: 16,
                                   child: CircularProgressIndicator(
                                     strokeWidth: 2,
-                                    color: Colors.white,
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .onPrimary,
                                   ),
                                 )
                               : const Icon(Icons.save_outlined),
@@ -390,11 +388,11 @@ class _Field extends StatelessWidget {
             fillColor: colorScheme.surfaceContainerHighest,
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: theme.dividerColor)
+              borderSide: BorderSide(color: theme.dividerColor),
             ),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: theme.dividerColor)
+              borderSide: BorderSide(color: theme.dividerColor),
             ),
           ),
         ),

@@ -1,5 +1,6 @@
 using GymFlow.Application.DTOs.Dashboard;
 using GymFlow.Application.Interfaces.Repositories;
+using GymFlow.Application.Services;
 using GymFlow.Domain.Enums;
 using GymFlow.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
@@ -51,10 +52,7 @@ public sealed class DashboardRepository(AppDbContext context) : IDashboardReposi
         CancellationToken cancellationToken)
     {
         // Inverse of AssessmentDate.AddMonths(2) <= today, including month-end clamping.
-        var assessmentCutoff = today.AddMonths(-2);
-        if (today.Day == DateTime.DaysInMonth(today.Year, today.Month))
-            assessmentCutoff = new DateOnly(assessmentCutoff.Year, assessmentCutoff.Month,
-                DateTime.DaysInMonth(assessmentCutoff.Year, assessmentCutoff.Month));
+        var assessmentCutoff = ReassessmentDuePolicy.GetLastDueAssessmentDate(today);
         var assessments = context.PhysicalAssessments;
         var students = await context.Students.AsNoTracking().Where(s =>
                 s.GymId == gymId && s.IsActive && s.ArchivedAt == null)

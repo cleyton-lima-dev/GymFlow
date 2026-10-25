@@ -534,12 +534,17 @@ public class EnrollmentService
 
     public async Task<List<EnrollmentResponse>> ListAsync(
         Guid gymId,
-        EnrollmentStatus? status = null)
+        EnrollmentStatus? status = null,
+        int? expiringWithinDays = null)
     {
-        var enrollments = await _enrollmentRepository
-            .GetByGymAsync(gymId, null);
-
         var today = GetToday(gymId);
+        if (expiringWithinDays is < 1 or > 365)
+            throw new ArgumentOutOfRangeException(nameof(expiringWithinDays));
+
+        var enrollments = expiringWithinDays.HasValue
+            ? await _enrollmentRepository.GetExpiringByGymAsync(
+                gymId, today, expiringWithinDays.Value)
+            : await _enrollmentRepository.GetByGymAsync(gymId, null);
 
         return enrollments
             .Select(enrollment => new

@@ -7,27 +7,26 @@ class ChargesService {
 
   final ApiClient _apiClient;
 
-  Future<List<ChargeSummary>> getCharges() async {
-    final response = await _apiClient.get(
-      'api/charges',
-    );
+  Future<List<ChargeSummary>> getCharges({DateTime? paidMonth}) async {
+    final query = paidMonth == null
+        ? ''
+        : '?paidMonth=${_formatDateOnly(paidMonth)}';
+    final response = await _apiClient.get('api/charges$query');
 
     if (response is! List) {
-      throw const FormatException(
-        'Invalid charges response.',
-      );
+      throw const FormatException('Invalid charges response.');
     }
 
     return response
         .map(
-          (item) => ChargeSummary.fromJson(
-        Map<String, dynamic>.from(
-          item as Map,
-        ),
-      ),
-    )
+          (item) =>
+              ChargeSummary.fromJson(Map<String, dynamic>.from(item as Map)),
+        )
         .toList();
   }
+
+  String _formatDateOnly(DateTime date) =>
+      '${date.year.toString().padLeft(4, '0')}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
 
   Future<void> confirmPayment({
     required String chargeId,

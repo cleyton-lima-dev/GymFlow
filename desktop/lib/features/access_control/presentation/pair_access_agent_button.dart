@@ -10,9 +10,7 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 class PairAccessAgentButton extends StatefulWidget {
-  const PairAccessAgentButton({required this.primaryColor, super.key});
-
-  final Color primaryColor;
+  const PairAccessAgentButton({super.key});
 
   @override
   State<PairAccessAgentButton> createState() => _PairAccessAgentButtonState();
@@ -189,10 +187,6 @@ class _PairAccessAgentButtonState extends State<PairAccessAgentButton> {
   @override
   Widget build(BuildContext context) {
     return FilledButton.icon(
-      style: FilledButton.styleFrom(
-        backgroundColor: widget.primaryColor,
-        foregroundColor: Colors.white,
-      ),
       onPressed: _isGenerating ? null : _generatePairingCode,
       icon: _isGenerating
           ? const SizedBox(

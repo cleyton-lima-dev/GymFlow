@@ -126,6 +126,10 @@ void main() {
           enabled ? findsOneWidget : findsNothing,
         );
         expect(find.text('Cadastrar aluno'), findsOneWidget);
+        expect(
+          find.byKey(const ValueKey('students-assessment-guidance')),
+          findsNothing,
+        );
         expect(find.text('MATRÍCULA'), enabled ? findsOneWidget : findsNothing);
         expect(find.text('PLANO'), enabled ? findsOneWidget : findsNothing);
         expect(
@@ -142,6 +146,102 @@ void main() {
         expect(find.text('Arquivamento'), findsOneWidget);
         await tester.tap(find.text('Cancelar'));
         await tester.pumpAndSettle();
+
+        await tester.pumpWidget(const SizedBox.shrink());
+        session.dispose();
+        features.dispose();
+        branding.dispose();
+        apiClient.close();
+      },
+    );
+  }
+
+  for (final filter in ['missing', 'reassessmentDue']) {
+    testWidgets(
+      'assessment guidance is shown only for contextual filter $filter',
+      (tester) async {
+        tester.view.physicalSize = const Size(1800, 1200);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        final apiClient = ApiClient(
+          baseUrl: 'https://api.example.invalid/',
+          client: MockClient((request) async {
+            if (request.url.path == '/api/gym-features') {
+              return http.Response(jsonEncode({'erpEnabled': true}), 200);
+            }
+            if (request.url.path == '/api/students') {
+              return http.Response(
+                jsonEncode({
+                  'items': <Object>[],
+                  'page': 1,
+                  'pageSize': 20,
+                  'totalCount': 0,
+                  'totalPages': 0,
+                }),
+                200,
+              );
+            }
+            return http.Response('not found', 404);
+          }),
+        );
+        final session = SessionController(
+          TokenStorage(
+            const FlutterSecureStorage(),
+            restorationGuard: TestSessionRestorationGuard(),
+          ),
+          AuthService(apiClient),
+          apiClient,
+        );
+        await session.startSession(
+          user: const SessionUser(
+            userId: 'admin',
+            gymId: 'tenant-a',
+            name: 'Admin',
+            email: 'admin@example.invalid',
+            role: AppRole.admin,
+          ),
+          token: 'test-jwt',
+        );
+        final features = ErpFeatureController(apiClient);
+        await features.loadForGym('tenant-a');
+        final branding = BrandingController(
+          const LocalBrandingRepository({}),
+          defaultBranding: avelriDefaultBranding,
+        );
+
+        await tester.pumpWidget(
+          MultiProvider(
+            providers: [
+              Provider<ApiClient>.value(value: apiClient),
+              ChangeNotifierProvider<SessionController>.value(value: session),
+              ChangeNotifierProvider<ErpFeatureController>.value(
+                value: features,
+              ),
+              ChangeNotifierProvider<BrandingController>.value(value: branding),
+            ],
+            child: MaterialApp(
+              home: Scaffold(body: StudentsPage(assessmentFilter: filter)),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        expect(
+          find.byKey(const ValueKey('students-assessment-guidance')),
+          findsOneWidget,
+        );
+        expect(
+          find.text(
+            'Para registrar ou atualizar avaliações físicas, use o Avelri Mobile no perfil Admin ou Professor.',
+          ),
+          findsOneWidget,
+        );
+        expect(
+          find.byKey(const ValueKey('student-assessment-filter')),
+          findsOneWidget,
+        );
+        expect(find.byType(OutlinedButton), findsWidgets);
 
         await tester.pumpWidget(const SizedBox.shrink());
         session.dispose();

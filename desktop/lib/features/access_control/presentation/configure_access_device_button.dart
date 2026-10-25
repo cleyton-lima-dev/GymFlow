@@ -8,14 +8,12 @@ import 'package:flutter/material.dart';
 class ConfigureAccessDeviceButton extends StatelessWidget {
   const ConfigureAccessDeviceButton({
     required this.agent,
-    required this.primaryColor,
     required this.service,
     required this.onSaved,
     super.key,
   });
 
   final AccessAgentSummary agent;
-  final Color primaryColor;
   final AccessAgentsService service;
   final Future<void> Function() onSaved;
 
@@ -43,7 +41,6 @@ class ConfigureAccessDeviceButton extends StatelessWidget {
       barrierDismissible: false,
       builder: (_) => _ConfigureAccessDeviceDialog(
         agentId: agent.id,
-        primaryColor: primaryColor,
         service: service,
         initialHost: existing?.host ?? '',
         initialPort: existing?.port ?? 7878,
@@ -60,7 +57,6 @@ class ConfigureAccessDeviceButton extends StatelessWidget {
 class _ConfigureAccessDeviceDialog extends StatefulWidget {
   const _ConfigureAccessDeviceDialog({
     required this.agentId,
-    required this.primaryColor,
     required this.service,
     required this.initialHost,
     required this.initialPort,
@@ -68,7 +64,6 @@ class _ConfigureAccessDeviceDialog extends StatefulWidget {
   });
 
   final String agentId;
-  final Color primaryColor;
   final AccessAgentsService service;
   final String initialHost;
   final int initialPort;
@@ -269,7 +264,6 @@ class _ConfigureAccessDeviceDialogState
             child: const Text('Cancelar'),
           ),
           FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: widget.primaryColor),
             onPressed: _isSaving ? null : _save,
             child: _isSaving
                 ? const SizedBox(

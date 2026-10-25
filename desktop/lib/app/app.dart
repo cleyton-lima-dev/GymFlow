@@ -10,6 +10,7 @@ import 'package:avelri_gestao/app/session/erp_feature_controller.dart';
 import 'package:avelri_gestao/app/session/session_status.dart';
 import 'package:avelri_gestao/app/theme/app_theme.dart';
 import 'package:avelri_gestao/app/theme/branding_controller.dart';
+import 'package:avelri_gestao/app/theme/default_branding.dart';
 import 'package:avelri_gestao/core/network/api_client.dart';
 
 class AvelriGestaoApp extends StatefulWidget {
@@ -75,11 +76,13 @@ class _AvelriGestaoAppState extends State<AvelriGestaoApp>
         ChangeNotifierProvider.value(value: widget.brandingController),
         ChangeNotifierProvider.value(value: widget.erpFeatureController),
       ],
-      child: Consumer<BrandingController>(
-        builder: (context, brandingController, child) {
+      child: Consumer2<BrandingController, SessionController>(
+        builder: (context, brandingController, sessionController, child) {
           return MaterialApp.router(
             debugShowCheckedModeBanner: false,
-            title: brandingController.branding.displayName,
+            title: sessionController.status == SessionStatus.authenticated
+                ? brandingController.branding.displayName
+                : avelriDefaultBranding.displayName,
             locale: const Locale('pt', 'BR'),
             supportedLocales: const [Locale('pt', 'BR')],
             localizationsDelegates: const [
@@ -89,8 +92,61 @@ class _AvelriGestaoAppState extends State<AvelriGestaoApp>
             ],
             theme: AppTheme.fromBranding(brandingController.branding),
             routerConfig: widget.router,
+            builder: (context, child) {
+              final previewLabel = brandingController.previewLabel;
+              if (previewLabel == null ||
+                  sessionController.status != SessionStatus.authenticated) {
+                return child ?? const SizedBox.shrink();
+              }
+
+              final theme = Theme.of(context);
+              return Column(
+                children: [
+                  BrandingPreviewNotice(
+                    label: previewLabel,
+                    backgroundColor: theme.colorScheme.surfaceContainerHighest,
+                    foregroundColor: theme.colorScheme.onSurface,
+                  ),
+                  Expanded(child: child ?? const SizedBox.shrink()),
+                ],
+              );
+            },
           );
         },
+      ),
+    );
+  }
+}
+
+class BrandingPreviewNotice extends StatelessWidget {
+  const BrandingPreviewNotice({
+    required this.label,
+    required this.backgroundColor,
+    required this.foregroundColor,
+    super.key,
+  });
+
+  final String label;
+  final Color backgroundColor;
+  final Color foregroundColor;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 30,
+      width: double.infinity,
+      child: ColoredBox(
+        color: backgroundColor,
+        child: Center(
+          child: Text(
+            'Pré-visualização local do tema: $label',
+            style: TextStyle(
+              color: foregroundColor,
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
       ),
     );
   }
