@@ -1,4 +1,4 @@
-import 'package:flutter/widgets.dart';
+import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:avelri_gestao/features/students/presentation/student_details_page.dart';
 import 'package:avelri_gestao/app/router/management_shell_page.dart';
@@ -8,6 +8,8 @@ import 'package:avelri_gestao/app/session/session_controller.dart';
 import 'package:avelri_gestao/app/session/erp_feature_controller.dart';
 import 'package:avelri_gestao/app/session/session_status.dart';
 import 'package:avelri_gestao/app/theme/branding_controller.dart';
+import 'package:avelri_gestao/app/theme/app_theme.dart';
+import 'package:avelri_gestao/app/theme/default_branding.dart';
 import 'package:avelri_gestao/features/auth/presentation/login_page.dart';
 import 'package:avelri_gestao/features/dashboard/presentation/dashboard_page.dart';
 import 'package:avelri_gestao/features/gym_settings/presentation/gym_settings_page.dart';
@@ -129,7 +131,13 @@ class AppRouter {
         path: '/bootstrap',
         builder: (context, state) => const SessionLoadingPage(),
       ),
-      GoRoute(path: '/login', builder: (context, state) => const LoginPage()),
+      GoRoute(
+        path: '/login',
+        builder: (context, state) => Theme(
+          data: AppTheme.fromBranding(avelriDefaultBranding),
+          child: const LoginPage(),
+        ),
+      ),
       ShellRoute(
         observers: [_shellPopups],
         builder: (context, state, child) {
@@ -223,6 +231,9 @@ class AppRouter {
             pageBuilder: (context, state) => NoTransitionPage(
               child: ChargesPage(
                 overdueOnly: state.uri.queryParameters['status'] == 'overdue',
+                paidMonth: DateTime.tryParse(
+                  state.uri.queryParameters['paidMonth'] ?? '',
+                ),
               ),
             ),
           ),
@@ -231,9 +242,6 @@ class AppRouter {
             pageBuilder: (context, state) =>
                 const NoTransitionPage(child: AccessControlPage()),
           ),
-                paidMonth: DateTime.tryParse(
-                  state.uri.queryParameters['paidMonth'] ?? '',
-                ),
           GoRoute(
             path: '/check-in',
             pageBuilder: (context, state) =>

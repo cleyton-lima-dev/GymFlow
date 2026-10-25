@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
@@ -11,6 +12,7 @@ import 'package:avelri_gestao/app/session/erp_feature_controller.dart';
 import 'package:avelri_gestao/app/session/session_status.dart';
 import 'package:avelri_gestao/app/theme/ac_power_gym_branding.dart';
 import 'package:avelri_gestao/app/theme/branding_controller.dart';
+import 'package:avelri_gestao/app/theme/branding_preview.dart';
 import 'package:avelri_gestao/app/theme/default_branding.dart';
 import 'package:avelri_gestao/app/theme/local_branding_repository.dart';
 import 'package:avelri_gestao/app/theme/space_branding.dart';
@@ -22,6 +24,12 @@ void main() {
   WidgetsFlutterBinding.ensureInitialized();
 
   final config = AppConfig.fromEnvironment();
+  const requestedBrandingPreview = String.fromEnvironment('BRANDING_PREVIEW');
+  final brandingPreview = BrandingPreview.resolve(
+    requestedBrandingPreview,
+    isDevelopment: config.isDevelopment,
+    isDebug: kDebugMode,
+  );
 
   const secureStorage = FlutterSecureStorage(
     wOptions: WindowsOptions(useBackwardCompatibility: true),
@@ -51,6 +59,7 @@ void main() {
   final brandingController = BrandingController(
     brandingRepository,
     defaultBranding: avelriDefaultBranding,
+    preview: brandingPreview,
   );
 
   void syncBrandingWithSession() {
