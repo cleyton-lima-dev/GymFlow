@@ -7,21 +7,21 @@ import 'package:avelri_gestao/features/students/models/student_summary.dart';
 import 'package:http/http.dart' as http;
 
 enum StudentsStatusFilter { all, active, inactive }
-enum StudentsEnrollmentFilter {
-  all,
-  active,
-  cancelled,
-  expired,
-  none,
-}
-enum StudentsArchiveFilter {
-  notArchived,
-  archived,
-  all,
-}
+
+enum StudentsEnrollmentFilter { all, active, cancelled, expired, none }
+
+enum StudentsArchiveFilter { notArchived, archived, all }
+
+enum StudentsAssessmentFilter { missing, reassessmentDue }
 
 class StudentsViewModel extends ChangeNotifier {
-  StudentsViewModel(this._studentsService);
+  StudentsViewModel(
+    this._studentsService, {
+    StudentsAssessmentFilter? assessmentFilter,
+  }) : _assessmentFilter = assessmentFilter,
+       _statusFilter = assessmentFilter == null
+           ? StudentsStatusFilter.all
+           : StudentsStatusFilter.active;
 
   static const int pageSize = 20;
   static const Duration _searchDebounce = Duration(milliseconds: 400);
@@ -38,11 +38,10 @@ class StudentsViewModel extends ChangeNotifier {
   String _search = '';
   String? _errorMessage;
 
-  StudentsStatusFilter _statusFilter = StudentsStatusFilter.all;
-  StudentsEnrollmentFilter _enrollmentFilter =
-      StudentsEnrollmentFilter.all;
-  StudentsArchiveFilter _archiveFilter =
-      StudentsArchiveFilter.notArchived;
+  StudentsStatusFilter _statusFilter;
+  StudentsEnrollmentFilter _enrollmentFilter = StudentsEnrollmentFilter.all;
+  StudentsArchiveFilter _archiveFilter = StudentsArchiveFilter.notArchived;
+  StudentsAssessmentFilter? _assessmentFilter;
 
   int _page = 1;
   int _totalPages = 1;
@@ -76,13 +75,27 @@ class StudentsViewModel extends ChangeNotifier {
 
   bool get hasActiveFilter =>
       _statusFilter != StudentsStatusFilter.all ||
-          _enrollmentFilter != StudentsEnrollmentFilter.all ||
-          _archiveFilter != StudentsArchiveFilter.notArchived;
+      _enrollmentFilter != StudentsEnrollmentFilter.all ||
+      _archiveFilter != StudentsArchiveFilter.notArchived;
 
-  StudentsEnrollmentFilter get enrollmentFilter =>
-      _enrollmentFilter;
+  StudentsEnrollmentFilter get enrollmentFilter => _enrollmentFilter;
 
   StudentsArchiveFilter get archiveFilter => _archiveFilter;
+  StudentsAssessmentFilter? get assessmentFilter => _assessmentFilter;
+
+  String? get assessmentFilterLabel => switch (_assessmentFilter) {
+    StudentsAssessmentFilter.missing => 'Sem avaliação física · alunos ativos',
+    StudentsAssessmentFilter.reassessmentDue =>
+      'Reavaliação pendente · alunos ativos',
+    null => null,
+  };
+
+  Future<void> clearAssessmentFilter() async {
+    if (_assessmentFilter == null) return;
+    _assessmentFilter = null;
+    _statusFilter = StudentsStatusFilter.all;
+    await _loadPage(page: 1, showLoading: true);
+  }
 
   int get _archiveFilterValue {
     return switch (_archiveFilter) {
@@ -126,7 +139,6 @@ class StudentsViewModel extends ChangeNotifier {
     required StudentsEnrollmentFilter enrollmentFilter,
     required StudentsArchiveFilter archiveFilter,
   }) async {
-
     if (_statusFilter == statusFilter &&
         _enrollmentFilter == enrollmentFilter &&
         _archiveFilter == archiveFilter) {
@@ -136,25 +148,17 @@ class StudentsViewModel extends ChangeNotifier {
     _statusFilter = statusFilter;
     _enrollmentFilter = enrollmentFilter;
 
-    await _loadPage(
-      page: 1,
-      showLoading: true,
-    );
+    await _loadPage(page: 1, showLoading: true);
   }
 
-  Future<void> updateEnrollmentFilter(
-      StudentsEnrollmentFilter filter,
-      ) async {
+  Future<void> updateEnrollmentFilter(StudentsEnrollmentFilter filter) async {
     if (_enrollmentFilter == filter) {
       return;
     }
 
     _enrollmentFilter = filter;
 
-    await _loadPage(
-      page: 1,
-      showLoading: true,
-    );
+    await _loadPage(page: 1, showLoading: true);
   }
 
   Future<void> goToPreviousPage() async {
@@ -199,6 +203,11 @@ class StudentsViewModel extends ChangeNotifier {
         page: page,
         pageSize: pageSize,
         archiveFilter: _archiveFilterValue,
+        assessmentFilter: switch (_assessmentFilter) {
+          StudentsAssessmentFilter.missing => '1',
+          StudentsAssessmentFilter.reassessmentDue => '2',
+          null => null,
+        },
       );
 
       if (_isDisposed || requestVersion != _requestVersion) {
@@ -251,6 +260,7 @@ class StudentsViewModel extends ChangeNotifier {
       }
     }
   }
+
   int? get _enrollmentFilterValue {
     return switch (_enrollmentFilter) {
       StudentsEnrollmentFilter.all => null,

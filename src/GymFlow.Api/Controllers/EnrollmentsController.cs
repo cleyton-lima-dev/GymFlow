@@ -52,15 +52,20 @@ public class EnrollmentsController : ControllerBase
 
     [HttpGet]
     public async Task<IActionResult> GetAll(
-        [FromQuery] EnrollmentStatus? status)
+        [FromQuery] EnrollmentStatus? status,
+        [FromQuery] int? expiringWithinDays)
     {
         if (!TryGetGymId(out var gymId))
             return Unauthorized();
 
+        if (expiringWithinDays is < 1 or > 365)
+            return BadRequest(new { message = "O prazo deve estar entre 1 e 365 dias." });
+
         var enrollments =
             await _enrollmentService.ListAsync(
                 gymId,
-                status);
+                status,
+                expiringWithinDays);
 
         return Ok(enrollments);
     }

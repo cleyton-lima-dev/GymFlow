@@ -1,5 +1,6 @@
 using GymFlow.Application.Interfaces.Repositories;
 using GymFlow.Domain.Entities;
+using GymFlow.Domain.Enums;
 using GymFlow.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 
@@ -65,6 +66,30 @@ public class ChargeRepository : IChargeRepository
                 charge.Enrollment.Student.GymId == gymId &&
                 charge.Enrollment.Plan.GymId == gymId)
             .OrderBy(charge => charge.DueDate)
+            .ThenBy(charge => charge.Id)
+            .ToListAsync();
+    }
+
+    public async Task<List<Charge>> GetPaidByGymAndPeriodAsync(
+        Guid gymId,
+        DateTime fromUtc,
+        DateTime untilUtc)
+    {
+        return await _context.Charges
+            .AsNoTracking()
+            .Include(charge => charge.Enrollment)
+                .ThenInclude(enrollment => enrollment.Student)
+                    .ThenInclude(student => student.User)
+            .Include(charge => charge.Enrollment)
+                .ThenInclude(enrollment => enrollment.Plan)
+            .Where(charge =>
+                charge.Enrollment.Student.GymId == gymId &&
+                charge.Enrollment.Plan.GymId == gymId &&
+                charge.Status == ChargeStatus.Paid &&
+                charge.PaymentOrigin == PaymentOrigin.Avelri &&
+                charge.PaidAt >= fromUtc &&
+                charge.PaidAt < untilUtc)
+            .OrderBy(charge => charge.PaidAt)
             .ThenBy(charge => charge.Id)
             .ToListAsync();
     }

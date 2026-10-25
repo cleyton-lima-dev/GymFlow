@@ -15,7 +15,8 @@ public interface IStudentRepository
     StudentArchiveFilter archiveFilter,
     DateOnly referenceDate,
     int skip,
-    int take);
+    int take,
+    StudentAssessmentFilter? assessmentFilter = null);
 
     Task<Student?> GetByIdAndGymIdAsync(Guid studentId, Guid gymId);
 

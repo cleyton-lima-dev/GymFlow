@@ -8,6 +8,7 @@ using GymFlow.Api.Authorization;
 using GymFlow.Application.Interfaces.Security;
 using GymFlow.Infrastructure.Security;
 using GymFlow.Application.DTOs.Dashboard;
+using GymFlow.Application.DTOs.Students;
 using GymFlow.Application.Interfaces.Repositories;
 using GymFlow.Application.Interfaces.Time;
 using GymFlow.Application.Services;
@@ -38,6 +39,185 @@ public sealed class DashboardTests
 
     [Fact]
     public Task Aggregates_SourceAmountsDatesStatesAndBothTenantRelationships() => CheckAggregates(false);
+
+    [Fact]
+    public Task ContextualLists_MatchDashboardMetricsAndRemainGymScoped() =>
+        CheckContextualLists(false);
+
+    [DashboardPostgresFact]
+    public Task PostgreSql_ContextualLists_MatchDashboardMetricsAndRemainGymScoped() =>
+        CheckContextualLists(true);
+
+    [DashboardPostgresFact]
+    public async Task PostgreSql_ExpiringListUsesGymLocalDateAndDashboardWindow()
+    {
+        await using var database = await DashboardTestDatabase.CreateAsync(true);
+        var db = database.Context;
+        var gym = Guid.NewGuid();
+        var otherGym = Guid.NewGuid();
+        var zone = new Zone();
+        var localToday = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(
+            DateTime.UtcNow, zone.GetTimeZone(gym)));
+
+        var expiresTomorrow = AddStudent(db, gym);
+        var expiresOnWindowEnd = AddStudent(db, gym);
+        var expiresOutsideWindow = AddStudent(db, gym);
+        var cancelled = AddStudent(db, gym);
+        var expired = AddStudent(db, gym);
+        var startsInFuture = AddStudent(db, gym);
+        var otherTenant = AddStudent(db, otherGym);
+        AddEnrollment(db, expiresTomorrow, gym, localToday.AddDays(1));
+        AddEnrollment(db, expiresOnWindowEnd, gym, localToday.AddDays(15));
+        AddEnrollment(db, expiresOutsideWindow, gym, localToday.AddDays(16));
+        AddEnrollment(db, cancelled, gym, localToday.AddDays(10), EnrollmentStatus.Cancelled);
+        AddEnrollment(db, expired, gym, localToday);
+        var futureEnrollment = AddEnrollment(db, startsInFuture, gym, localToday.AddDays(10));
+        futureEnrollment.StartDate = localToday.AddDays(1);
+        AddEnrollment(db, otherTenant, otherGym, localToday.AddDays(5));
+        await db.SaveChangesAsync();
+        db.ChangeTracker.Clear();
+
+        var summary = await new DashboardService(
+            new DashboardRepository(db), zone, TimeProvider.System).GetAsync(gym);
+        var list = await new EnrollmentService(
+            new EnrollmentRepository(db), new StudentRepository(db), null!,
+            new ChargeRepository(db), zone, null!, null!, null!)
+            .ListAsync(gym, expiringWithinDays: summary.ExpiringWithinDays);
+
+        Assert.Equal(localToday, summary.Today);
+        Assert.Equal(2, summary.ExpiringEnrollments);
+        Assert.Equal(summary.ExpiringEnrollments, list.Count);
+        Assert.Contains(list, item => item.StudentId == expiresTomorrow.Id &&
+            item.EndDate == localToday.AddDays(1));
+        Assert.Contains(list, item => item.StudentId == expiresOnWindowEnd.Id &&
+            item.EndDate == localToday.AddDays(15));
+        Assert.DoesNotContain(list, item => item.StudentId == expiresOutsideWindow.Id);
+        Assert.DoesNotContain(list, item => item.StudentId == cancelled.Id);
+        Assert.DoesNotContain(list, item => item.StudentId == expired.Id);
+        Assert.DoesNotContain(list, item => item.StudentId == startsInFuture.Id);
+        Assert.DoesNotContain(list, item => item.StudentId == otherTenant.Id);
+    }
+
+    private static async Task CheckContextualLists(bool postgres)
+    {
+        await using var database = await DashboardTestDatabase.CreateAsync(postgres);
+        var db = database.Context;
+        var gym = Guid.NewGuid();
+        var otherGym = Guid.NewGuid();
+
+        var missing = AddStudent(db, gym);
+        var additionalMissing = Enumerable.Range(0, 22)
+            .Select(_ => AddStudent(db, gym)).ToArray();
+        var due = AddStudent(db, gym);
+        var additionalDue = Enumerable.Range(0, 21)
+            .Select(_ => AddStudent(db, gym)).ToArray();
+        var notDue = AddStudent(db, gym);
+        var inactive = AddStudent(db, gym, false);
+        var archived = AddStudent(db, gym);
+        archived.ArchivedAt = DateTime.UtcNow;
+        var otherMissing = AddStudent(db, otherGym);
+        Assess(db, due, Today.AddMonths(-3));
+        Assess(db, due, Today.AddMonths(-2));
+        foreach (var student in additionalDue)
+            Assess(db, student, Today.AddMonths(-2));
+        Assess(db, notDue, Today.AddMonths(-2).AddDays(1));
+        Assess(db, inactive, Today.AddMonths(-3));
+        await db.SaveChangesAsync();
+
+        AddEnrollment(db, missing, gym, Today.AddDays(15));
+        AddEnrollment(db, due, gym, Today.AddDays(1));
+        AddEnrollment(db, notDue, gym, Today.AddDays(16));
+        AddEnrollment(db, missing, gym, Today, EnrollmentStatus.Active);
+        AddEnrollment(db, notDue, gym, Today.AddDays(15), EnrollmentStatus.Cancelled);
+        AddEnrollment(db, notDue, gym, Today.AddDays(15), EnrollmentStatus.Expired);
+        AddEnrollment(db, notDue, gym, Today.AddDays(-1));
+        var future = AddEnrollment(db, missing, gym, Today.AddDays(2));
+        future.StartDate = Today.AddDays(1);
+        AddEnrollment(db, otherMissing, otherGym, Today.AddDays(5));
+
+        var includedPaymentEnrollment = AddEnrollment(db, missing, gym, Today.AddDays(20));
+        AddCharge(db, includedPaymentEnrollment, ChargeStatus.Paid, 125.50m, Today.AddMonths(-2),
+            paid: 125.50m, paidAt: From.AddDays(3));
+        var outsidePeriod = AddEnrollment(db, missing, gym, Today.AddDays(20));
+        AddCharge(db, outsidePeriod, ChargeStatus.Paid, 40m, Today,
+            paid: 40m, paidAt: Until);
+        var migrationPayment = AddEnrollment(db, missing, gym, Today.AddDays(20));
+        var migrationCharge = new Charge
+        {
+            Id = Guid.NewGuid(), Enrollment = migrationPayment, Amount = 70,
+            PaidAmount = 70, PaidAt = From.AddDays(4), DueDate = Today,
+            Status = ChargeStatus.Paid, PaymentOrigin = PaymentOrigin.Migration
+        };
+        db.Charges.Add(migrationCharge);
+        var otherPayment = AddEnrollment(db, otherMissing, otherGym, Today.AddDays(20));
+        AddCharge(db, otherPayment, ChargeStatus.Paid, 900, Today,
+            paid: 900, paidAt: From.AddDays(5));
+        await db.SaveChangesAsync();
+        db.ChangeTracker.Clear();
+
+        var summary = await new DashboardRepository(db)
+            .GetAsync(gym, Today, From, Until, default);
+        var studentRepository = new StudentRepository(db);
+        var missingPage = await studentRepository.GetPagedByGymIdAsync(
+            gym, null, true, null, StudentArchiveFilter.NotArchived,
+            Today, 0, 20, StudentAssessmentFilter.Missing);
+        var missingSecondPage = await studentRepository.GetPagedByGymIdAsync(
+            gym, null, true, null, StudentArchiveFilter.NotArchived,
+            Today, 20, 20, StudentAssessmentFilter.Missing);
+        var missingPageAgain = await studentRepository.GetPagedByGymIdAsync(
+            gym, null, true, null, StudentArchiveFilter.NotArchived,
+            Today, 0, 20, StudentAssessmentFilter.Missing);
+        var duePage = await studentRepository.GetPagedByGymIdAsync(
+            gym, null, true, null, StudentArchiveFilter.NotArchived,
+            Today, 0, 20, StudentAssessmentFilter.ReassessmentDue);
+        var dueSecondPage = await studentRepository.GetPagedByGymIdAsync(
+            gym, null, true, null, StudentArchiveFilter.NotArchived,
+            Today, 20, 20, StudentAssessmentFilter.ReassessmentDue);
+        var duePageAgain = await studentRepository.GetPagedByGymIdAsync(
+            gym, null, true, null, StudentArchiveFilter.NotArchived,
+            Today, 0, 20, StudentAssessmentFilter.ReassessmentDue);
+        var expiring = await new EnrollmentRepository(db)
+            .GetExpiringByGymAsync(gym, Today, 15);
+        var received = await new ChargeRepository(db)
+            .GetPaidByGymAndPeriodAsync(gym, From, Until);
+
+        Assert.Equal(summary.StudentsWithoutAssessment, missingPage.TotalCount);
+        Assert.Equal(20, missingPage.Items.Count);
+        Assert.Equal(3, missingSecondPage.Items.Count);
+        Assert.Equal(summary.StudentsWithoutAssessment, missingSecondPage.TotalCount);
+        var missingIds = missingPage.Items.Select(s => s.Id)
+            .Concat(missingSecondPage.Items.Select(s => s.Id)).ToArray();
+        Assert.Equal(23, missingIds.Distinct().Count());
+        Assert.True(missingIds.ToHashSet().SetEquals(
+            additionalMissing.Select(s => s.Id).Append(missing.Id)));
+        Assert.Equal(missingPage.Items.Select(s => s.Id),
+            missingPageAgain.Items.Select(s => s.Id));
+        Assert.Contains(missing.Id, missingPage.Items.Select(s => s.Id)
+            .Concat(missingSecondPage.Items.Select(s => s.Id)));
+        Assert.Equal(20, duePage.Items.Count);
+        Assert.Equal(2, dueSecondPage.Items.Count);
+        Assert.Equal(summary.ReassessmentsDue, duePage.TotalCount);
+        Assert.Equal(summary.ReassessmentsDue, dueSecondPage.TotalCount);
+        var dueIds = duePage.Items.Select(s => s.Id)
+            .Concat(dueSecondPage.Items.Select(s => s.Id)).ToArray();
+        Assert.Equal(22, dueIds.Distinct().Count());
+        Assert.True(dueIds.ToHashSet().SetEquals(
+            additionalDue.Select(s => s.Id).Append(due.Id)));
+        Assert.Equal(duePage.Items.Select(s => s.Id),
+            duePageAgain.Items.Select(s => s.Id));
+        Assert.Contains(due.Id, dueIds);
+        Assert.DoesNotContain(notDue.Id, dueIds);
+        Assert.Equal(summary.ExpiringEnrollments, expiring.Count);
+        Assert.Equal(2, expiring.Count);
+        Assert.Contains(expiring, item => item.StudentId == missing.Id && item.EndDate == Today.AddDays(15));
+        Assert.DoesNotContain(expiring, item => item.StudentId == otherMissing.Id);
+        Assert.Equal(summary.ReceivedRevenue, received.Sum(charge => charge.PaidAmount ?? 0m));
+        Assert.Single(received);
+        Assert.Equal(ChargeStatus.Paid, received[0].Status);
+        Assert.Equal(PaymentOrigin.Avelri, received[0].PaymentOrigin);
+        Assert.NotEqual(Today.Month, received[0].DueDate.Month);
+        Assert.DoesNotContain(received, charge => charge.Enrollment.Student.GymId != gym);
+    }
 
     [DashboardPostgresFact]
     public Task PostgreSql_Aggregates_SourceAmountsDatesStatesAndBothTenantRelationships() => CheckAggregates(true);

@@ -115,6 +115,7 @@ public class StudentsController : ControllerBase
     [FromQuery] string? search,
     [FromQuery] bool? isActive,
     [FromQuery] StudentEnrollmentFilter? enrollmentFilter,
+    [FromQuery] StudentAssessmentFilter? assessmentFilter,
     [FromQuery] StudentArchiveFilter archiveFilter = StudentArchiveFilter.NotArchived,
     [FromQuery] int page = 1,
     [FromQuery] int pageSize = 20)
@@ -138,7 +139,8 @@ public class StudentsController : ControllerBase
                 archiveFilter,
                 page,
                 pageSize,
-                includeEnrollmentMetadata);
+                includeEnrollmentMetadata,
+                assessmentFilter);
 
             return Ok(students);
         }

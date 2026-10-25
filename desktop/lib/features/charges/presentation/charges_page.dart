@@ -9,19 +9,23 @@ import 'package:intl/intl.dart';
 import 'package:avelri_gestao/features/charges/models/payment_details.dart';
 
 class ChargesPage extends StatelessWidget {
-  const ChargesPage({this.overdueOnly = false, super.key});
+  const ChargesPage({this.overdueOnly = false, this.paidMonth, super.key});
 
   final bool overdueOnly;
 
   @override
+  final DateTime? paidMonth;
   Widget build(BuildContext context) {
     return ChangeNotifierProvider(
       create: (context) => ChargesViewModel(
-        ChargesService(
-          context.read<ApiClient>(),
-        ),
-      )..updateStatusFilter(overdueOnly ? ChargesStatusFilter.overdue : ChargesStatusFilter.all)
-       ..loadInitial(),
+        ChargesService(context.read<ApiClient>()),
+        initialStatus: overdueOnly
+            ? ChargesStatusFilter.overdue
+            : paidMonth != null
+            ? ChargesStatusFilter.paid
+            : ChargesStatusFilter.all,
+        paidMonth: paidMonth,
+      )..loadInitial(),
       child: const _ChargesView(),
     );
   }
@@ -154,6 +158,21 @@ class _ChargesView extends StatelessWidget {
                         onTap: () {
                           viewModel.updateStatusFilter(
                             ChargesStatusFilter.overdue,
+                  if (viewModel.paidMonth case final month?) ...[
+                    const SizedBox(height: 12),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: InputChip(
+                        key: const ValueKey('charges-paid-month-filter'),
+                        label: Text(
+                          'Pagas em ${DateFormat('MM/yyyy').format(month)}',
+                        ),
+                        onDeleted: viewModel.isLoading
+                            ? null
+                            : viewModel.clearPaidMonth,
+                      ),
+                    ),
+                  ],
                           );
                         },
                       ),

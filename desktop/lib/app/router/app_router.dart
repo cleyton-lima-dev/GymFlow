@@ -146,8 +146,11 @@ class AppRouter {
           ),
           GoRoute(
             path: '/students',
-            pageBuilder: (context, state) =>
-                const NoTransitionPage(child: StudentsPage()),
+            pageBuilder: (context, state) => NoTransitionPage(
+              child: StudentsPage(
+                assessmentFilter: state.uri.queryParameters['assessmentFilter'],
+              ),
+            ),
           ),
           GoRoute(
             path: '/students/new',
@@ -202,8 +205,13 @@ class AppRouter {
           ),
           GoRoute(
             path: '/enrollments',
-            pageBuilder: (context, state) =>
-                const NoTransitionPage(child: EnrollmentsPage()),
+            pageBuilder: (context, state) => NoTransitionPage(
+              child: EnrollmentsPage(
+                expiringWithinDays: int.tryParse(
+                  state.uri.queryParameters['expiringWithinDays'] ?? '',
+                ),
+              ),
+            ),
           ),
           GoRoute(
             path: '/enrollments/new',
@@ -223,6 +231,9 @@ class AppRouter {
             pageBuilder: (context, state) =>
                 const NoTransitionPage(child: AccessControlPage()),
           ),
+                paidMonth: DateTime.tryParse(
+                  state.uri.queryParameters['paidMonth'] ?? '',
+                ),
           GoRoute(
             path: '/check-in',
             pageBuilder: (context, state) =>

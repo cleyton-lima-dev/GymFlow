@@ -78,6 +78,29 @@ public class EnrollmentRepository : IEnrollmentRepository
             .ToListAsync();
     }
 
+    public async Task<List<Enrollment>> GetExpiringByGymAsync(
+        Guid gymId,
+        DateOnly today,
+        int withinDays)
+    {
+        var until = today.AddDays(withinDays);
+        return await _context.Enrollments
+            .AsNoTracking()
+            .Include(enrollment => enrollment.Student)
+                .ThenInclude(student => student.User)
+            .Include(enrollment => enrollment.Plan)
+            .Where(enrollment =>
+                enrollment.Student.GymId == gymId &&
+                enrollment.Plan.GymId == gymId &&
+                enrollment.Status == EnrollmentStatus.Active &&
+                enrollment.StartDate <= today &&
+                enrollment.EndDate > today &&
+                enrollment.EndDate <= until)
+            .OrderBy(enrollment => enrollment.EndDate)
+            .ThenBy(enrollment => enrollment.Id)
+            .ToListAsync();
+    }
+
     public async Task UpdateAsync(Enrollment enrollment)
     {
         _context.Enrollments.Update(enrollment);

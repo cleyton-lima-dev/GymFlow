@@ -17,5 +17,10 @@ public interface IChargeRepository
     Task<List<Charge>> GetByGymAsync(
         Guid gymId);
 
+    Task<List<Charge>> GetPaidByGymAndPeriodAsync(
+        Guid gymId,
+        DateTime fromUtc,
+        DateTime untilUtc);
+
     Task UpdateAsync(Charge charge);
 }

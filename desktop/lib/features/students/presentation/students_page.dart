@@ -11,7 +11,9 @@ import 'package:avelri_gestao/features/students/presentation/students_view_model
 import 'package:avelri_gestao/features/enrollments/models/enrollment_summary.dart';
 
 class StudentsPage extends StatelessWidget {
-  const StudentsPage({super.key});
+  const StudentsPage({this.assessmentFilter, super.key});
+
+  final String? assessmentFilter;
 
   @override
   Widget build(BuildContext context) {
@@ -21,9 +23,14 @@ class StudentsPage extends StatelessWidget {
         context.watch<ErpFeatureController>().isEnabledForGym(gymId);
     return ChangeNotifierProvider(
       key: ValueKey(erpEnabled),
-      create: (context) =>
-          StudentsViewModel(StudentsService(context.read<ApiClient>()))
-            ..loadInitial(),
+      create: (context) => StudentsViewModel(
+        StudentsService(context.read<ApiClient>()),
+        assessmentFilter: switch (assessmentFilter) {
+          'missing' => StudentsAssessmentFilter.missing,
+          'reassessmentDue' => StudentsAssessmentFilter.reassessmentDue,
+          _ => null,
+        },
+      )..loadInitial(),
       child: const _StudentsView(),
     );
   }
@@ -183,6 +190,55 @@ class _StudentsView extends StatelessWidget {
                       IconButton(
                         tooltip: 'Atualizar',
                         onPressed: viewModel.isLoading
+                  if (viewModel.assessmentFilterLabel case final label?) ...[
+                    const SizedBox(height: 12),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: InputChip(
+                        key: const ValueKey('student-assessment-filter'),
+                        label: Text(label),
+                        onDeleted: viewModel.isLoading
+                            ? null
+                            : viewModel.clearAssessmentFilter,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Container(
+                      key: const ValueKey('students-assessment-guidance'),
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 10,
+                      ),
+                      decoration: BoxDecoration(
+                        color: colorScheme.surfaceContainerHighest.withValues(
+                          alpha: 0.45,
+                        ),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Icon(
+                            Icons.info_outline_rounded,
+                            size: 17,
+                            color: colorScheme.onSurfaceVariant,
+                          ),
+                          const SizedBox(width: 9),
+                          Expanded(
+                            child: Text(
+                              'Para registrar ou atualizar avaliações físicas, use o Avelri Mobile no perfil Admin ou Professor.',
+                              style: TextStyle(
+                                color: colorScheme.onSurfaceVariant,
+                                fontSize: 12,
+                                height: 1.35,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                             ? null
                             : viewModel.refresh,
                         icon: const Icon(Icons.refresh_rounded),

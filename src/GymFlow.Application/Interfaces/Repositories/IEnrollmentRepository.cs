@@ -20,6 +20,11 @@ public interface IEnrollmentRepository
         Guid gymId,
         EnrollmentStatus? status);
 
+    Task<List<Enrollment>> GetExpiringByGymAsync(
+        Guid gymId,
+        DateOnly today,
+        int withinDays);
+
     Task UpdateAsync(Enrollment enrollment);
 
     Task<bool> HasOverlappingEnrollmentAsync(

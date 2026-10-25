@@ -6,15 +6,10 @@ import 'package:avelri_gestao/features/enrollments/models/enrollment_summary.dar
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
-enum EnrollmentsStatusFilter {
-  all,
-  active,
-  cancelled,
-  expired,
-}
+enum EnrollmentsStatusFilter { all, active, cancelled, expired }
 
 class EnrollmentsViewModel extends ChangeNotifier {
-  EnrollmentsViewModel(this._enrollmentsService);
+  EnrollmentsViewModel(this._enrollmentsService, {this.expiringWithinDays});
 
   final EnrollmentsService _enrollmentsService;
 
@@ -24,11 +19,10 @@ class EnrollmentsViewModel extends ChangeNotifier {
   bool _isDisposed = false;
   String? _errorMessage;
 
-  EnrollmentsStatusFilter _statusFilter =
-      EnrollmentsStatusFilter.all;
+  EnrollmentsStatusFilter _statusFilter = EnrollmentsStatusFilter.all;
+  int? expiringWithinDays;
 
-  List<EnrollmentSummary> get enrollments =>
-      List.unmodifiable(_enrollments);
+  List<EnrollmentSummary> get enrollments => List.unmodifiable(_enrollments);
 
   bool get isLoading => _isLoading;
 
@@ -36,8 +30,13 @@ class EnrollmentsViewModel extends ChangeNotifier {
 
   bool get hasEnrollments => _enrollments.isNotEmpty;
 
-  EnrollmentsStatusFilter get statusFilter =>
-      _statusFilter;
+  EnrollmentsStatusFilter get statusFilter => _statusFilter;
+
+  Future<void> clearExpiringFilter() async {
+    if (expiringWithinDays == null) return;
+    expiringWithinDays = null;
+    await _load(showLoading: true);
+  }
 
   Future<void> loadInitial() {
     return _load(showLoading: true);
@@ -51,9 +50,7 @@ class EnrollmentsViewModel extends ChangeNotifier {
     return _load(showLoading: false);
   }
 
-  Future<void> updateStatusFilter(
-      EnrollmentsStatusFilter filter,
-      ) async {
+  Future<void> updateStatusFilter(EnrollmentsStatusFilter filter) async {
     if (_statusFilter == filter) {
       return;
     }
@@ -63,38 +60,32 @@ class EnrollmentsViewModel extends ChangeNotifier {
     await _load(showLoading: true);
   }
 
-  Future<bool> cancelEnrollment(
-      EnrollmentSummary enrollment,
-      ) async {
+  Future<bool> cancelEnrollment(EnrollmentSummary enrollment) async {
     try {
-      await _enrollmentsService.cancelEnrollment(
-        enrollmentId: enrollment.id,
-      );
+      await _enrollmentsService.cancelEnrollment(enrollmentId: enrollment.id);
 
       await refresh();
 
       return true;
     } on ApiException catch (exception) {
-      _errorMessage =
-          _messageFromApiException(exception);
+      _errorMessage = _messageFromApiException(exception);
       _notifySafely();
 
       return false;
     } on TimeoutException {
       _errorMessage =
-      'A operação demorou mais que o esperado. Tente novamente.';
+          'A operação demorou mais que o esperado. Tente novamente.';
       _notifySafely();
 
       return false;
     } on http.ClientException {
       _errorMessage =
-      'Não foi possível conectar ao servidor. Verifique sua conexão.';
+          'Não foi possível conectar ao servidor. Verifique sua conexão.';
       _notifySafely();
 
       return false;
     } catch (_) {
-      _errorMessage =
-      'Não foi possível cancelar a matrícula. Tente novamente.';
+      _errorMessage = 'Não foi possível cancelar a matrícula. Tente novamente.';
       _notifySafely();
 
       return false;
@@ -102,9 +93,9 @@ class EnrollmentsViewModel extends ChangeNotifier {
   }
 
   Future<bool> renewEnrollment(
-      EnrollmentSummary enrollment,
-      String planId,
-      ) async {
+    EnrollmentSummary enrollment,
+    String planId,
+  ) async {
     try {
       await _enrollmentsService.renewEnrollment(
         enrollmentId: enrollment.id,
@@ -116,11 +107,9 @@ class EnrollmentsViewModel extends ChangeNotifier {
       return true;
     } on ApiException catch (exception) {
       if (exception.statusCode == 409) {
-        _errorMessage =
-        'Não foi possível renovar porque o período entra em conflito com outra matrícula ativa ou aguardando pagamento.';
+        _errorMessage = 'Não foi possível renovar porque o período entra em conflito com outra matrícula ativa ou aguardando pagamento.';
       } else {
-        _errorMessage =
-            _messageFromApiException(exception);
+        _errorMessage = _messageFromApiException(exception);
       }
 
       _notifySafely();
@@ -128,28 +117,25 @@ class EnrollmentsViewModel extends ChangeNotifier {
       return false;
     } on TimeoutException {
       _errorMessage =
-      'A operação demorou mais que o esperado. Tente novamente.';
+          'A operação demorou mais que o esperado. Tente novamente.';
       _notifySafely();
 
       return false;
     } on http.ClientException {
       _errorMessage =
-      'Não foi possível conectar ao servidor. Verifique sua conexão.';
+          'Não foi possível conectar ao servidor. Verifique sua conexão.';
       _notifySafely();
 
       return false;
     } catch (_) {
-      _errorMessage =
-      'Não foi possível renovar a matrícula. Tente novamente.';
+      _errorMessage = 'Não foi possível renovar a matrícula. Tente novamente.';
       _notifySafely();
 
       return false;
     }
   }
 
-  Future<void> _load({
-    required bool showLoading,
-  }) async {
+  Future<void> _load({required bool showLoading}) async {
     if (showLoading) {
       _isLoading = true;
     }
@@ -158,9 +144,9 @@ class EnrollmentsViewModel extends ChangeNotifier {
     _notifySafely();
 
     try {
-      final enrollments =
-      await _enrollmentsService.getEnrollments(
+      final enrollments = await _enrollmentsService.getEnrollments(
         status: _statusValue,
+        expiringWithinDays: expiringWithinDays,
       );
 
       if (_isDisposed) {
@@ -175,36 +161,35 @@ class EnrollmentsViewModel extends ChangeNotifier {
         return;
       }
 
-      _errorMessage =
-          _messageFromApiException(exception);
+      _errorMessage = _messageFromApiException(exception);
     } on TimeoutException {
       if (_isDisposed) {
         return;
       }
 
       _errorMessage =
-      'A consulta demorou mais que o esperado. Tente novamente.';
+          'A consulta demorou mais que o esperado. Tente novamente.';
     } on http.ClientException {
       if (_isDisposed) {
         return;
       }
 
       _errorMessage =
-      'Não foi possível conectar ao servidor. Verifique sua conexão.';
+          'Não foi possível conectar ao servidor. Verifique sua conexão.';
     } on FormatException {
       if (_isDisposed) {
         return;
       }
 
       _errorMessage =
-      'Não foi possível carregar as matrículas. Tente novamente.';
+          'Não foi possível carregar as matrículas. Tente novamente.';
     } catch (_) {
       if (_isDisposed) {
         return;
       }
 
       _errorMessage =
-      'Não foi possível carregar as matrículas. Tente novamente.';
+          'Não foi possível carregar as matrículas. Tente novamente.';
     } finally {
       if (!_isDisposed) {
         _isLoading = false;
@@ -216,18 +201,13 @@ class EnrollmentsViewModel extends ChangeNotifier {
   EnrollmentStatus? get _statusValue {
     return switch (_statusFilter) {
       EnrollmentsStatusFilter.all => null,
-      EnrollmentsStatusFilter.active =>
-      EnrollmentStatus.active,
-      EnrollmentsStatusFilter.cancelled =>
-      EnrollmentStatus.cancelled,
-      EnrollmentsStatusFilter.expired =>
-      EnrollmentStatus.expired,
+      EnrollmentsStatusFilter.active => EnrollmentStatus.active,
+      EnrollmentsStatusFilter.cancelled => EnrollmentStatus.cancelled,
+      EnrollmentsStatusFilter.expired => EnrollmentStatus.expired,
     };
   }
 
-  String _messageFromApiException(
-      ApiException exception,
-      ) {
+  String _messageFromApiException(ApiException exception) {
     if (exception.statusCode == 403) {
       return 'Você não possui permissão para acessar as matrículas.';
     }

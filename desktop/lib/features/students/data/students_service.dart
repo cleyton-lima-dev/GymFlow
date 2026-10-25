@@ -16,7 +16,9 @@ class StudentsService {
       'api/students/$studentId/app-access',
       body: {'enabled': enabled},
     );
-    if (response is! Map) throw const FormatException('Invalid app access response.');
+    if (response is! Map) {
+      throw const FormatException('Invalid app access response.');
+    }
     return response['token'] as String?;
   }
 
@@ -27,6 +29,7 @@ class StudentsService {
     int? archiveFilter,
     int page = 1,
     int pageSize = 20,
+    String? assessmentFilter,
   }) async {
     final normalizedSearch = search?.trim();
 
@@ -38,8 +41,8 @@ class StudentsService {
       if (isActive != null) 'isActive': isActive.toString(),
       if (enrollmentFilter != null)
         'enrollmentFilter': enrollmentFilter.toString(),
-      if (archiveFilter != null)
-        'archiveFilter': archiveFilter.toString(),
+      if (archiveFilter != null) 'archiveFilter': archiveFilter.toString(),
+      'assessmentFilter': ?assessmentFilter,
     };
 
     final query = Uri(queryParameters: queryParameters).query;
@@ -74,10 +77,9 @@ class StudentsService {
     );
   }
 
-  Future<List<StudentFinancialHistoryItem>>
-  getStudentFinancialHistory(
-      String studentId,
-      ) async {
+  Future<List<StudentFinancialHistoryItem>> getStudentFinancialHistory(
+    String studentId,
+  ) async {
     final response = await _apiClient.get(
       'api/students/$studentId/financial-history',
     );
@@ -90,20 +92,16 @@ class StudentsService {
 
     return response
         .map(
-          (item) =>
-          StudentFinancialHistoryItem.fromJson(
-            Map<String, dynamic>.from(
-              item as Map,
-            ),
+          (item) => StudentFinancialHistoryItem.fromJson(
+            Map<String, dynamic>.from(item as Map),
           ),
-    )
+        )
         .toList();
   }
 
-  Future<PhysicalAccessOverride?>
-  getPhysicalAccessOverride(
-      String studentId,
-      ) async {
+  Future<PhysicalAccessOverride?> getPhysicalAccessOverride(
+    String studentId,
+  ) async {
     try {
       final response = await _apiClient.get(
         'api/physical-access/overrides/student/$studentId',
@@ -134,10 +132,7 @@ class StudentsService {
   }) async {
     await _apiClient.post(
       'api/students/$studentId/reactivate',
-      body: {
-        'planId': planId,
-        'startDate': _formatDateOnly(startDate),
-      },
+      body: {'planId': planId, 'startDate': _formatDateOnly(startDate)},
     );
   }
 
@@ -149,10 +144,9 @@ class StudentsService {
     return '$year-$month-$day';
   }
 
-  Future<List<PhysicalAccessCredential>>
-  getPhysicalAccessCredentials(
-      String studentId,
-      ) async {
+  Future<List<PhysicalAccessCredential>> getPhysicalAccessCredentials(
+    String studentId,
+  ) async {
     final response = await _apiClient.get(
       'api/physical-access/credentials/student/$studentId',
     );
@@ -165,18 +159,14 @@ class StudentsService {
 
     return response
         .map(
-          (item) =>
-          PhysicalAccessCredential.fromJson(
-            Map<String, dynamic>.from(
-              item as Map,
-            ),
+          (item) => PhysicalAccessCredential.fromJson(
+            Map<String, dynamic>.from(item as Map),
           ),
-    )
+        )
         .toList();
   }
 
-  Future<PhysicalAccessCredential>
-  createPhysicalAccessCredential({
+  Future<PhysicalAccessCredential> createPhysicalAccessCredential({
     required String studentId,
     required int type,
     required String providerKey,
@@ -188,8 +178,7 @@ class StudentsService {
         'studentId': studentId,
         'type': type,
         'providerKey': providerKey.trim(),
-        'externalIdentifier':
-        externalIdentifier.trim(),
+        'externalIdentifier': externalIdentifier.trim(),
       },
     );
 
@@ -217,7 +206,8 @@ class StudentsService {
     final data = Map<String, dynamic>.from(response);
     final pin = data['pin'];
     final credential = data['credential'];
-    if (pin is! String || !RegExp(r'^\d{4}$').hasMatch(pin) ||
+    if (pin is! String ||
+        !RegExp(r'^\d{4}$').hasMatch(pin) ||
         credential is! Map) {
       throw const FormatException('Invalid PIN issue response.');
     }
@@ -253,18 +243,12 @@ class StudentsService {
   }) async {
     await _apiClient.patch(
       'api/physical-access/credentials/$credentialId/status',
-      body: {
-        'isActive': isActive,
-      },
+      body: {'isActive': isActive},
     );
   }
 
-  Future<void> removePhysicalAccessOverride({
-    required String studentId,
-  }) async {
-    await _apiClient.delete(
-      'api/physical-access/overrides/student/$studentId',
-    );
+  Future<void> removePhysicalAccessOverride({required String studentId}) async {
+    await _apiClient.delete('api/physical-access/overrides/student/$studentId');
   }
 
   Future<void> updateStudent({
@@ -299,8 +283,7 @@ class StudentsService {
     );
   }
 
-  Future<PhysicalAccessOverride>
-  setPhysicalAccessOverride({
+  Future<PhysicalAccessOverride> setPhysicalAccessOverride({
     required String studentId,
     required int type,
     String? reason,
@@ -311,21 +294,16 @@ class StudentsService {
       'api/physical-access/overrides/student/$studentId',
       body: {
         'type': type,
-        'reason': normalizedReason == null ||
-            normalizedReason.isEmpty
+        'reason': normalizedReason == null || normalizedReason.isEmpty
             ? null
             : normalizedReason,
       },
     );
 
     if (response is! Map) {
-      throw const FormatException(
-        'Invalid physical access override response.',
-      );
+      throw const FormatException('Invalid physical access override response.');
     }
 
-    return PhysicalAccessOverride.fromJson(
-      Map<String, dynamic>.from(response),
-    );
+    return PhysicalAccessOverride.fromJson(Map<String, dynamic>.from(response));
   }
 }
