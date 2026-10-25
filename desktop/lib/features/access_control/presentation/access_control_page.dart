@@ -1,4 +1,5 @@
 import 'package:avelri_gestao/app/theme/branding_controller.dart';
+import 'package:avelri_gestao/app/theme/semantic_colors.dart';
 import 'package:avelri_gestao/core/network/api_client.dart';
 import 'package:avelri_gestao/features/access_control/data/access_agents_service.dart';
 import 'package:avelri_gestao/features/access_control/models/access_agent_summary.dart';
@@ -70,7 +71,7 @@ class _AccessControlView extends StatelessWidget {
                     ],
                   ),
                 ),
-                PairAccessAgentButton(primaryColor: primaryColor),
+                const PairAccessAgentButton(),
                 const SizedBox(width: 8),
                 IconButton(
                   tooltip: 'Atualizar',
@@ -231,7 +232,6 @@ class _AgentCard extends StatelessWidget {
               const SizedBox(width: 8),
               ConfigureAccessDeviceButton(
                 agent: agent,
-                primaryColor: primaryColor,
                 service: AccessAgentsService(context.read<ApiClient>()),
                 onSaved: context.read<AccessControlViewModel>().refresh,
               ),
@@ -358,7 +358,7 @@ class _DeviceTile extends StatelessWidget {
           Icon(
             Icons.door_sliding_outlined,
             color: connected
-                ? const Color(0xFF2CB67D)
+                ? AvelriSemanticColors.success
                 : colorScheme.onSurfaceVariant,
           ),
           const SizedBox(width: 12),
@@ -419,7 +419,7 @@ class _FailureTile extends StatelessWidget {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Icon(Icons.warning_amber_rounded, color: Color(0xFFF3A712)),
+        Icon(Icons.warning_amber_rounded, color: AvelriSemanticColors.warning),
         const SizedBox(width: 10),
         Expanded(
           child: Column(
@@ -509,7 +509,7 @@ class _StatusBadge extends StatelessWidget {
     final colorScheme = Theme.of(context).colorScheme;
 
     final color = healthy
-        ? const Color(0xFF2CB67D)
+        ? AvelriSemanticColors.success
         : colorScheme.onSurfaceVariant;
 
     return Container(
@@ -530,7 +530,7 @@ class _StatusBadge extends StatelessWidget {
           Text(
             label,
             style: TextStyle(
-              color: color,
+              color: colorScheme.onSurface,
               fontSize: 11,
               fontWeight: FontWeight.w700,
             ),

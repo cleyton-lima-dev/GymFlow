@@ -1,4 +1,5 @@
 import 'package:avelri_gestao/app/theme/branding_controller.dart';
+import 'package:avelri_gestao/app/theme/semantic_colors.dart';
 import 'package:avelri_gestao/core/network/api_client.dart';
 import 'package:avelri_gestao/features/check_ins/data/check_ins_service.dart';
 import 'package:avelri_gestao/features/check_ins/data/physical_access_events_service.dart';
@@ -577,9 +578,9 @@ class _SourceBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final color = switch (source) {
-      CheckInSource.physicalAccess => const Color(0xFF2CB67D),
-      CheckInSource.manual => const Color(0xFFF3A712),
-      CheckInSource.wellhub => const Color(0xFF5374E7),
+      CheckInSource.physicalAccess => AvelriSemanticColors.success,
+      CheckInSource.manual => AvelriSemanticColors.warning,
+      CheckInSource.wellhub => AvelriSemanticColors.information,
       CheckInSource.otherIntegration => Theme.of(
         context,
       ).colorScheme.onSurfaceVariant,
@@ -601,7 +602,7 @@ class _SourceBadge extends StatelessWidget {
       child: Text(
         label,
         style: TextStyle(
-          color: color,
+          color: Theme.of(context).colorScheme.onSurface,
           fontSize: 11,
           fontWeight: FontWeight.w700,
         ),

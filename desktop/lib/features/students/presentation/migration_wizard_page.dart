@@ -1,6 +1,8 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:convert';
 
+import 'package:avelri_gestao/app/theme/app_button_styles.dart';
 import 'package:avelri_gestao/core/network/api_client.dart';
 import 'package:avelri_gestao/features/students/data/column_header_mapper.dart';
 import 'package:avelri_gestao/features/students/data/migration_import_templates.dart';
@@ -8,6 +10,7 @@ import 'package:avelri_gestao/features/students/data/student_import_parser.dart'
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 Map<String, dynamic> buildMigrationRowPayload(
@@ -67,6 +70,10 @@ class _MigrationWizardPageState extends State<MigrationWizardPage> {
   final _name = TextEditingController();
   final _source = TextEditingController();
   bool _busy = false;
+  bool _selectingFile = false;
+  bool _allowPop = false;
+  bool _handlingBack = false;
+  bool _reviewDirty = false;
   int _type = 0;
   String? _sessionId;
   String? _error;
@@ -145,10 +152,26 @@ class _MigrationWizardPageState extends State<MigrationWizardPage> {
     _actions.clear();
     _targets.clear();
     _financialStateResolutions.clear();
+    _reviewDirty = false;
     await _load();
   });
 
-  Future<void> _backToSessions() => _run(() async {
+  bool get _hasLocalChanges =>
+      _file != null ||
+      _reviewDirty ||
+      (_sessionId == null &&
+          (_name.text.trim().isNotEmpty || _source.text.trim().isNotEmpty));
+
+  Future<void> _backToSessions() async {
+    if (_busy || _selectingFile) {
+      _showBusyNotice();
+      return;
+    }
+    if (_hasLocalChanges && !await _confirmDiscardLocalChanges()) return;
+    await _returnToSessions();
+  }
+
+  Future<void> _returnToSessions() => _run(() async {
     _sessionId = null;
     _session = null;
     _preview = null;
@@ -158,8 +181,63 @@ class _MigrationWizardPageState extends State<MigrationWizardPage> {
     _ambiguousFields.clear();
     _actions.clear();
     _targets.clear();
+    _reviewDirty = false;
     await _loadSessions();
   });
+
+  Future<bool> _confirmDiscardLocalChanges() async =>
+      await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Sair da migração?'),
+          content: const Text(
+            'O arquivo e o mapeamento locais sairão desta tela. Sessões e revisões já salvas permanecem disponíveis para retomada.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Continuar na migração'),
+            ),
+            OutlinedButton(
+              style: AppButtonStyles.destructiveOutlined(dialogContext),
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: const Text('Sair e descartar'),
+            ),
+          ],
+        ),
+      ) ??
+      false;
+
+  void _showBusyNotice() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Aguarde a operação de migração terminar antes de sair.'),
+      ),
+    );
+  }
+
+  Future<void> _attemptBack() async {
+    if (_handlingBack || !mounted) return;
+    _handlingBack = true;
+    try {
+      if (_busy || _selectingFile) {
+        _showBusyNotice();
+        return;
+      }
+      if (_hasLocalChanges && !await _confirmDiscardLocalChanges()) return;
+      if (!mounted) return;
+      if (!context.canPop()) {
+        context.go('/students');
+        return;
+      }
+      setState(() => _allowPop = true);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) context.pop();
+      });
+    } finally {
+      _handlingBack = false;
+    }
+  }
 
   String _sessionStatusLabel(Map<String, dynamic> session) {
     final expiresAt = DateTime.tryParse(session['expiresAt'].toString());
@@ -185,16 +263,18 @@ class _MigrationWizardPageState extends State<MigrationWizardPage> {
     await _load();
   });
   Future<void> _pick() async {
-    final file = await openFile(
-      acceptedTypeGroups: const [
-        XTypeGroup(label: 'CSV ou XLSX', extensions: ['csv', 'xlsx']),
-      ],
-    );
-    if (file == null) return;
+    setState(() => _selectingFile = true);
     try {
+      final file = await openFile(
+        acceptedTypeGroups: const [
+          XTypeGroup(label: 'CSV ou XLSX', extensions: ['csv', 'xlsx']),
+        ],
+      );
+      if (file == null || !mounted) return;
       _file = parseStudentImportFile(file.name, await file.readAsBytes());
       _preview = null;
       _previewRevision = null;
+      _reviewDirty = false;
       _mapping.clear();
       _ambiguousFields.clear();
       for (final f in migrationImportTemplates[_type].fields) {
@@ -204,7 +284,9 @@ class _MigrationWizardPageState extends State<MigrationWizardPage> {
       }
       setState(() {});
     } catch (e) {
-      setState(() => _error = e.toString());
+      if (mounted) setState(() => _error = e.toString());
+    } finally {
+      if (mounted) setState(() => _selectingFile = false);
     }
   }
 
@@ -254,6 +336,7 @@ class _MigrationWizardPageState extends State<MigrationWizardPage> {
     setState(() {
       _targets[rowNumber] = id;
       _selectedStudentLabels[id] = selected['name'] as String;
+      _reviewDirty = true;
     });
   }
 
@@ -271,6 +354,7 @@ class _MigrationWizardPageState extends State<MigrationWizardPage> {
     _actions.clear();
     _targets.clear();
     _financialStateResolutions.clear();
+    _reviewDirty = false;
     final savedDecisions = (batch['decisions'] as List? ?? const [])
         .cast<Map>();
     for (final raw in (batch['rows'] as List).cast<Map>()) {
@@ -292,6 +376,7 @@ class _MigrationWizardPageState extends State<MigrationWizardPage> {
       _financialStateResolutions[number] =
           saved?['financialStateResolution'] as String?;
     }
+    _reviewDirty = false;
   });
 
   Future<void> _previewFile() => _run(() async {
@@ -319,6 +404,7 @@ class _MigrationWizardPageState extends State<MigrationWizardPage> {
       mapping: _mapping,
       rows: rows,
     );
+    _reviewDirty = true;
     _actions.clear();
     _targets.clear();
     _financialStateResolutions.clear();
@@ -354,6 +440,7 @@ class _MigrationWizardPageState extends State<MigrationWizardPage> {
       _actions.clear();
       _targets.clear();
       _financialStateResolutions.clear();
+      _reviewDirty = true;
       _info = 'Mapeamento alterado. Gere uma nova prévia antes de revisar ou confirmar.';
     });
   }
@@ -383,6 +470,7 @@ class _MigrationWizardPageState extends State<MigrationWizardPage> {
       },
     );
     _info = 'Decisões salvas. Você pode sair e retomar esta revisão depois.';
+    _reviewDirty = false;
   });
 
   Future<void> _confirm() => _run(() async {
@@ -406,6 +494,7 @@ class _MigrationWizardPageState extends State<MigrationWizardPage> {
     _preview = null;
     _previewRevision = null;
     _file = null;
+    _reviewDirty = false;
     await _load();
   });
 
@@ -495,335 +584,133 @@ class _MigrationWizardPageState extends State<MigrationWizardPage> {
                 ?.isBefore(DateTime.now()) ??
             false);
     final batches = (s?['batches'] as List? ?? const []).cast<Map>();
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(28),
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 1050),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Motor de migração',
-                style: Theme.of(context).textTheme.headlineMedium,
-              ),
-              const Text(
-                'Prepare alunos, planos, matrículas e situação financeira atual em arquivos separados. Os dados só entram em operação após liberação do Admin. Situações financeiras importadas não geram receita no Avelri.',
-              ),
-              if (_error != null)
-                Padding(
-                  padding: const EdgeInsets.all(8),
-                  child: Text(
-                    _error!,
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.error,
+    return PopScope<Object?>(
+      canPop: _allowPop,
+      onPopInvokedWithResult: (didPop, result) {
+        if (!didPop) unawaited(_attemptBack());
+      },
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(28),
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 1050),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    OutlinedButton.icon(
+                      key: const ValueKey('migration-wizard-back'),
+                      onPressed: _attemptBack,
+                      icon: const Icon(Icons.arrow_back_rounded),
+                      label: const Text('Voltar'),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        'Motor de migração',
+                        style: Theme.of(context).textTheme.headlineMedium,
+                      ),
+                    ),
+                  ],
+                ),
+                const Text(
+                  'Prepare alunos, planos, matrículas e situação financeira atual em arquivos separados. Os dados só entram em operação após liberação do Admin. Situações financeiras importadas não geram receita no Avelri.',
+                ),
+                if (_error != null)
+                  Padding(
+                    padding: const EdgeInsets.all(8),
+                    child: Text(
+                      _error!,
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.error,
+                      ),
                     ),
                   ),
-                ),
-              if (_info != null)
-                Padding(
-                  padding: const EdgeInsets.all(8),
-                  child: Text(
-                    _info!,
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.primary,
+                if (_info != null)
+                  Padding(
+                    padding: const EdgeInsets.all(8),
+                    child: Text(
+                      _info!,
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.primary,
+                      ),
                     ),
                   ),
-                ),
-              if (_busy) const LinearProgressIndicator(),
-              if (s == null) ...[
-                Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Sessões salvas',
-                          style: Theme.of(context).textTheme.titleMedium,
-                        ),
-                        const Text(
-                          'As sessões e seus lotes ficam salvos na academia e podem ser retomados após reiniciar o aplicativo.',
-                        ),
-                        if (_sessions == null && !_busy)
-                          const Text(
-                            'Não foi possível carregar as sessões salvas.',
-                          ),
-                        if (_sessions?.isEmpty == true)
-                          const Padding(
-                            padding: EdgeInsets.symmetric(vertical: 12),
-                            child: Text('Nenhuma sessão salva nesta academia.'),
-                          ),
-                        for (final saved in _sessions ?? const [])
-                          ListTile(
-                            contentPadding: EdgeInsets.zero,
-                            title: Text(saved['name'].toString()),
-                            subtitle: Text(
-                              '${saved['sourceNamespace']} · ${saved['batchCount']} lotes · ${_sessionStatusLabel(saved)}',
-                            ),
-                            trailing: TextButton(
-                              onPressed: _busy
-                                  ? null
-                                  : () => _resumeSession(
-                                      saved['sessionId'] as String,
-                                    ),
-                              child: Text(
-                                saved['status'] == 3 ? 'Abrir' : 'Retomar',
-                              ),
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
-                ),
-                Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      children: [
-                        TextField(
-                          controller: _name,
-                          decoration: const InputDecoration(
-                            labelText: 'Nome da migração',
-                          ),
-                        ),
-                        TextField(
-                          controller: _source,
-                          decoration: const InputDecoration(
-                            labelText: 'Sistema de origem',
-                          ),
-                        ),
-                        FilledButton(
-                          onPressed: _busy ? null : _create,
-                          child: const Text('Criar nova sessão'),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ] else ...[
-                Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          '${s['name'] as String} · ${s['sourceNamespace'] as String}',
-                        ),
-                        Align(
-                          alignment: Alignment.centerRight,
-                          child: TextButton.icon(
-                            onPressed: _busy ? null : _backToSessions,
-                            icon: const Icon(Icons.arrow_back),
-                            label: const Text('Voltar às sessões'),
-                          ),
-                        ),
-                        if (sessionExpired)
-                          const Text(
-                            'Esta sessão expirou. Você pode consultar os lotes, mas não continuar a preparação.',
-                          ),
-                        for (final b in batches)
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  Expanded(
-                                    child: Text(
-                                      'Lote ${b['entityType']} · ${b['rowCount']} registros · ${b['errorCount']} erros · ${_statusLabel(b['status'])}',
-                                    ),
-                                  ),
-                                  if (b['status'] == 'Previewed')
-                                    Wrap(
-                                      spacing: 4,
-                                      children: [
-                                        TextButton.icon(
-                                          onPressed: _busy || sessionExpired
-                                              ? null
-                                              : () => _resumeBatch(
-                                                  b['batchId'] as String,
-                                                ),
-                                          icon: const Icon(
-                                            Icons.rate_review_outlined,
-                                          ),
-                                          label: const Text('Retomar revisão'),
-                                        ),
-                                        TextButton.icon(
-                                          onPressed: _busy || sessionExpired
-                                              ? null
-                                              : () => _discard(
-                                                  b['batchId'] as String,
-                                                ),
-                                          icon: const Icon(
-                                            Icons.delete_outline,
-                                          ),
-                                          label: const Text('Descartar'),
-                                        ),
-                                      ],
-                                    ),
-                                  if (b['status'] == 'Confirmed')
-                                    TextButton.icon(
-                                      onPressed: _busy || sessionExpired
-                                          ? null
-                                          : () => _resumeBatch(
-                                              b['batchId'] as String,
-                                            ),
-                                      icon: const Icon(Icons.rule_outlined),
-                                      label: Text(
-                                        (s['releaseBlockers'] as List? ??
-                                                    const [])
-                                                .any(
-                                                  (blocker) => blocker
-                                                      .toString()
-                                                      .contains(
-                                                        b['batchId'].toString(),
-                                                      ),
-                                                )
-                                            ? 'Resolver conflito'
-                                            : 'Reabrir revisão',
-                                      ),
-                                    ),
-                                ],
-                              ),
-                              if (b['status'] == 'Released' &&
-                                  b['totals'] is Map)
-                                Padding(
-                                  padding: const EdgeInsets.only(bottom: 8),
-                                  child: Text(
-                                    _batchTotalsLabel(b['totals'] as Map),
-                                  ),
-                                ),
-                            ],
-                          ),
-                        for (final e
-                            in (s['releaseBlockers'] as List? ?? const []))
-                          Text('• $e'),
-                        if (s['status'] == 3)
-                          const Text('Sessão liberada.')
-                        else
-                          FilledButton(
-                            onPressed:
-                                _busy ||
-                                    sessionExpired ||
-                                    s['canRelease'] != true
-                                ? null
-                                : _release,
-                            child: const Text('Liberar operacionalmente'),
-                          ),
-                        if (s['status'] == 3)
-                          for (final r
-                              in (s['results'] as List? ?? const [])
-                                  .cast<Map>())
-                            Text(
-                              '${r['entityType']} · linha ${r['rowNumber']}: ${r['status']} — ${r['message']}',
-                            ),
-                      ],
-                    ),
-                  ),
-                ),
-                if (s['status'] != 3 && !sessionExpired)
+                if (_busy || _selectingFile) const LinearProgressIndicator(),
+                if (s == null) ...[
                   Card(
                     child: Padding(
                       padding: const EdgeInsets.all(16),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          DropdownButton<int>(
-                            value: _type,
-                            items: List.generate(
-                              migrationImportTemplates.length,
-                              (i) => DropdownMenuItem(
-                                value: i,
-                                child: Text(migrationImportTemplates[i].label),
+                          Text(
+                            'Sessões salvas',
+                            style: Theme.of(context).textTheme.titleMedium,
+                          ),
+                          const Text(
+                            'As sessões e seus lotes ficam salvos na academia e podem ser retomados após reiniciar o aplicativo.',
+                          ),
+                          if (_sessions == null && !_busy)
+                            const Text(
+                              'Não foi possível carregar as sessões salvas.',
+                            ),
+                          if (_sessions?.isEmpty == true)
+                            const Padding(
+                              padding: EdgeInsets.symmetric(vertical: 12),
+                              child: Text(
+                                'Nenhuma sessão salva nesta academia.',
                               ),
                             ),
-                            onChanged: _busy
-                                ? null
-                                : (v) => setState(() {
-                                    _type = v!;
-                                    _file = null;
-                                    _preview = null;
-                                    _previewRevision = null;
-                                    _mapping.clear();
-                                    _actions.clear();
-                                    _targets.clear();
-                                    _financialStateResolutions.clear();
-                                  }),
-                          ),
-                          Wrap(
-                            spacing: 8,
-                            runSpacing: 8,
-                            children: [
-                              OutlinedButton(
-                                onPressed: _busy ? null : _pick,
+                          for (final saved in _sessions ?? const [])
+                            ListTile(
+                              contentPadding: EdgeInsets.zero,
+                              title: Text(saved['name'].toString()),
+                              subtitle: Text(
+                                '${saved['sourceNamespace']} · ${saved['batchCount']} lotes · ${_sessionStatusLabel(saved)}',
+                              ),
+                              trailing: TextButton(
+                                onPressed: _busy
+                                    ? null
+                                    : () => _resumeSession(
+                                        saved['sessionId'] as String,
+                                      ),
                                 child: Text(
-                                  _file?.fileName ?? 'Selecionar CSV/XLSX',
+                                  saved['status'] == 3 ? 'Abrir' : 'Retomar',
                                 ),
                               ),
-                              TextButton.icon(
-                                onPressed: _busy ? null : _downloadTemplate,
-                                icon: const Icon(Icons.download_outlined),
-                                label: const Text('Baixar modelo'),
-                              ),
-                            ],
-                          ),
-                          Text(
-                            'Modelo CSV de ${migrationImportTemplates[_type].label.toLowerCase()} com exemplo fictício. Outros arquivos CSV/XLSX continuam aceitos por mapeamento.',
-                          ),
-                          if (_file != null) ...[
-                            Text(
-                              '${_file!.rows.length} linhas. Faça o mapeamento; IDs externos relacionam os arquivos.',
                             ),
-                            for (final f
-                                in migrationImportTemplates[_type].fields)
-                              Row(
-                                children: [
-                                  SizedBox(
-                                    width: 190,
-                                    child: Text(_fieldLabel(f)),
-                                  ),
-                                  Expanded(
-                                    child: DropdownButton<int?>(
-                                      value: _mapping[f],
-                                      isExpanded: true,
-                                      items: [
-                                        const DropdownMenuItem(
-                                          value: null,
-                                          child: Text('Não mapeado'),
-                                        ),
-                                        for (
-                                          var i = 0;
-                                          i < _file!.headers.length;
-                                          i++
-                                        )
-                                          DropdownMenuItem(
-                                            value: i,
-                                            child: Text(_file!.headers[i]),
-                                          ),
-                                      ],
-                                      onChanged: _busy
-                                          ? null
-                                          : (v) => _changeMapping(f, v),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            if (_ambiguousFields.isNotEmpty)
-                              Text(
-                                'Alguns cabeçalhos correspondem a mais de um campo. Selecione manualmente: ${_ambiguousFields.map(_fieldLabel).join(', ')}.',
-                              ),
-                            if (_preview == null)
-                              FilledButton(
-                                onPressed: _busy ? null : _previewFile,
-                                child: const Text('Gerar prévia'),
-                              ),
-                          ],
                         ],
                       ),
                     ),
                   ),
-                if (_preview != null)
+                  Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        children: [
+                          TextField(
+                            controller: _name,
+                            decoration: const InputDecoration(
+                              labelText: 'Nome da migração',
+                            ),
+                          ),
+                          TextField(
+                            controller: _source,
+                            decoration: const InputDecoration(
+                              labelText: 'Sistema de origem',
+                            ),
+                          ),
+                          FilledButton(
+                            onPressed: _busy ? null : _create,
+                            child: const Text('Criar nova sessão'),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ] else ...[
                   Card(
                     child: Padding(
                       padding: const EdgeInsets.all(16),
@@ -831,196 +718,432 @@ class _MigrationWizardPageState extends State<MigrationWizardPage> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'Prévia: ${(_preview!['rows'] as List).length} registros',
+                            '${s['name'] as String} · ${s['sourceNamespace'] as String}',
                           ),
-                          for (final raw
-                              in (_preview!['rows'] as List).cast<Map>())
-                            Builder(
-                              builder: (context) {
-                                final r = Map<String, dynamic>.from(raw);
-                                final n = r['rowNumber'] as int;
-                                final cs =
-                                    (r['candidates'] as List? ?? const [])
-                                        .cast<Map>();
-                                final targetCandidates = <String, Map>{
-                                  for (final candidate in cs)
-                                    if (candidate['targetId'] is String)
-                                      candidate['targetId'] as String:
-                                          candidate,
-                                };
-                                final selectedTarget = _targets[n];
-                                final info = [
-                                  ...(r['errors'] as List? ?? const []),
-                                  ...cs.map(
-                                    (c) => '${c['name']} ${c['description']}',
-                                  ),
-                                ].join(' · ');
-                                final values = Map<String, dynamic>.from(
-                                  r['values'] as Map,
-                                );
-                                final requiresFinancialResolution =
-                                    r['requiresFinancialResolution'] == true;
-                                return ExpansionTile(
-                                  title: Text(
-                                    'Linha $n${r['isValid'] == true ? ' · válida' : ' · erro'}${cs.isEmpty ? '' : ' · revisar possível duplicidade'}',
-                                  ),
-                                  subtitle: Text(info),
+                          Align(
+                            alignment: Alignment.centerRight,
+                            child: TextButton.icon(
+                              onPressed: _busy ? null : _backToSessions,
+                              icon: const Icon(Icons.arrow_back),
+                              label: const Text('Voltar às sessões'),
+                            ),
+                          ),
+                          if (sessionExpired)
+                            const Text(
+                              'Esta sessão expirou. Você pode consultar os lotes, mas não continuar a preparação.',
+                            ),
+                          for (final b in batches)
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
                                   children: [
-                                    Padding(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 16,
-                                        vertical: 8,
+                                    Expanded(
+                                      child: Text(
+                                        'Lote ${b['entityType']} · ${b['rowCount']} registros · ${b['errorCount']} erros · ${_statusLabel(b['status'])}',
                                       ),
-                                      child: Wrap(
-                                        spacing: 16,
-                                        runSpacing: 8,
+                                    ),
+                                    if (b['status'] == 'Previewed')
+                                      Wrap(
+                                        spacing: 4,
                                         children: [
-                                          for (final entry
-                                              in values.entries.where(
-                                                (entry) =>
-                                                    entry.value != null &&
-                                                    !const {
-                                                      'studentIdentityContext',
-                                                      'resolvedStudentKey',
-                                                      'resolvedFinancialTargetKey',
-                                                    }.contains(entry.key),
-                                              ))
-                                            Text(
-                                              '${_fieldLabel(entry.key)}: ${entry.value}',
+                                          TextButton.icon(
+                                            onPressed: _busy || sessionExpired
+                                                ? null
+                                                : () => _resumeBatch(
+                                                    b['batchId'] as String,
+                                                  ),
+                                            icon: const Icon(
+                                              Icons.rate_review_outlined,
                                             ),
-                                        ],
-                                      ),
-                                    ),
-                                    DropdownButton<String>(
-                                      value: _actions[n],
-                                      items: [
-                                        DropdownMenuItem(
-                                          value: 'ImportNew',
-                                          child: Text(
-                                            _type == 3
-                                                ? 'Aplicar situação atual'
-                                                : 'Criar novo',
-                                          ),
-                                        ),
-                                        if (!requiresFinancialResolution)
-                                          const DropdownMenuItem(
-                                            value: 'LinkExisting',
-                                            child: Text('Vincular existente'),
-                                          ),
-                                        DropdownMenuItem(
-                                          value: 'Ignore',
-                                          child: const Text('Ignorar'),
-                                        ),
-                                      ],
-                                      onChanged:
-                                          r['isValid'] == true ||
-                                              requiresFinancialResolution
-                                          ? (v) =>
-                                                setState(() => _actions[n] = v!)
-                                          : null,
-                                    ),
-                                    if (requiresFinancialResolution)
-                                      DropdownButton<String>(
-                                        value: _financialStateResolutions[n],
-                                        hint: const Text(
-                                          'Resolver conflito financeiro',
-                                        ),
-                                        items: const [
-                                          DropdownMenuItem(
-                                            value: 'UseEnrollmentState',
-                                            child: Text(
-                                              'Manter situação da matrícula',
+                                            label: const Text(
+                                              'Retomar revisão',
                                             ),
                                           ),
-                                          DropdownMenuItem(
-                                            value: 'UseFinancialFile',
-                                            child: Text(
-                                              'Usar situação deste arquivo',
+                                          TextButton.icon(
+                                            onPressed: _busy || sessionExpired
+                                                ? null
+                                                : () => _discard(
+                                                    b['batchId'] as String,
+                                                  ),
+                                            icon: const Icon(
+                                              Icons.delete_outline,
                                             ),
+                                            label: const Text('Descartar'),
                                           ),
                                         ],
-                                        onChanged: _actions[n] == 'ImportNew'
-                                            ? (value) => setState(
-                                                () =>
-                                                    _financialStateResolutions[n] =
-                                                        value,
-                                              )
-                                            : null,
                                       ),
-                                    if (_actions[n] == 'LinkExisting' &&
-                                        (targetCandidates.isNotEmpty ||
-                                            selectedTarget != null))
-                                      DropdownButton<String>(
-                                        hint: const Text('Selecione destino'),
-                                        value: selectedTarget,
-                                        isExpanded: true,
-                                        items: [
-                                          for (final c
-                                              in targetCandidates.values)
-                                            DropdownMenuItem(
-                                              value: c['targetId'] as String,
-                                              child: Text(
-                                                '${c['name']} · ${c['description']}',
-                                                maxLines: 1,
-                                                overflow: TextOverflow.ellipsis,
-                                              ),
-                                            ),
-                                          if (selectedTarget != null &&
-                                              !targetCandidates.containsKey(
-                                                selectedTarget,
-                                              ))
-                                            DropdownMenuItem(
-                                              value: selectedTarget,
-                                              child: Text(
-                                                '${_selectedStudentLabels[selectedTarget] ?? 'Aluno selecionado'} · $selectedTarget',
-                                                maxLines: 1,
-                                                overflow: TextOverflow.ellipsis,
-                                              ),
-                                            ),
-                                        ],
-                                        onChanged: (v) =>
-                                            setState(() => _targets[n] = v),
-                                      ),
-                                    if (_type == 0 &&
-                                        _actions[n] == 'LinkExisting' &&
-                                        r['isValid'] == true)
+                                    if (b['status'] == 'Confirmed')
                                       TextButton.icon(
-                                        onPressed: _busy
+                                        onPressed: _busy || sessionExpired
                                             ? null
-                                            : () => _selectExistingStudent(
-                                                n,
-                                                values['name'] as String?,
+                                            : () => _resumeBatch(
+                                                b['batchId'] as String,
                                               ),
-                                        icon: const Icon(
-                                          Icons.person_search_outlined,
-                                        ),
-                                        label: const Text(
-                                          'Buscar aluno existente',
+                                        icon: const Icon(Icons.rule_outlined),
+                                        label: Text(
+                                          (s['releaseBlockers'] as List? ??
+                                                      const [])
+                                                  .any(
+                                                    (blocker) => blocker
+                                                        .toString()
+                                                        .contains(
+                                                          b['batchId']
+                                                              .toString(),
+                                                        ),
+                                                  )
+                                              ? 'Resolver conflito'
+                                              : 'Reabrir revisão',
                                         ),
                                       ),
                                   ],
-                                );
-                              },
+                                ),
+                                if (b['status'] == 'Released' &&
+                                    b['totals'] is Map)
+                                  Padding(
+                                    padding: const EdgeInsets.only(bottom: 8),
+                                    child: Text(
+                                      _batchTotalsLabel(b['totals'] as Map),
+                                    ),
+                                  ),
+                              ],
                             ),
-                          Wrap(
-                            spacing: 8,
-                            children: [
-                              OutlinedButton(
-                                onPressed: _busy ? null : _saveReview,
-                                child: const Text('Salvar decisões'),
+                          for (final e
+                              in (s['releaseBlockers'] as List? ?? const []))
+                            Text('• $e'),
+                          if (s['status'] == 3)
+                            const Text('Sessão liberada.')
+                          else
+                            FilledButton(
+                              onPressed:
+                                  _busy ||
+                                      sessionExpired ||
+                                      s['canRelease'] != true
+                                  ? null
+                                  : _release,
+                              child: const Text('Liberar operacionalmente'),
+                            ),
+                          if (s['status'] == 3)
+                            for (final r
+                                in (s['results'] as List? ?? const [])
+                                    .cast<Map>())
+                              Text(
+                                '${r['entityType']} · linha ${r['rowNumber']}: ${r['status']} — ${r['message']}',
                               ),
-                              FilledButton(
-                                onPressed: _busy ? null : _confirm,
-                                child: const Text('Confirmar revisão do lote'),
-                              ),
-                            ],
-                          ),
                         ],
                       ),
                     ),
                   ),
+                  if (s['status'] != 3 && !sessionExpired)
+                    Card(
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            DropdownButton<int>(
+                              value: _type,
+                              items: List.generate(
+                                migrationImportTemplates.length,
+                                (i) => DropdownMenuItem(
+                                  value: i,
+                                  child: Text(
+                                    migrationImportTemplates[i].label,
+                                  ),
+                                ),
+                              ),
+                              onChanged: _busy
+                                  ? null
+                                  : (v) => setState(() {
+                                      _type = v!;
+                                      _file = null;
+                                      _preview = null;
+                                      _previewRevision = null;
+                                      _mapping.clear();
+                                      _actions.clear();
+                                      _targets.clear();
+                                      _financialStateResolutions.clear();
+                                    }),
+                            ),
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: [
+                                OutlinedButton(
+                                  onPressed: _busy ? null : _pick,
+                                  child: Text(
+                                    _file?.fileName ?? 'Selecionar CSV/XLSX',
+                                  ),
+                                ),
+                                TextButton.icon(
+                                  onPressed: _busy ? null : _downloadTemplate,
+                                  icon: const Icon(Icons.download_outlined),
+                                  label: const Text('Baixar modelo'),
+                                ),
+                              ],
+                            ),
+                            Text(
+                              'Modelo CSV de ${migrationImportTemplates[_type].label.toLowerCase()} com exemplo fictício. Outros arquivos CSV/XLSX continuam aceitos por mapeamento.',
+                            ),
+                            if (_file != null) ...[
+                              Text(
+                                '${_file!.rows.length} linhas. Faça o mapeamento; IDs externos relacionam os arquivos.',
+                              ),
+                              for (final f
+                                  in migrationImportTemplates[_type].fields)
+                                Row(
+                                  children: [
+                                    SizedBox(
+                                      width: 190,
+                                      child: Text(_fieldLabel(f)),
+                                    ),
+                                    Expanded(
+                                      child: DropdownButton<int?>(
+                                        value: _mapping[f],
+                                        isExpanded: true,
+                                        items: [
+                                          const DropdownMenuItem(
+                                            value: null,
+                                            child: Text('Não mapeado'),
+                                          ),
+                                          for (
+                                            var i = 0;
+                                            i < _file!.headers.length;
+                                            i++
+                                          )
+                                            DropdownMenuItem(
+                                              value: i,
+                                              child: Text(_file!.headers[i]),
+                                            ),
+                                        ],
+                                        onChanged: _busy
+                                            ? null
+                                            : (v) => _changeMapping(f, v),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              if (_ambiguousFields.isNotEmpty)
+                                Text(
+                                  'Alguns cabeçalhos correspondem a mais de um campo. Selecione manualmente: ${_ambiguousFields.map(_fieldLabel).join(', ')}.',
+                                ),
+                              if (_preview == null)
+                                FilledButton(
+                                  onPressed: _busy ? null : _previewFile,
+                                  child: const Text('Gerar prévia'),
+                                ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ),
+                  if (_preview != null)
+                    Card(
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Prévia: ${(_preview!['rows'] as List).length} registros',
+                            ),
+                            for (final raw
+                                in (_preview!['rows'] as List).cast<Map>())
+                              Builder(
+                                builder: (context) {
+                                  final r = Map<String, dynamic>.from(raw);
+                                  final n = r['rowNumber'] as int;
+                                  final cs =
+                                      (r['candidates'] as List? ?? const [])
+                                          .cast<Map>();
+                                  final targetCandidates = <String, Map>{
+                                    for (final candidate in cs)
+                                      if (candidate['targetId'] is String)
+                                        candidate['targetId'] as String:
+                                            candidate,
+                                  };
+                                  final selectedTarget = _targets[n];
+                                  final info = [
+                                    ...(r['errors'] as List? ?? const []),
+                                    ...cs.map(
+                                      (c) => '${c['name']} ${c['description']}',
+                                    ),
+                                  ].join(' · ');
+                                  final values = Map<String, dynamic>.from(
+                                    r['values'] as Map,
+                                  );
+                                  final requiresFinancialResolution =
+                                      r['requiresFinancialResolution'] == true;
+                                  return ExpansionTile(
+                                    title: Text(
+                                      'Linha $n${r['isValid'] == true ? ' · válida' : ' · erro'}${cs.isEmpty ? '' : ' · revisar possível duplicidade'}',
+                                    ),
+                                    subtitle: Text(info),
+                                    children: [
+                                      Padding(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 16,
+                                          vertical: 8,
+                                        ),
+                                        child: Wrap(
+                                          spacing: 16,
+                                          runSpacing: 8,
+                                          children: [
+                                            for (final entry
+                                                in values.entries.where(
+                                                  (entry) =>
+                                                      entry.value != null &&
+                                                      !const {
+                                                        'studentIdentityContext',
+                                                        'resolvedStudentKey',
+                                                        'resolvedFinancialTargetKey',
+                                                      }.contains(entry.key),
+                                                ))
+                                              Text(
+                                                '${_fieldLabel(entry.key)}: ${entry.value}',
+                                              ),
+                                          ],
+                                        ),
+                                      ),
+                                      DropdownButton<String>(
+                                        value: _actions[n],
+                                        items: [
+                                          DropdownMenuItem(
+                                            value: 'ImportNew',
+                                            child: Text(
+                                              _type == 3
+                                                  ? 'Aplicar situação atual'
+                                                  : 'Criar novo',
+                                            ),
+                                          ),
+                                          if (!requiresFinancialResolution)
+                                            const DropdownMenuItem(
+                                              value: 'LinkExisting',
+                                              child: Text('Vincular existente'),
+                                            ),
+                                          DropdownMenuItem(
+                                            value: 'Ignore',
+                                            child: const Text('Ignorar'),
+                                          ),
+                                        ],
+                                        onChanged:
+                                            r['isValid'] == true ||
+                                                requiresFinancialResolution
+                                            ? (v) => setState(() {
+                                                _actions[n] = v!;
+                                                _reviewDirty = true;
+                                              })
+                                            : null,
+                                      ),
+                                      if (requiresFinancialResolution)
+                                        DropdownButton<String>(
+                                          value: _financialStateResolutions[n],
+                                          hint: const Text(
+                                            'Resolver conflito financeiro',
+                                          ),
+                                          items: const [
+                                            DropdownMenuItem(
+                                              value: 'UseEnrollmentState',
+                                              child: Text(
+                                                'Manter situação da matrícula',
+                                              ),
+                                            ),
+                                            DropdownMenuItem(
+                                              value: 'UseFinancialFile',
+                                              child: Text(
+                                                'Usar situação deste arquivo',
+                                              ),
+                                            ),
+                                          ],
+                                          onChanged: _actions[n] == 'ImportNew'
+                                              ? (value) => setState(() {
+                                                  _financialStateResolutions[n] =
+                                                      value;
+                                                  _reviewDirty = true;
+                                                })
+                                              : null,
+                                        ),
+                                      if (_actions[n] == 'LinkExisting' &&
+                                          (targetCandidates.isNotEmpty ||
+                                              selectedTarget != null))
+                                        DropdownButton<String>(
+                                          hint: const Text('Selecione destino'),
+                                          value: selectedTarget,
+                                          isExpanded: true,
+                                          items: [
+                                            for (final c
+                                                in targetCandidates.values)
+                                              DropdownMenuItem(
+                                                value: c['targetId'] as String,
+                                                child: Text(
+                                                  '${c['name']} · ${c['description']}',
+                                                  maxLines: 1,
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
+                                                ),
+                                              ),
+                                            if (selectedTarget != null &&
+                                                !targetCandidates.containsKey(
+                                                  selectedTarget,
+                                                ))
+                                              DropdownMenuItem(
+                                                value: selectedTarget,
+                                                child: Text(
+                                                  '${_selectedStudentLabels[selectedTarget] ?? 'Aluno selecionado'} · $selectedTarget',
+                                                  maxLines: 1,
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
+                                                ),
+                                              ),
+                                          ],
+                                          onChanged: (v) => setState(() {
+                                            _targets[n] = v;
+                                            _reviewDirty = true;
+                                          }),
+                                        ),
+                                      if (_type == 0 &&
+                                          _actions[n] == 'LinkExisting' &&
+                                          r['isValid'] == true)
+                                        TextButton.icon(
+                                          onPressed: _busy
+                                              ? null
+                                              : () => _selectExistingStudent(
+                                                  n,
+                                                  values['name'] as String?,
+                                                ),
+                                          icon: const Icon(
+                                            Icons.person_search_outlined,
+                                          ),
+                                          label: const Text(
+                                            'Buscar aluno existente',
+                                          ),
+                                        ),
+                                    ],
+                                  );
+                                },
+                              ),
+                            Wrap(
+                              spacing: 8,
+                              children: [
+                                OutlinedButton(
+                                  onPressed: _busy ? null : _saveReview,
+                                  child: const Text('Salvar decisões'),
+                                ),
+                                FilledButton(
+                                  onPressed: _busy ? null : _confirm,
+                                  child: const Text(
+                                    'Confirmar revisão do lote',
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                ],
               ],
-            ],
+            ),
           ),
         ),
       ),

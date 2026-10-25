@@ -1,5 +1,8 @@
 import 'package:avelri_gestao/app/theme/branding_controller.dart';
+import 'package:avelri_gestao/core/widgets/app_status_states.dart';
 import 'package:avelri_gestao/core/network/api_client.dart';
+import 'package:avelri_gestao/core/widgets/app_filter_button.dart';
+import 'package:avelri_gestao/app/theme/app_button_styles.dart';
 import 'package:avelri_gestao/features/enrollments/data/enrollments_service.dart';
 import 'package:avelri_gestao/features/enrollments/presentation/enrollments_view_model.dart';
 import 'package:flutter/material.dart';
@@ -10,15 +13,16 @@ import 'package:go_router/go_router.dart';
 import 'package:avelri_gestao/features/plans/data/plans_service.dart';
 
 class EnrollmentsPage extends StatelessWidget {
-  const EnrollmentsPage({super.key});
+  const EnrollmentsPage({this.expiringWithinDays, super.key});
+
+  final int? expiringWithinDays;
 
   @override
   Widget build(BuildContext context) {
     return ChangeNotifierProvider(
       create: (context) => EnrollmentsViewModel(
-        EnrollmentsService(
-          context.read<ApiClient>(),
-        ),
+        EnrollmentsService(context.read<ApiClient>()),
+        expiringWithinDays: expiringWithinDays,
       )..loadInitial(),
       child: const _EnrollmentsView(),
     );
@@ -30,11 +34,9 @@ class _EnrollmentsView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final viewModel =
-    context.watch<EnrollmentsViewModel>();
+    final viewModel = context.watch<EnrollmentsViewModel>();
 
-    final branding =
-        context.watch<BrandingController>().branding;
+    final branding = context.watch<BrandingController>().branding;
 
     final primaryColor = branding.primaryColor;
     final theme = Theme.of(context);
@@ -43,18 +45,15 @@ class _EnrollmentsView extends StatelessWidget {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(30),
       child: ConstrainedBox(
-        constraints:
-        const BoxConstraints(maxWidth: 1250),
+        constraints: const BoxConstraints(maxWidth: 1250),
         child: Column(
-          crossAxisAlignment:
-          CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
                 Expanded(
                   child: Column(
-                    crossAxisAlignment:
-                    CrossAxisAlignment.start,
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
                         'Matrículas',
@@ -77,16 +76,8 @@ class _EnrollmentsView extends StatelessWidget {
                 ),
                 FilledButton.icon(
                   onPressed: () => context.go('/enrollments/new'),
-                  icon: const Icon(
-                    Icons.add_rounded,
-                  ),
-                  label: const Text(
-                    'Nova matrícula',
-                  ),
-                  style: FilledButton.styleFrom(
-                    backgroundColor: primaryColor,
-                    foregroundColor: Colors.white,
-                  ),
+                  icon: const Icon(Icons.add_rounded),
+                  label: const Text('Nova matrícula'),
                 ),
               ],
             ),
@@ -96,62 +87,59 @@ class _EnrollmentsView extends StatelessWidget {
               padding: const EdgeInsets.all(22),
               decoration: BoxDecoration(
                 color: colorScheme.surface,
-                borderRadius:
-                BorderRadius.circular(18),
-                border: Border.all(
-                  color: theme.dividerColor,
-                ),
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: theme.dividerColor),
               ),
               child: Column(
                 children: [
                   Row(
                     children: [
-                      _FilterButton(
+                      AppFilterButton(
                         label: 'Todas',
                         selected:
-                        viewModel.statusFilter ==
+                            viewModel.statusFilter ==
                             EnrollmentsStatusFilter.all,
                         color: primaryColor,
-                        onTap: () {
+                        onPressed: () {
                           viewModel.updateStatusFilter(
                             EnrollmentsStatusFilter.all,
                           );
                         },
                       ),
                       const SizedBox(width: 8),
-                      _FilterButton(
+                      AppFilterButton(
                         label: 'Ativas',
                         selected:
-                        viewModel.statusFilter ==
+                            viewModel.statusFilter ==
                             EnrollmentsStatusFilter.active,
                         color: primaryColor,
-                        onTap: () {
+                        onPressed: () {
                           viewModel.updateStatusFilter(
                             EnrollmentsStatusFilter.active,
                           );
                         },
                       ),
                       const SizedBox(width: 8),
-                      _FilterButton(
+                      AppFilterButton(
                         label: 'Canceladas',
                         selected:
-                        viewModel.statusFilter ==
+                            viewModel.statusFilter ==
                             EnrollmentsStatusFilter.cancelled,
                         color: primaryColor,
-                        onTap: () {
+                        onPressed: () {
                           viewModel.updateStatusFilter(
                             EnrollmentsStatusFilter.cancelled,
                           );
                         },
                       ),
                       const SizedBox(width: 8),
-                      _FilterButton(
+                      AppFilterButton(
                         label: 'Vencidas',
                         selected:
-                        viewModel.statusFilter ==
+                            viewModel.statusFilter ==
                             EnrollmentsStatusFilter.expired,
                         color: primaryColor,
-                        onTap: () {
+                        onPressed: () {
                           viewModel.updateStatusFilter(
                             EnrollmentsStatusFilter.expired,
                           );
@@ -160,25 +148,31 @@ class _EnrollmentsView extends StatelessWidget {
                       const Spacer(),
                       IconButton(
                         tooltip: 'Atualizar',
-                        onPressed:
-                        viewModel.isLoading
+                        onPressed: viewModel.isLoading
                             ? null
                             : viewModel.refresh,
-                        icon: const Icon(
-                          Icons.refresh_rounded,
-                        ),
+                        icon: const Icon(Icons.refresh_rounded),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 20),
-                  if (viewModel.isLoading &&
-                      !viewModel.hasEnrollments)
-                    const Padding(
-                      padding:
-                      EdgeInsets.symmetric(vertical: 70),
-                      child: Center(
-                        child: CircularProgressIndicator(),
+                  if (viewModel.expiringWithinDays case final days?) ...[
+                    const SizedBox(height: 12),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: InputChip(
+                        key: const ValueKey('enrollment-expiring-filter'),
+                        label: Text('Vigentes até $days dias do vencimento'),
+                        onDeleted: viewModel.isLoading
+                            ? null
+                            : viewModel.clearExpiringFilter,
                       ),
+                    ),
+                  ],
+                  const SizedBox(height: 20),
+                  if (viewModel.isLoading && !viewModel.hasEnrollments)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 70),
+                      child: Center(child: CircularProgressIndicator()),
                     )
                   else if (viewModel.errorMessage != null)
                     _ErrorState(
@@ -186,11 +180,9 @@ class _EnrollmentsView extends StatelessWidget {
                       onRetry: viewModel.retry,
                     )
                   else if (!viewModel.hasEnrollments)
-                      const _EmptyState()
-                    else
-                      _EnrollmentsTable(
-                        enrollments: viewModel.enrollments,
-                      ),
+                    const _EmptyState()
+                  else
+                    _EnrollmentsTable(enrollments: viewModel.enrollments),
                 ],
               ),
             ),
@@ -200,19 +192,15 @@ class _EnrollmentsView extends StatelessWidget {
     );
   }
 }
+
 class _EnrollmentsTable extends StatelessWidget {
-  const _EnrollmentsTable({
-    required this.enrollments,
-  });
+  const _EnrollmentsTable({required this.enrollments});
 
   final List<EnrollmentSummary> enrollments;
 
   @override
   Widget build(BuildContext context) {
-    final currency = NumberFormat.currency(
-      locale: 'pt_BR',
-      symbol: 'R\$',
-    );
+    final currency = NumberFormat.currency(locale: 'pt_BR', symbol: 'R\$');
 
     final dateFormat = DateFormat('dd/MM/yyyy');
     final colorScheme = Theme.of(context).colorScheme;
@@ -229,8 +217,8 @@ class _EnrollmentsTable extends StatelessWidget {
         ],
         rows: enrollments.map((enrollment) {
           final hasPendingRenewal = enrollments.any(
-                (other) =>
-            other.id != enrollment.id &&
+            (other) =>
+                other.id != enrollment.id &&
                 other.studentId == enrollment.studentId &&
                 other.status == EnrollmentStatus.pendingPayment,
           );
@@ -238,12 +226,10 @@ class _EnrollmentsTable extends StatelessWidget {
           final canRenew =
               (enrollment.status == EnrollmentStatus.active ||
                   enrollment.status == EnrollmentStatus.expired) &&
-                  !hasPendingRenewal;
+              !hasPendingRenewal;
           return DataRow(
             cells: [
-              DataCell(
-                Text(enrollment.studentName),
-              ),
+              DataCell(Text(enrollment.studentName)),
               DataCell(
                 Column(
                   mainAxisAlignment: MainAxisAlignment.center,
@@ -251,15 +237,11 @@ class _EnrollmentsTable extends StatelessWidget {
                   children: [
                     Text(
                       enrollment.planName,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w600,
-                      ),
+                      style: const TextStyle(fontWeight: FontWeight.w600),
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      currency.format(
-                        enrollment.planPrice,
-                      ),
+                      currency.format(enrollment.planPrice),
                       style: TextStyle(
                         color: colorScheme.onSurfaceVariant,
                         fontSize: 12,
@@ -271,36 +253,22 @@ class _EnrollmentsTable extends StatelessWidget {
               DataCell(
                 Text(
                   '${dateFormat.format(enrollment.startDate)} → '
-                      '${dateFormat.format(enrollment.endDate)}',
+                  '${dateFormat.format(enrollment.endDate)}',
                 ),
               ),
-              DataCell(
-                Text(
-                  _statusLabel(
-                    enrollment.status,
-                  ),
-                ),
-              ),
+              DataCell(Text(_statusLabel(enrollment.status))),
               DataCell(
                 PopupMenuButton<String>(
                   tooltip: 'Ações',
-                  icon: const Icon(
-                    Icons.more_vert_rounded,
-                  ),
+                  icon: const Icon(Icons.more_vert_rounded),
                   onSelected: (action) async {
                     if (action == 'renew') {
-                      await _renewEnrollment(
-                        context,
-                        enrollment,
-                      );
+                      await _renewEnrollment(context, enrollment);
                       return;
                     }
 
                     if (action == 'cancel') {
-                      await _confirmCancellation(
-                        context,
-                        enrollment,
-                      );
+                      await _confirmCancellation(context, enrollment);
                     }
                   },
                   itemBuilder: (context) => [
@@ -308,26 +276,18 @@ class _EnrollmentsTable extends StatelessWidget {
                       const PopupMenuItem(
                         value: 'renew',
                         child: ListTile(
-                          leading: Icon(
-                            Icons.autorenew_rounded,
-                          ),
+                          leading: Icon(Icons.autorenew_rounded),
                           title: Text('Renovar'),
                           contentPadding: EdgeInsets.zero,
                         ),
                       ),
-                    if (enrollment.status ==
-                        EnrollmentStatus.active ||
-                        enrollment.status ==
-                            EnrollmentStatus.pendingPayment)
+                    if (enrollment.status == EnrollmentStatus.active ||
+                        enrollment.status == EnrollmentStatus.pendingPayment)
                       const PopupMenuItem(
                         value: 'cancel',
                         child: ListTile(
-                          leading: Icon(
-                            Icons.cancel_outlined,
-                          ),
-                          title: Text(
-                            'Cancelar matrícula',
-                          ),
+                          leading: Icon(Icons.cancel_outlined),
+                          title: Text('Cancelar matrícula'),
                           contentPadding: EdgeInsets.zero,
                         ),
                       ),
@@ -342,16 +302,12 @@ class _EnrollmentsTable extends StatelessWidget {
   }
 
   Future<void> _renewEnrollment(
-      BuildContext context,
-      EnrollmentSummary enrollment,
-      ) async {
-    final plansService = PlansService(
-      context.read<ApiClient>(),
-    );
+    BuildContext context,
+    EnrollmentSummary enrollment,
+  ) async {
+    final plansService = PlansService(context.read<ApiClient>());
 
-    final plans = await plansService.getPlans(
-      isActive: true,
-    );
+    final plans = await plansService.getPlans(isActive: true);
 
     if (!context.mounted) {
       return;
@@ -365,22 +321,18 @@ class _EnrollmentsTable extends StatelessWidget {
         return StatefulBuilder(
           builder: (context, setState) {
             return AlertDialog(
-              title: const Text(
-                'Renovar matrícula',
-              ),
+              title: const Text('Renovar matrícula'),
               content: SizedBox(
                 width: 420,
                 child: DropdownButtonFormField<String>(
-                  decoration: const InputDecoration(
-                    labelText: 'Plano',
-                  ),
+                  decoration: const InputDecoration(labelText: 'Plano'),
                   items: plans
                       .map(
                         (plan) => DropdownMenuItem(
-                      value: plan.id,
-                      child: Text(plan.name),
-                    ),
-                  )
+                          value: plan.id,
+                          child: Text(plan.name),
+                        ),
+                      )
                       .toList(),
                   onChanged: (value) {
                     setState(() {
@@ -391,15 +343,13 @@ class _EnrollmentsTable extends StatelessWidget {
               ),
               actions: [
                 TextButton(
-                  onPressed: () =>
-                      Navigator.of(dialogContext).pop(false),
+                  onPressed: () => Navigator.of(dialogContext).pop(false),
                   child: const Text('Voltar'),
                 ),
                 FilledButton(
                   onPressed: selectedPlanId == null
                       ? null
-                      : () =>
-                      Navigator.of(dialogContext).pop(true),
+                      : () => Navigator.of(dialogContext).pop(true),
                   child: const Text('Renovar'),
                 ),
               ],
@@ -409,44 +359,37 @@ class _EnrollmentsTable extends StatelessWidget {
       },
     );
 
-    if (confirmed != true ||
-        selectedPlanId == null ||
-        !context.mounted) {
+    if (confirmed != true || selectedPlanId == null || !context.mounted) {
       return;
     }
 
-    await context
-        .read<EnrollmentsViewModel>()
-        .renewEnrollment(
+    await context.read<EnrollmentsViewModel>().renewEnrollment(
       enrollment,
       selectedPlanId!,
     );
   }
 
   Future<void> _confirmCancellation(
-      BuildContext context,
-      EnrollmentSummary enrollment,
-      ) async {
+    BuildContext context,
+    EnrollmentSummary enrollment,
+  ) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) {
         return AlertDialog(
-          title: const Text(
-            'Cancelar matrícula',
-          ),
+          title: const Text('Cancelar matrícula'),
           content: Text(
             'Deseja cancelar a matrícula de '
-                '${enrollment.studentName}?',
+            '${enrollment.studentName}?',
           ),
           actions: [
             TextButton(
-              onPressed: () =>
-                  Navigator.of(dialogContext).pop(false),
+              onPressed: () => Navigator.of(dialogContext).pop(false),
               child: const Text('Voltar'),
             ),
             FilledButton(
-              onPressed: () =>
-                  Navigator.of(dialogContext).pop(true),
+              style: AppButtonStyles.destructive(dialogContext),
+              onPressed: () => Navigator.of(dialogContext).pop(true),
               child: const Text('Cancelar matrícula'),
             ),
           ],
@@ -458,14 +401,10 @@ class _EnrollmentsTable extends StatelessWidget {
       return;
     }
 
-    await context
-        .read<EnrollmentsViewModel>()
-        .cancelEnrollment(enrollment);
+    await context.read<EnrollmentsViewModel>().cancelEnrollment(enrollment);
   }
 
-  String _statusLabel(
-      EnrollmentStatus status,
-      ) {
+  String _statusLabel(EnrollmentStatus status) {
     return switch (status) {
       EnrollmentStatus.active => 'Ativa',
       EnrollmentStatus.cancelled => 'Cancelada',
@@ -480,84 +419,25 @@ class _EmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Padding(
-      padding: EdgeInsets.symmetric(vertical: 70),
-      child: Center(
-        child: Text(
-          'Nenhuma matrícula encontrada.',
-          style: TextStyle(
-            color: Color(0xFF74798D),
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-      ),
+    return const AppEmptyState(
+      icon: Icons.assignment_outlined,
+      title: 'Nenhuma matrícula encontrada.',
     );
   }
 }
 
 class _ErrorState extends StatelessWidget {
-  const _ErrorState({
-    required this.message,
-    required this.onRetry,
-  });
+  const _ErrorState({required this.message, required this.onRetry});
 
   final String message;
   final VoidCallback onRetry;
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(
-        vertical: 60,
-      ),
-      child: Column(
-        children: [
-          Text(
-            message,
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 14),
-          OutlinedButton(
-            onPressed: onRetry,
-            child: const Text(
-              'Tentar novamente',
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-class _FilterButton extends StatelessWidget {
-  const _FilterButton({
-    required this.label,
-    required this.selected,
-    required this.color,
-    required this.onTap,
-  });
-
-  final String label;
-  final bool selected;
-  final Color color;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-
-    return OutlinedButton(
-      onPressed: onTap,
-      style: OutlinedButton.styleFrom(
-        foregroundColor:
-        selected ? Colors.white : colorScheme.onSurfaceVariant,
-        backgroundColor:
-        selected ? color : colorScheme.surface,
-        side: BorderSide(
-          color: selected ? color : theme.dividerColor,
-        ),
-      ),
-      child: Text(label),
+    return AppErrorState(
+      message: message,
+      onRetry: onRetry,
+      padding: const EdgeInsets.symmetric(vertical: 60),
     );
   }
 }

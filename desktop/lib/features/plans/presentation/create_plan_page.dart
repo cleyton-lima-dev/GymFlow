@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
-import 'package:avelri_gestao/app/theme/branding_controller.dart';
 import 'package:avelri_gestao/core/network/api_client.dart';
 import 'package:avelri_gestao/features/plans/data/plans_service.dart';
 import 'package:avelri_gestao/features/plans/models/plan_summary.dart';
@@ -56,12 +55,9 @@ class _CreatePlanViewState extends State<_CreatePlanView> {
       _priceController.text.trim().replaceAll(',', '.'),
     );
 
-    final durationMonths = int.parse(
-      _durationController.text.trim(),
-    );
+    final durationMonths = int.parse(_durationController.text.trim());
 
-    final created =
-    await context.read<CreatePlanViewModel>().createPlan(
+    final created = await context.read<CreatePlanViewModel>().createPlan(
       name: _nameController.text,
       price: price,
       durationMonths: durationMonths,
@@ -73,9 +69,7 @@ class _CreatePlanViewState extends State<_CreatePlanView> {
     }
 
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Plano cadastrado com sucesso.'),
-      ),
+      const SnackBar(content: Text('Plano cadastrado com sucesso.')),
     );
 
     context.go('/plans');
@@ -84,8 +78,6 @@ class _CreatePlanViewState extends State<_CreatePlanView> {
   @override
   Widget build(BuildContext context) {
     final viewModel = context.watch<CreatePlanViewModel>();
-    final branding = context.watch<BrandingController>().branding;
-    final primaryColor = branding.primaryColor;
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
 
@@ -138,9 +130,7 @@ class _CreatePlanViewState extends State<_CreatePlanView> {
                 decoration: BoxDecoration(
                   color: colorScheme.surface,
                   borderRadius: BorderRadius.circular(18),
-                  border: Border.all(
-                    color: theme.dividerColor,
-                  ),
+                  border: Border.all(color: theme.dividerColor),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -171,16 +161,13 @@ class _CreatePlanViewState extends State<_CreatePlanView> {
                         Expanded(
                           child: TextFormField(
                             controller: _priceController,
-                            keyboardType:
-                            const TextInputType.numberWithOptions(
+                            keyboardType: const TextInputType.numberWithOptions(
                               decimal: true,
                             ),
                             onChanged: (_) => viewModel.clearError(),
                             validator: (value) {
                               final price = double.tryParse(
-                                (value ?? '')
-                                    .trim()
-                                    .replaceAll(',', '.'),
+                                (value ?? '').trim().replaceAll(',', '.'),
                               );
 
                               if (price == null || price <= 0) {
@@ -203,8 +190,9 @@ class _CreatePlanViewState extends State<_CreatePlanView> {
                             keyboardType: TextInputType.number,
                             onChanged: (_) => viewModel.clearError(),
                             validator: (value) {
-                              final duration =
-                              int.tryParse(value?.trim() ?? '');
+                              final duration = int.tryParse(
+                                value?.trim() ?? '',
+                              );
 
                               if (duration == null || duration <= 0) {
                                 return 'Informe a duração.';
@@ -226,8 +214,7 @@ class _CreatePlanViewState extends State<_CreatePlanView> {
                       initialValue: _billingCycle,
                       decoration: const InputDecoration(
                         labelText: 'Recorrência da cobrança',
-                        prefixIcon:
-                        Icon(Icons.autorenew_rounded),
+                        prefixIcon: Icon(Icons.autorenew_rounded),
                       ),
                       items: const [
                         DropdownMenuItem(
@@ -250,18 +237,18 @@ class _CreatePlanViewState extends State<_CreatePlanView> {
                       onChanged: viewModel.isLoading
                           ? null
                           : (value) {
-                        if (value != null) {
-                          _billingCycle = value;
-                          viewModel.clearError();
-                        }
-                      },
+                              if (value != null) {
+                                _billingCycle = value;
+                                viewModel.clearError();
+                              }
+                            },
                     ),
                     if (viewModel.errorMessage != null) ...[
                       const SizedBox(height: 20),
                       Text(
                         viewModel.errorMessage!,
-                        style: const TextStyle(
-                          color: Colors.red,
+                        style: TextStyle(
+                          color: colorScheme.error,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
@@ -278,25 +265,16 @@ class _CreatePlanViewState extends State<_CreatePlanView> {
                         ),
                         const SizedBox(width: 12),
                         FilledButton.icon(
-                          onPressed:
-                          viewModel.isLoading ? null : _submit,
-                          style: FilledButton.styleFrom(
-                            backgroundColor: primaryColor,
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 22,
-                              vertical: 17,
-                            ),
-                          ),
+                          onPressed: viewModel.isLoading ? null : _submit,
                           icon: viewModel.isLoading
-                              ? const SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Colors.white,
-                            ),
-                          )
+                              ? SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: colorScheme.onPrimary,
+                                  ),
+                                )
                               : const Icon(Icons.save_rounded),
                           label: const Text('Cadastrar plano'),
                         ),

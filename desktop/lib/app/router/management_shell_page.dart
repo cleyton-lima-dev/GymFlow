@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import 'package:avelri_gestao/app/session/session_controller.dart';
 import 'package:avelri_gestao/app/session/erp_feature_controller.dart';
 import 'package:avelri_gestao/app/theme/branding_controller.dart';
+import 'package:avelri_gestao/app/theme/brand_contrast.dart';
 import 'package:avelri_gestao/core/network/erp_access_policy.dart';
 
 class ManagementShellPage extends StatelessWidget {
@@ -87,6 +88,9 @@ class ManagementShellPage extends StatelessWidget {
         .toList();
 
     final primaryColor = branding.primaryColor;
+    final sidebarColor = branding.secondaryColor;
+    final sidebarForeground = BrandContrast.foregroundFor(sidebarColor);
+    final selectedForeground = BrandContrast.foregroundFor(primaryColor);
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
 
@@ -96,7 +100,7 @@ class ManagementShellPage extends StatelessWidget {
         children: [
           Container(
             width: 254,
-            color: branding.secondaryColor,
+            color: sidebarColor,
             child: SafeArea(
               child: Column(
                 children: [
@@ -110,7 +114,7 @@ class ManagementShellPage extends StatelessWidget {
                           child: branding.logoAsset == null
                               ? Icon(
                                   Icons.fitness_center_rounded,
-                                  color: primaryColor,
+                                  color: sidebarForeground,
                                   size: 28,
                                 )
                               : Image.asset(
@@ -124,8 +128,8 @@ class ManagementShellPage extends StatelessWidget {
                             branding.displayName,
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: Colors.white,
+                            style: TextStyle(
+                              color: sidebarForeground,
                               fontWeight: FontWeight.w800,
                               fontSize: 16,
                             ),
@@ -134,14 +138,14 @@ class ManagementShellPage extends StatelessWidget {
                       ],
                     ),
                   ),
-                  const Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 22),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 22),
                     child: Align(
                       alignment: Alignment.centerLeft,
                       child: Text(
                         'GESTÃO',
                         style: TextStyle(
-                          color: Color(0xFF666C82),
+                          color: sidebarForeground.withValues(alpha: 0.68),
                           fontSize: 10,
                           fontWeight: FontWeight.w800,
                           letterSpacing: 1.6,
@@ -163,6 +167,8 @@ class ManagementShellPage extends StatelessWidget {
                           item: item,
                           selected: selected,
                           accentColor: primaryColor,
+                          sidebarForeground: sidebarForeground,
+                          selectedForeground: selectedForeground,
                           onTap: () {
                             context.go(item.path);
                           },
@@ -174,19 +180,21 @@ class ManagementShellPage extends StatelessWidget {
                     margin: const EdgeInsets.all(14),
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF191D31),
+                      color: colorScheme.surfaceContainerHighest,
                       borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: const Color(0xFF292E45)),
+                      border: Border.all(color: theme.dividerColor),
                     ),
                     child: Row(
                       children: [
                         CircleAvatar(
                           radius: 18,
-                          backgroundColor: primaryColor.withValues(alpha: 0.18),
+                          backgroundColor: sidebarForeground.withValues(
+                            alpha: 0.12,
+                          ),
                           child: Text(
                             _initials(session.user?.name),
                             style: TextStyle(
-                              color: primaryColor,
+                              color: sidebarForeground,
                               fontWeight: FontWeight.w800,
                               fontSize: 12,
                             ),
@@ -201,17 +209,17 @@ class ManagementShellPage extends StatelessWidget {
                                 session.user?.name ?? '',
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                  color: Colors.white,
+                                style: TextStyle(
+                                  color: colorScheme.onSurface,
                                   fontSize: 12,
                                   fontWeight: FontWeight.w700,
                                 ),
                               ),
                               const SizedBox(height: 2),
-                              const Text(
+                              Text(
                                 'Administrador',
                                 style: TextStyle(
-                                  color: Color(0xFF8E94A9),
+                                  color: colorScheme.onSurfaceVariant,
                                   fontSize: 10,
                                 ),
                               ),
@@ -222,9 +230,9 @@ class ManagementShellPage extends StatelessWidget {
                           tooltip: 'Sair',
                           visualDensity: VisualDensity.compact,
                           onPressed: session.logout,
-                          icon: const Icon(
+                          icon: Icon(
                             Icons.logout_rounded,
-                            color: Color(0xFF9BA1B5),
+                            color: colorScheme.onSurfaceVariant,
                             size: 19,
                           ),
                         ),
@@ -270,17 +278,8 @@ class ManagementShellPage extends StatelessWidget {
                         ),
                         child: Row(
                           children: [
-                            Container(
-                              width: 7,
-                              height: 7,
-                              decoration: const BoxDecoration(
-                                color: Color(0xFF2CB67D),
-                                shape: BoxShape.circle,
-                              ),
-                            ),
-                            const SizedBox(width: 7),
                             Text(
-                              'Online',
+                              'Área administrativa',
                               style: TextStyle(
                                 color: colorScheme.onSurfaceVariant,
                                 fontSize: 11,
@@ -322,20 +321,22 @@ class _SidebarItem extends StatelessWidget {
     required this.item,
     required this.selected,
     required this.accentColor,
+    required this.sidebarForeground,
+    required this.selectedForeground,
     required this.onTap,
   });
 
   final _NavigationItem item;
   final bool selected;
   final Color accentColor;
+  final Color sidebarForeground;
+  final Color selectedForeground;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: selected
-          ? accentColor.withValues(alpha: 0.14)
-          : Colors.transparent,
+      color: selected ? accentColor : Colors.transparent,
       borderRadius: BorderRadius.circular(11),
       child: InkWell(
         onTap: onTap,
@@ -356,7 +357,9 @@ class _SidebarItem extends StatelessWidget {
               Icon(
                 item.icon,
                 size: 20,
-                color: selected ? accentColor : const Color(0xFF8D93A8),
+                color: selected
+                    ? selectedForeground
+                    : sidebarForeground.withValues(alpha: 0.72),
               ),
               const SizedBox(width: 13),
               Expanded(
@@ -365,7 +368,9 @@ class _SidebarItem extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    color: selected ? Colors.white : const Color(0xFFB0B5C5),
+                    color: selected
+                        ? selectedForeground
+                        : sidebarForeground.withValues(alpha: 0.82),
                     fontSize: 13,
                     fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
                   ),

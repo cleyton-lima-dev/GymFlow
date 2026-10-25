@@ -1,9 +1,14 @@
+import 'dart:async';
+
+import 'package:avelri_gestao/app/theme/app_button_styles.dart';
+import 'package:avelri_gestao/app/theme/semantic_colors.dart';
 import 'package:avelri_gestao/core/network/api_client.dart';
 import 'package:avelri_gestao/features/students/data/student_import_api_service.dart';
 import 'package:avelri_gestao/features/students/models/student_import_preview.dart';
 import 'package:avelri_gestao/features/students/presentation/student_import_view_model.dart';
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 class StudentImportPage extends StatelessWidget {
@@ -29,76 +34,99 @@ class _StudentImportViewState extends State<_StudentImportView> {
   static const _pageSize = 40;
   int _previewPage = 0;
   int _resultPage = 0;
+  bool _selectingFile = false;
+  bool _allowPop = false;
+  bool _handlingBack = false;
 
   @override
   Widget build(BuildContext context) {
     final viewModel = context.watch<StudentImportViewModel>();
     final colors = Theme.of(context).colorScheme;
     final source = viewModel.source;
+    final isBusy = _selectingFile || viewModel.isBusy;
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(30),
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 1250),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Importar alunos',
-                style: Theme.of(context).textTheme.headlineMedium,
-              ),
-              const SizedBox(height: 6),
-              const Text(
-                'Importe cadastros de arquivos CSV ou XLSX. A importação não cria contas do aplicativo, matrículas, cobranças ou acesso físico.',
-              ),
-              const SizedBox(height: 20),
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(20),
-                  child: Wrap(
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    spacing: 16,
-                    runSpacing: 12,
-                    children: [
-                      FilledButton.icon(
-                        onPressed: viewModel.isBusy ? null : _chooseFile,
-                        icon: viewModel.isBusy
-                            ? const SizedBox.square(
-                                dimension: 18,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                ),
-                              )
-                            : const Icon(Icons.upload_file_outlined),
-                        label: const Text('Selecionar CSV/XLSX'),
+    return PopScope<Object?>(
+      canPop: _allowPop,
+      onPopInvokedWithResult: (didPop, result) {
+        if (!didPop) unawaited(_attemptBack(viewModel));
+      },
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(30),
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 1250),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    OutlinedButton.icon(
+                      key: const ValueKey('student-import-back'),
+                      onPressed: () => _attemptBack(viewModel),
+                      icon: const Icon(Icons.arrow_back_rounded),
+                      label: const Text('Voltar'),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        'Importar alunos',
+                        style: Theme.of(context).textTheme.headlineMedium,
                       ),
-                      if (source != null)
-                        Text(
-                          '${source.fileName} · ${source.rows.length} registros',
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                const Text(
+                  'Importe cadastros de arquivos CSV ou XLSX. A importação não cria contas do aplicativo, matrículas, cobranças ou acesso físico.',
+                ),
+                const SizedBox(height: 20),
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(20),
+                    child: Wrap(
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      spacing: 16,
+                      runSpacing: 12,
+                      children: [
+                        FilledButton.icon(
+                          onPressed: isBusy ? null : _chooseFile,
+                          icon: isBusy
+                              ? const SizedBox.square(
+                                  dimension: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : const Icon(Icons.upload_file_outlined),
+                          label: const Text('Selecionar CSV/XLSX'),
                         ),
-                      const Text('Limite: 5 MB e 5.000 registros.'),
-                    ],
+                        if (source != null)
+                          Text(
+                            '${source.fileName} · ${source.rows.length} registros',
+                          ),
+                        const Text('Limite: 5 MB e 5.000 registros.'),
+                      ],
+                    ),
                   ),
                 ),
-              ),
-              if (viewModel.errorMessage != null) ...[
-                const SizedBox(height: 12),
-                _MessageCard(message: viewModel.errorMessage!, isError: true),
+                if (viewModel.errorMessage != null) ...[
+                  const SizedBox(height: 12),
+                  _MessageCard(message: viewModel.errorMessage!, isError: true),
+                ],
+                if (source != null) ...[
+                  const SizedBox(height: 16),
+                  _buildMappingCard(viewModel, colors),
+                ],
+                if (viewModel.preview != null) ...[
+                  const SizedBox(height: 16),
+                  _buildPreview(viewModel, colors),
+                ],
+                if (viewModel.result != null) ...[
+                  const SizedBox(height: 16),
+                  _buildResults(viewModel),
+                ],
               ],
-              if (source != null) ...[
-                const SizedBox(height: 16),
-                _buildMappingCard(viewModel, colors),
-              ],
-              if (viewModel.preview != null) ...[
-                const SizedBox(height: 16),
-                _buildPreview(viewModel, colors),
-              ],
-              if (viewModel.result != null) ...[
-                const SizedBox(height: 16),
-                _buildResults(viewModel),
-              ],
-            ],
+            ),
           ),
         ),
       ),
@@ -106,14 +134,17 @@ class _StudentImportViewState extends State<_StudentImportView> {
   }
 
   Future<void> _chooseFile() async {
-    final file = await openFile(
-      acceptedTypeGroups: const [
-        XTypeGroup(label: 'CSV ou XLSX', extensions: ['csv', 'xlsx']),
-      ],
-    );
-    if (file == null || !mounted) return;
-    final viewModel = context.read<StudentImportViewModel>();
+    setState(() => _selectingFile = true);
+    XFile? selectedFile;
     try {
+      final file = await openFile(
+        acceptedTypeGroups: const [
+          XTypeGroup(label: 'CSV ou XLSX', extensions: ['csv', 'xlsx']),
+        ],
+      );
+      if (file == null || !mounted) return;
+      selectedFile = file;
+      final viewModel = context.read<StudentImportViewModel>();
       final bytes = await file.readAsBytes();
       if (!mounted) return;
       setState(() {
@@ -122,9 +153,70 @@ class _StudentImportViewState extends State<_StudentImportView> {
       });
       viewModel.loadFile(file.name, bytes);
     } catch (_) {
-      if (!mounted) return;
-      viewModel.loadFile(file.name, null);
+      if (!mounted || selectedFile == null) return;
+      context.read<StudentImportViewModel>().loadFile(selectedFile.name, null);
+    } finally {
+      if (mounted) setState(() => _selectingFile = false);
     }
+  }
+
+  Future<void> _attemptBack(StudentImportViewModel viewModel) async {
+    if (_handlingBack || !mounted) return;
+    _handlingBack = true;
+    try {
+      if (_selectingFile || viewModel.isBusy) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Aguarde a operação de importação terminar antes de sair.',
+            ),
+          ),
+        );
+        return;
+      }
+
+      if (viewModel.source != null) {
+        final confirmed = await showDialog<bool>(
+          context: context,
+          builder: (dialogContext) => AlertDialog(
+            title: const Text('Sair da importação?'),
+            content: Text(
+              viewModel.result == null
+                  ? 'O arquivo selecionado, o mapeamento e a prévia desta tela serão descartados. Nenhuma importação será iniciada ao sair.'
+                  : 'O resultado desta tela será fechado. A importação já concluída não será desfeita.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext, false),
+                child: const Text('Continuar importando'),
+              ),
+              OutlinedButton(
+                style: AppButtonStyles.destructiveOutlined(dialogContext),
+                onPressed: () => Navigator.pop(dialogContext, true),
+                child: const Text('Sair e descartar'),
+              ),
+            ],
+          ),
+        );
+        if (confirmed != true || !mounted) return;
+      }
+
+      _navigateBack();
+    } finally {
+      _handlingBack = false;
+    }
+  }
+
+  void _navigateBack() {
+    if (!mounted) return;
+    if (!context.canPop()) {
+      context.go('/students');
+      return;
+    }
+    setState(() => _allowPop = true);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) context.pop();
+    });
   }
 
   Widget _buildMappingCard(
@@ -520,8 +612,8 @@ class _StudentImportViewState extends State<_StudentImportView> {
   };
 
   Color _resultColor(String status) => switch (status) {
-    'Imported' => Colors.green,
-    'Ignored' => Colors.blueGrey,
+    'Imported' => AvelriSemanticColors.success,
+    'Ignored' => AvelriSemanticColors.inactive,
     _ => Theme.of(context).colorScheme.error,
   };
 }

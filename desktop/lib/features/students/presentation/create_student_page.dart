@@ -37,7 +37,6 @@ class _CreateStudentViewState extends State<_CreateStudentView> {
 
   DateTime? _birthDate;
 
-
   @override
   void dispose() {
     _nameController.dispose();
@@ -285,22 +284,22 @@ class _CreateStudentViewState extends State<_CreateStudentView> {
                         width: double.infinity,
                         padding: const EdgeInsets.all(14),
                         decoration: BoxDecoration(
-                          color: const Color(0xFFFCEEEF),
+                          color: colorScheme.errorContainer,
                           borderRadius: BorderRadius.circular(11),
                         ),
                         child: Row(
                           children: [
-                            const Icon(
+                            Icon(
                               Icons.error_outline_rounded,
-                              color: Color(0xFFB54752),
+                              color: colorScheme.error,
                               size: 20,
                             ),
                             const SizedBox(width: 10),
                             Expanded(
                               child: Text(
                                 viewModel.errorMessage!,
-                                style: const TextStyle(
-                                  color: Color(0xFF9E3E48),
+                                style: TextStyle(
+                                  color: colorScheme.onErrorContainer,
                                   fontSize: 12,
                                 ),
                               ),
@@ -322,24 +321,13 @@ class _CreateStudentViewState extends State<_CreateStudentView> {
                         const SizedBox(width: 12),
                         FilledButton.icon(
                           onPressed: viewModel.isLoading ? null : _submit,
-                          style: FilledButton.styleFrom(
-                            backgroundColor: primaryColor,
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 20,
-                              vertical: 16,
-                            ),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(11),
-                            ),
-                          ),
                           icon: viewModel.isLoading
-                              ? const SizedBox(
+                              ? SizedBox(
                                   width: 17,
                                   height: 17,
                                   child: CircularProgressIndicator(
                                     strokeWidth: 2,
-                                    color: Colors.white,
+                                    color: colorScheme.onPrimary,
                                   ),
                                 )
                               : const Icon(Icons.person_add_alt_1_rounded),
@@ -369,11 +357,11 @@ class _CreateStudentViewState extends State<_CreateStudentView> {
   }
 
   InputDecoration _decoration(
-      BuildContext context, {
-        required String hintText,
-        required IconData icon,
-        Widget? suffixIcon,
-      }) {
+    BuildContext context, {
+    required String hintText,
+    required IconData icon,
+    Widget? suffixIcon,
+  }) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
 
@@ -383,21 +371,14 @@ class _CreateStudentViewState extends State<_CreateStudentView> {
       suffixIcon: suffixIcon,
       filled: true,
       fillColor: colorScheme.surfaceContainerHighest,
-      contentPadding: const EdgeInsets.symmetric(
-        horizontal: 15,
-        vertical: 16,
-      ),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 15, vertical: 16),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(11),
-        borderSide: BorderSide(
-          color: theme.dividerColor,
-        ),
+        borderSide: BorderSide(color: theme.dividerColor),
       ),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(11),
-        borderSide: BorderSide(
-          color: theme.dividerColor,
-        ),
+        borderSide: BorderSide(color: theme.dividerColor),
       ),
     );
   }
@@ -413,7 +394,6 @@ class _SectionTitle extends StatelessWidget {
   final IconData icon;
   final String title;
   final Color color;
-
 
   @override
   Widget build(BuildContext context) {
@@ -470,9 +450,9 @@ class _Field extends StatelessWidget {
             children: [
               TextSpan(text: label),
               if (requiredField)
-                const TextSpan(
+                TextSpan(
                   text: ' *',
-                  style: TextStyle(color: Color(0xFFB54752)),
+                  style: TextStyle(color: colorScheme.error),
                 ),
             ],
           ),

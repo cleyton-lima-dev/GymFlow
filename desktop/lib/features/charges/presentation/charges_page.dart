@@ -1,5 +1,7 @@
 import 'package:avelri_gestao/app/theme/branding_controller.dart';
+import 'package:avelri_gestao/app/theme/semantic_colors.dart';
 import 'package:avelri_gestao/core/network/api_client.dart';
+import 'package:avelri_gestao/core/widgets/app_filter_button.dart';
 import 'package:avelri_gestao/features/charges/data/charges_service.dart';
 import 'package:avelri_gestao/features/charges/presentation/charges_view_model.dart';
 import 'package:flutter/material.dart';
@@ -12,9 +14,9 @@ class ChargesPage extends StatelessWidget {
   const ChargesPage({this.overdueOnly = false, this.paidMonth, super.key});
 
   final bool overdueOnly;
+  final DateTime? paidMonth;
 
   @override
-  final DateTime? paidMonth;
   Widget build(BuildContext context) {
     return ChangeNotifierProvider(
       create: (context) => ChargesViewModel(
@@ -36,11 +38,9 @@ class _ChargesView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final viewModel =
-    context.watch<ChargesViewModel>();
+    final viewModel = context.watch<ChargesViewModel>();
 
-    final branding =
-        context.watch<BrandingController>().branding;
+    final branding = context.watch<BrandingController>().branding;
 
     final primaryColor = branding.primaryColor;
     final theme = Theme.of(context);
@@ -49,19 +49,15 @@ class _ChargesView extends StatelessWidget {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(30),
       child: ConstrainedBox(
-        constraints: const BoxConstraints(
-          maxWidth: 1250,
-        ),
+        constraints: const BoxConstraints(maxWidth: 1250),
         child: Column(
-          crossAxisAlignment:
-          CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
                 Expanded(
                   child: Column(
-                    crossAxisAlignment:
-                    CrossAxisAlignment.start,
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
                         'Cobranças',
@@ -84,13 +80,8 @@ class _ChargesView extends StatelessWidget {
                 ),
                 IconButton(
                   tooltip: 'Atualizar',
-                  onPressed: viewModel.isLoading
-                      ? null
-                      : viewModel.refresh,
-                  icon: Icon(
-                    Icons.refresh_rounded,
-                    color: primaryColor,
-                  ),
+                  onPressed: viewModel.isLoading ? null : viewModel.refresh,
+                  icon: Icon(Icons.refresh_rounded, color: primaryColor),
                 ),
               ],
             ),
@@ -100,64 +91,73 @@ class _ChargesView extends StatelessWidget {
               padding: const EdgeInsets.all(22),
               decoration: BoxDecoration(
                 color: colorScheme.surface,
-                borderRadius:
-                BorderRadius.circular(18),
-                border: Border.all(
-                  color: theme.dividerColor,
-                ),
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: theme.dividerColor),
               ),
               child: Column(
                 children: [
-                  Row(
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
                     children: [
-                      _ChargeFilterButton(
+                      AppFilterButton(
                         label: 'Todas',
                         selected:
-                        viewModel.statusFilter ==
-                            ChargesStatusFilter.all,
+                            viewModel.statusFilter == ChargesStatusFilter.all,
                         color: primaryColor,
-                        onTap: () {
-                          viewModel.updateStatusFilter(
-                            ChargesStatusFilter.all,
-                          );
+                        onPressed: () {
+                          viewModel.updateStatusFilter(ChargesStatusFilter.all);
                         },
                       ),
-                      const SizedBox(width: 8),
-                      _ChargeFilterButton(
+                      AppFilterButton(
                         label: 'Pendentes',
                         selected:
-                        viewModel.statusFilter ==
+                            viewModel.statusFilter ==
                             ChargesStatusFilter.pending,
                         color: primaryColor,
-                        onTap: () {
+                        onPressed: () {
                           viewModel.updateStatusFilter(
                             ChargesStatusFilter.pending,
                           );
                         },
                       ),
-                      const SizedBox(width: 8),
-                      _ChargeFilterButton(
+                      AppFilterButton(
                         label: 'Pagas',
                         selected:
-                        viewModel.statusFilter ==
-                            ChargesStatusFilter.paid,
+                            viewModel.statusFilter == ChargesStatusFilter.paid,
                         color: primaryColor,
-                        onTap: () {
+                        onPressed: () {
                           viewModel.updateStatusFilter(
                             ChargesStatusFilter.paid,
                           );
                         },
                       ),
-                      const SizedBox(width: 8),
-                      _ChargeFilterButton(
+                      AppFilterButton(
                         label: 'Em atraso',
                         selected:
-                        viewModel.statusFilter ==
+                            viewModel.statusFilter ==
                             ChargesStatusFilter.overdue,
                         color: primaryColor,
-                        onTap: () {
+                        onPressed: () {
                           viewModel.updateStatusFilter(
                             ChargesStatusFilter.overdue,
+                          );
+                        },
+                      ),
+                      AppFilterButton(
+                        label: 'Canceladas',
+                        selected:
+                            viewModel.statusFilter ==
+                            ChargesStatusFilter.cancelled,
+                        color: primaryColor,
+                        onPressed: () {
+                          viewModel.updateStatusFilter(
+                            ChargesStatusFilter.cancelled,
+                          );
+                        },
+                      ),
+                    ],
+                  ),
                   if (viewModel.paidMonth case final month?) ...[
                     const SizedBox(height: 12),
                     Align(
@@ -173,56 +173,25 @@ class _ChargesView extends StatelessWidget {
                       ),
                     ),
                   ],
-                          );
-                        },
-                      ),
-                      const SizedBox(width: 8),
-                      _ChargeFilterButton(
-                        label: 'Canceladas',
-                        selected:
-                        viewModel.statusFilter ==
-                            ChargesStatusFilter.cancelled,
-                        color: primaryColor,
-                        onTap: () {
-                          viewModel.updateStatusFilter(
-                            ChargesStatusFilter.cancelled,
-                          );
-                        },
-                      ),
-                    ],
-                  ),
                   const SizedBox(height: 20),
-                  if (viewModel.isLoading &&
-                      !viewModel.hasCharges)
+                  if (viewModel.isLoading && !viewModel.hasCharges)
                     const Padding(
-                      padding: EdgeInsets.symmetric(
-                        vertical: 70,
-                      ),
-                      child: Center(
-                        child: CircularProgressIndicator(),
-                      ),
+                      padding: EdgeInsets.symmetric(vertical: 70),
+                      child: Center(child: CircularProgressIndicator()),
                     )
                   else if (viewModel.errorMessage != null)
-                    Center(
-                      child: Text(
-                        viewModel.errorMessage!,
+                    Center(child: Text(viewModel.errorMessage!))
+                  else if (viewModel.filteredCharges.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 70),
+                      child: Center(
+                        child: Text(
+                          'Nenhuma cobrança encontrada para este filtro.',
+                        ),
                       ),
                     )
-                  else if (viewModel.filteredCharges.isEmpty)
-                      const Padding(
-                        padding: EdgeInsets.symmetric(
-                          vertical: 70,
-                        ),
-                        child: Center(
-                          child: Text(
-                            'Nenhuma cobrança encontrada para este filtro.',
-                          ),
-                        ),
-                      )
-                    else
-                      _ChargesTable(
-                        charges: viewModel.filteredCharges,
-                      ),
+                  else
+                    _ChargesTable(charges: viewModel.filteredCharges),
                 ],
               ),
             ),
@@ -232,21 +201,26 @@ class _ChargesView extends StatelessWidget {
     );
   }
 }
-class _ChargesTable extends StatelessWidget {
-  const _ChargesTable({
-    required this.charges,
-  });
+
+class _ChargesTable extends StatefulWidget {
+  const _ChargesTable({required this.charges});
 
   final List<ChargeSummary> charges;
 
+  @override
+  State<_ChargesTable> createState() => _ChargesTableState();
+}
+
+class _ChargesTableState extends State<_ChargesTable> {
+  static const _compactBreakpoint = 760.0;
+
   Future<void> _confirmPayment(
-      BuildContext context,
-      ChargeSummary charge,
-      ) async {
+    BuildContext context,
+    ChargeSummary charge,
+  ) async {
     final formKey = GlobalKey<FormState>();
 
-    String paidAmountText =
-    charge.amount.toStringAsFixed(2);
+    String paidAmountText = charge.amount.toStringAsFixed(2);
 
     String discountText = '0.00';
 
@@ -261,9 +235,7 @@ class _ChargesTable extends StatelessWidget {
         return StatefulBuilder(
           builder: (context, setDialogState) {
             return AlertDialog(
-              title: const Text(
-                'Confirmar pagamento',
-              ),
+              title: const Text('Confirmar pagamento'),
               content: SizedBox(
                 width: 430,
                 child: Form(
@@ -273,8 +245,7 @@ class _ChargesTable extends StatelessWidget {
                     children: [
                       TextFormField(
                         initialValue: paidAmountText,
-                        keyboardType:
-                        const TextInputType.numberWithOptions(
+                        keyboardType: const TextInputType.numberWithOptions(
                           decimal: true,
                         ),
                         decoration: const InputDecoration(
@@ -283,12 +254,10 @@ class _ChargesTable extends StatelessWidget {
                         ),
                         validator: (value) {
                           final amount = double.tryParse(
-                            (value ?? '')
-                                .replaceAll(',', '.'),
+                            (value ?? '').replaceAll(',', '.'),
                           );
 
-                          if (amount == null ||
-                              amount <= 0) {
+                          if (amount == null || amount <= 0) {
                             return 'Informe um valor válido.';
                           }
 
@@ -301,8 +270,7 @@ class _ChargesTable extends StatelessWidget {
                       const SizedBox(height: 18),
                       TextFormField(
                         initialValue: discountText,
-                        keyboardType:
-                        const TextInputType.numberWithOptions(
+                        keyboardType: const TextInputType.numberWithOptions(
                           decimal: true,
                         ),
                         decoration: const InputDecoration(
@@ -311,12 +279,10 @@ class _ChargesTable extends StatelessWidget {
                         ),
                         validator: (value) {
                           final discount = double.tryParse(
-                            (value ?? '')
-                                .replaceAll(',', '.'),
+                            (value ?? '').replaceAll(',', '.'),
                           );
 
-                          if (discount == null ||
-                              discount < 0) {
+                          if (discount == null || discount < 0) {
                             return 'Informe um desconto válido.';
                           }
 
@@ -334,14 +300,11 @@ class _ChargesTable extends StatelessWidget {
                         ),
                         items: PaymentMethod.values
                             .map(
-                              (method) =>
-                              DropdownMenuItem(
+                              (method) => DropdownMenuItem(
                                 value: method,
-                                child: Text(
-                                  method.label,
-                                ),
+                                child: Text(method.label),
                               ),
-                        )
+                            )
                             .toList(),
                         validator: (value) {
                           if (value == null) {
@@ -359,8 +322,7 @@ class _ChargesTable extends StatelessWidget {
                       const SizedBox(height: 18),
                       InkWell(
                         onTap: () async {
-                          final selectedDate =
-                          await showDatePicker(
+                          final selectedDate = await showDatePicker(
                             context: dialogContext,
                             initialDate: paidAt,
                             firstDate: DateTime(2020),
@@ -383,18 +345,11 @@ class _ChargesTable extends StatelessWidget {
                           });
                         },
                         child: InputDecorator(
-                          decoration:
-                          const InputDecoration(
-                            labelText:
-                            'Data do pagamento',
-                            prefixIcon: Icon(
-                              Icons
-                                  .calendar_today_outlined,
-                            ),
+                          decoration: const InputDecoration(
+                            labelText: 'Data do pagamento',
+                            prefixIcon: Icon(Icons.calendar_today_outlined),
                           ),
-                          child: Text(
-                            dateFormat.format(paidAt),
-                          ),
+                          child: Text(dateFormat.format(paidAt)),
                         ),
                       ),
                     ],
@@ -403,39 +358,25 @@ class _ChargesTable extends StatelessWidget {
               ),
               actions: [
                 TextButton(
-                  onPressed: () =>
-                      Navigator.of(dialogContext)
-                          .pop(),
+                  onPressed: () => Navigator.of(dialogContext).pop(),
                   child: const Text('Voltar'),
                 ),
                 FilledButton(
                   onPressed: () {
-                    if (!(formKey.currentState
-                        ?.validate() ??
-                        false)) {
+                    if (!(formKey.currentState?.validate() ?? false)) {
                       return;
                     }
 
-                    final paidAmount =
-                    double.parse(
-                      paidAmountText
-                          .replaceAll(',', '.'),
+                    final paidAmount = double.parse(
+                      paidAmountText.replaceAll(',', '.'),
                     );
 
-                    final discount =
-                    double.parse(
-                      discountText
-                          .replaceAll(',', '.'),
+                    final discount = double.parse(
+                      discountText.replaceAll(',', '.'),
                     );
 
-                    if ((paidAmount +
-                        discount -
-                        charge.amount)
-                        .abs() >
-                        0.009) {
-                      ScaffoldMessenger.of(
-                        dialogContext,
-                      ).showSnackBar(
+                    if ((paidAmount + discount - charge.amount).abs() > 0.009) {
+                      ScaffoldMessenger.of(dialogContext).showSnackBar(
                         const SnackBar(
                           content: Text(
                             'O valor pago mais o desconto deve ser igual ao valor da cobrança.',
@@ -450,15 +391,12 @@ class _ChargesTable extends StatelessWidget {
                       PaymentDetails(
                         paidAmount: paidAmount,
                         discountAmount: discount,
-                        paymentMethod:
-                        selectedMethod!,
+                        paymentMethod: selectedMethod!,
                         paidAt: paidAt,
                       ),
                     );
                   },
-                  child: const Text(
-                    'Confirmar pagamento',
-                  ),
+                  child: const Text('Confirmar pagamento'),
                 ),
               ],
             );
@@ -471,56 +409,37 @@ class _ChargesTable extends StatelessWidget {
       return;
     }
 
-    await context
-        .read<ChargesViewModel>()
-        .confirmPayment(
-      charge,
-      payment,
-    );
+    await context.read<ChargesViewModel>().confirmPayment(charge, payment);
   }
 
-  Future<void> _showDetails(
-      BuildContext context,
-      ChargeSummary charge,
-      ) async {
-    final currency = NumberFormat.currency(
-      locale: 'pt_BR',
-      symbol: 'R\$',
-    );
+  Future<void> _showDetails(BuildContext context, ChargeSummary charge) async {
+    final currency = NumberFormat.currency(locale: 'pt_BR', symbol: 'R\$');
 
     final dateFormat = DateFormat('dd/MM/yyyy');
-    final dateTimeFormat =
-    DateFormat('dd/MM/yyyy HH:mm');
+    final dateTimeFormat = DateFormat('dd/MM/yyyy HH:mm');
 
     await showDialog<void>(
       context: context,
       builder: (dialogContext) {
         return AlertDialog(
-          title: const Text(
-            'Detalhes da cobrança',
-          ),
+          title: const Text('Detalhes da cobrança'),
           content: SizedBox(
             width: 430,
             child: Column(
               mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment:
-              CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text('Aluno: ${charge.studentName}'),
                 const SizedBox(height: 10),
                 Text('Plano: ${charge.planName}'),
                 const SizedBox(height: 10),
-                Text(
-                  'Valor: ${currency.format(charge.amount)}',
-                ),
+                Text('Valor: ${currency.format(charge.amount)}'),
                 const SizedBox(height: 10),
                 Text(
                   'Valor pago: ${charge.paidAmount == null ? 'Não registrado' : currency.format(charge.paidAmount)}',
                 ),
                 const SizedBox(height: 10),
-                Text(
-                  'Desconto: ${currency.format(charge.discountAmount)}',
-                ),
+                Text('Desconto: ${currency.format(charge.discountAmount)}'),
                 const SizedBox(height: 10),
                 Text(
                   'Forma de pagamento: ${charge.paymentMethod?.label ?? 'Não registrada'}',
@@ -528,31 +447,28 @@ class _ChargesTable extends StatelessWidget {
                 const SizedBox(height: 10),
                 Text(
                   'Vencimento: '
-                      '${dateFormat.format(charge.dueDate)}',
+                  '${dateFormat.format(charge.dueDate)}',
                 ),
                 const SizedBox(height: 10),
-                Text(
-                  'Status: ${_statusLabel(charge.status)}',
-                ),
+                Text('Status: ${_statusLabel(charge.status)}'),
                 const SizedBox(height: 10),
                 Text(
                   charge.paidAt == null
                       ? 'Pagamento: Não confirmado'
                       : 'Pago em: '
-                      '${dateTimeFormat.format(charge.paidAt!.toLocal())}',
+                            '${dateTimeFormat.format(charge.paidAt!.toLocal())}',
                 ),
                 const SizedBox(height: 10),
                 Text(
                   'Cobrança criada em: '
-                      '${dateTimeFormat.format(charge.createdAt.toLocal())}',
+                  '${dateTimeFormat.format(charge.createdAt.toLocal())}',
                 ),
               ],
             ),
           ),
           actions: [
             TextButton(
-              onPressed: () =>
-                  Navigator.of(dialogContext).pop(),
+              onPressed: () => Navigator.of(dialogContext).pop(),
               child: const Text('Fechar'),
             ),
           ],
@@ -563,105 +479,206 @@ class _ChargesTable extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final currency = NumberFormat.currency(
-      locale: 'pt_BR',
-      symbol: 'R\$',
-    );
-
+    final currency = NumberFormat.currency(locale: 'pt_BR', symbol: 'R\$');
     final dateFormat = DateFormat('dd/MM/yyyy');
 
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: DataTable(
-        columns: const [
-          DataColumn(label: Text('Aluno')),
-          DataColumn(label: Text('Plano')),
-          DataColumn(label: Text('Valor')),
-          DataColumn(label: Text('Vencimento')),
-          DataColumn(label: Text('Status')),
-          DataColumn(label: Text('Ações')),
-        ],
-        rows: charges.map((charge) {
-          return DataRow(
-            cells: [
-              DataCell(
-                Text(charge.studentName),
-              ),
-              DataCell(
-                Text(charge.planName),
-              ),
-              DataCell(
-                Text(
-                  currency.format(charge.amount),
-                ),
-              ),
-              DataCell(
-                Text(
-                  dateFormat.format(charge.dueDate),
-                ),
-              ),
-              DataCell(
-                Text(
-                  _statusLabel(charge.status),
-                ),
-              ),
-              DataCell(
-                PopupMenuButton<String>(
-                  tooltip: 'Ações',
-                  icon: const Icon(
-                    Icons.more_vert_rounded,
-                  ),
-                  onSelected: (action) async {
-                    if (action == 'details') {
-                      await _showDetails(
-                        context,
-                        charge,
-                      );
-                      return;
-                    }
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth < _compactBreakpoint) {
+          return Column(
+            key: const ValueKey('charges-compact-list'),
+            children: [
+              for (final charge in widget.charges)
+                _buildCompactCharge(context, charge, currency, dateFormat),
+            ],
+          );
+        }
 
-                    if (action == 'confirm') {
-                      await _confirmPayment(
-                        context,
-                        charge,
-                      );
-                    }
-                  },
-                  itemBuilder: (context) => [
-                    const PopupMenuItem(
-                      value: 'details',
-                      child: ListTile(
-                        leading: Icon(
-                          Icons.visibility_outlined,
-                        ),
-                        title: Text(
-                          'Ver detalhes',
-                        ),
-                        contentPadding: EdgeInsets.zero,
-                      ),
-                    ),
-                    if (charge.status ==
-                        ChargeStatus.pending ||
-                        charge.status ==
-                            ChargeStatus.overdue)
-                      const PopupMenuItem(
-                        value: 'confirm',
-                        child: ListTile(
-                          leading: Icon(
-                            Icons.check_circle_outline,
-                          ),
-                          title: Text(
-                            'Confirmar pagamento',
-                          ),
-                          contentPadding: EdgeInsets.zero,
-                        ),
-                      ),
+        return Column(
+          key: const ValueKey('charges-responsive-table'),
+          children: [
+            _buildTableRow(
+              context,
+              isHeader: true,
+              student: const Text('Aluno'),
+              plan: const Text('Plano'),
+              amount: const Text('Valor'),
+              dueDate: const Text('Vencimento'),
+              status: const Text('Status'),
+              actions: const Text('Ações'),
+            ),
+            const Divider(height: 1),
+            for (final charge in widget.charges)
+              _buildTableRow(
+                context,
+                student: _ellipsized(charge.studentName),
+                plan: _ellipsized(charge.planName),
+                amount: Text(currency.format(charge.amount)),
+                dueDate: Text(dateFormat.format(charge.dueDate)),
+                status: _ChargeStatusBadge(
+                  label: _statusLabel(charge.status),
+                  status: charge.status,
+                ),
+                actions: _buildActions(context, charge),
+              ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildTableRow(
+    BuildContext context, {
+    required Widget student,
+    required Widget plan,
+    required Widget amount,
+    required Widget dueDate,
+    required Widget status,
+    required Widget actions,
+    bool isHeader = false,
+  }) {
+    final colors = Theme.of(context).colorScheme;
+    final style = isHeader
+        ? TextStyle(
+            color: colors.onSurfaceVariant,
+            fontSize: 11,
+            fontWeight: FontWeight.w800,
+          )
+        : TextStyle(color: colors.onSurface, fontSize: 12);
+
+    return Container(
+      key: isHeader ? const ValueKey('charges-table-header') : null,
+      constraints: BoxConstraints(minHeight: isHeader ? 42 : 62),
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      decoration: BoxDecoration(
+        color: isHeader ? colors.surfaceContainerHighest : null,
+        border: isHeader
+            ? null
+            : Border(bottom: BorderSide(color: Theme.of(context).dividerColor)),
+      ),
+      child: Row(
+        children: [
+          _chargeCell(flex: 19, child: student, style: style),
+          _chargeCell(flex: 16, child: plan, style: style),
+          _chargeCell(flex: 8, child: amount, style: style),
+          _chargeCell(flex: 10, child: dueDate, style: style),
+          _chargeCell(flex: 10, child: status, style: style),
+          Expanded(flex: 5, child: Center(child: actions)),
+        ],
+      ),
+    );
+  }
+
+  Widget _chargeCell({
+    required int flex,
+    required Widget child,
+    required TextStyle style,
+  }) => Expanded(
+    flex: flex,
+    child: Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+      child: DefaultTextStyle.merge(
+        style: style,
+        maxLines: 2,
+        overflow: TextOverflow.ellipsis,
+        child: child,
+      ),
+    ),
+  );
+
+  Widget _ellipsized(String value) => Tooltip(
+    message: value,
+    child: Text(value, maxLines: 2, overflow: TextOverflow.ellipsis),
+  );
+
+  Widget _buildActions(BuildContext context, ChargeSummary charge) =>
+      PopupMenuButton<String>(
+        key: ValueKey('charge-actions-${charge.id}'),
+        tooltip: 'Ações',
+        padding: EdgeInsets.zero,
+        constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+        icon: const Icon(Icons.more_vert_rounded, size: 20),
+        onSelected: (action) async {
+          if (action == 'details') {
+            await _showDetails(context, charge);
+            return;
+          }
+          if (action == 'confirm') {
+            await _confirmPayment(context, charge);
+          }
+        },
+        itemBuilder: (context) => [
+          const PopupMenuItem(
+            value: 'details',
+            child: ListTile(
+              leading: Icon(Icons.visibility_outlined),
+              title: Text('Ver detalhes'),
+              contentPadding: EdgeInsets.zero,
+            ),
+          ),
+          if (charge.status == ChargeStatus.pending ||
+              charge.status == ChargeStatus.overdue)
+            const PopupMenuItem(
+              value: 'confirm',
+              child: ListTile(
+                leading: Icon(Icons.check_circle_outline),
+                title: Text('Confirmar pagamento'),
+                contentPadding: EdgeInsets.zero,
+              ),
+            ),
+        ],
+      );
+
+  Widget _buildCompactCharge(
+    BuildContext context,
+    ChargeSummary charge,
+    NumberFormat currency,
+    DateFormat dateFormat,
+  ) {
+    final colors = Theme.of(context).colorScheme;
+    return Container(
+      key: ValueKey('charge-card-${charge.id}'),
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: colors.surface,
+        border: Border.all(color: Theme.of(context).dividerColor),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _ellipsized(charge.studentName),
+                    const SizedBox(height: 3),
+                    _ellipsized(charge.planName),
                   ],
                 ),
               ),
+              _buildActions(context, charge),
             ],
-          );
-        }).toList(),
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 14,
+            runSpacing: 6,
+            children: [
+              Text('Valor: ${currency.format(charge.amount)}'),
+              Text('Vencimento: ${dateFormat.format(charge.dueDate)}'),
+              _ChargeStatusBadge(
+                label: _statusLabel(charge.status),
+                status: charge.status,
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -675,38 +692,38 @@ class _ChargesTable extends StatelessWidget {
     };
   }
 }
-class _ChargeFilterButton extends StatelessWidget {
-  const _ChargeFilterButton({
-    required this.label,
-    required this.selected,
-    required this.color,
-    required this.onTap,
-  });
+
+class _ChargeStatusBadge extends StatelessWidget {
+  const _ChargeStatusBadge({required this.label, required this.status});
 
   final String label;
-  final bool selected;
-  final Color color;
-  final VoidCallback onTap;
+  final ChargeStatus status;
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-
-    return OutlinedButton(
-      onPressed: onTap,
-      style: OutlinedButton.styleFrom(
-        foregroundColor: selected
-            ? colorScheme.onPrimary
-            : colorScheme.onSurfaceVariant,
-        backgroundColor:
-        selected ? color : colorScheme.surface,
-        side: BorderSide(
-          color:
-          selected ? color : theme.dividerColor,
+    final color = switch (status) {
+      ChargeStatus.paid => AvelriSemanticColors.success,
+      ChargeStatus.pending => AvelriSemanticColors.warning,
+      ChargeStatus.overdue => AvelriSemanticColors.error,
+      ChargeStatus.cancelled => Theme.of(context).colorScheme.onSurfaceVariant,
+    };
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Text(
+        label,
+        maxLines: 2,
+        overflow: TextOverflow.ellipsis,
+        textAlign: TextAlign.center,
+        style: TextStyle(
+          color: Theme.of(context).colorScheme.onSurface,
+          fontSize: 11,
+          fontWeight: FontWeight.w700,
         ),
       ),
-      child: Text(label),
     );
   }
 }
