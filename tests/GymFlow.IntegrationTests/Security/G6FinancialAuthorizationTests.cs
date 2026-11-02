@@ -149,13 +149,17 @@ public partial class TenantEnrollmentAccessTests
                 Assert.Equal(100m, c.PaidAmount);
                 Assert.Equal(PaymentMethod.Pix, c.PaymentMethod);
             });
-            Assert.Equal(2, db.FinancialAuditLogs.Count());
-            Assert.All(db.FinancialAuditLogs, audit =>
+            var financialAudits = db.FinancialAuditLogs.ToList();
+            Assert.Equal(3, financialAudits.Count);
+            Assert.Equal(2, financialAudits.Count(audit => audit.Action == FinancialAuditAction.PaymentConfirmed));
+            Assert.All(financialAudits, audit =>
             {
                 Assert.Equal(factory.EnabledGym, audit.GymId);
                 Assert.Equal(admin.Id, audit.ActorUserId);
-                Assert.Equal(FinancialAuditAction.PaymentConfirmed, audit.Action);
             });
+            var cancellationAudit = Assert.Single(financialAudits, audit => audit.Action == FinancialAuditAction.Cancel);
+            Assert.Equal(nameof(Enrollment), cancellationAudit.EntityType);
+            Assert.Equal(renewedEnrollmentId, cancellationAudit.EntityId);
         });
     }
 

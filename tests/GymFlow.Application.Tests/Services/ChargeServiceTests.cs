@@ -79,6 +79,11 @@ public class ChargeServiceTests
             Status = EnrollmentStatus.PendingPayment,
             Student = student
         };
+        var previousEnrollmentToken = DateTime.UtcNow.AddYears(1).AddTicks(7);
+        var expectedEnrollmentToken = new DateTime(
+            previousEnrollmentToken.Ticks - previousEnrollmentToken.Ticks % 10 + 10,
+            DateTimeKind.Utc);
+        enrollment.UpdatedAt = previousEnrollmentToken;
 
         var charge = new Charge
         {
@@ -128,6 +133,7 @@ public class ChargeServiceTests
         Assert.Equal(
             EnrollmentStatus.Active,
             enrollment.Status);
+        Assert.Equal(expectedEnrollmentToken, enrollment.UpdatedAt);
 
         Assert.False(student.User.IsActive); // Payment cannot enable the app account.
         Assert.Null(student.NoValidEnrollmentSince);

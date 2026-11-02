@@ -280,6 +280,11 @@ public class EnrollmentServiceTests
             EndDate = new DateOnly(2099, 10, 1),
             Status = EnrollmentStatus.Active
         };
+        var previousToken = DateTime.UtcNow.AddYears(1).AddTicks(7);
+        var expectedToken = new DateTime(
+            previousToken.Ticks - previousToken.Ticks % 10 + 10,
+            DateTimeKind.Utc);
+        enrollment.UpdatedAt = previousToken;
 
         var paidAt = DateTime.UtcNow.AddDays(-5);
 
@@ -318,6 +323,7 @@ public class EnrollmentServiceTests
 
         Assert.NotNull(enrollment.CancellationDate);
         Assert.NotNull(enrollment.UpdatedAt);
+        Assert.Equal(expectedToken, enrollment.UpdatedAt);
         Assert.Equal(
              ChargeStatus.Paid,
              enrollment.Charge.Status);
@@ -331,9 +337,22 @@ public class EnrollmentServiceTests
             .UpdateAsync(enrollment);
 
         await _financialAuditRepository
-    .DidNotReceive()
-    .StageAsync(
-        Arg.Any<FinancialAuditLog>());
+            .Received(1)
+            .StageAsync(Arg.Is<FinancialAuditLog>(audit =>
+                audit.GymId == gymId &&
+                audit.ActorUserId == actorUserId &&
+                audit.EntityType == nameof(Enrollment) &&
+                audit.EntityId == enrollmentId &&
+                audit.Action == FinancialAuditAction.Cancel &&
+                audit.PreviousValues.Contains("Active") &&
+                audit.NewValues.Contains("Cancelled")));
+
+        // A retry after the successful cancellation is rejected and does not add
+        // a duplicate audit event.
+        Assert.False(await _service.CancelAsync(gymId, actorUserId, enrollmentId));
+        await _financialAuditRepository
+            .Received(1)
+            .StageAsync(Arg.Any<FinancialAuditLog>());
     }
 
     [Fact]
@@ -401,6 +420,15 @@ public class EnrollmentServiceTests
                 FinancialAuditAction.ChargeCancelled &&
             audit.PreviousValues.Contains("Pending") &&
             audit.NewValues.Contains("Cancelled")));
+
+        await _financialAuditRepository
+            .Received(1)
+            .StageAsync(Arg.Is<FinancialAuditLog>(audit =>
+                audit.GymId == gymId &&
+                audit.ActorUserId == actorUserId &&
+                audit.EntityType == nameof(Enrollment) &&
+                audit.EntityId == enrollmentId &&
+                audit.Action == FinancialAuditAction.Cancel));
 
         Assert.NotNull(enrollment.Charge.UpdatedAt);
         Assert.NotNull(enrollment.CancellationDate);

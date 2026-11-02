@@ -19,4 +19,8 @@
     <ProjectReference Include="..\GymFlow.Domain\GymFlow.Domain.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="GymFlow.Application.Tests" />
+  </ItemGroup>
+
 </Project>

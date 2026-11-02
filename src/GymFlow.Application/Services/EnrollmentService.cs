@@ -242,29 +242,45 @@ public class EnrollmentService
 
         var now = DateTime.UtcNow;
 
+        var previousEnrollmentValues = JsonSerializer.Serialize(new
+        {
+            Status = enrollment.Status.ToString(),
+            enrollment.CancellationDate
+        });
+
+        var newEnrollmentValues = JsonSerializer.Serialize(new
+        {
+            Status = EnrollmentStatus.Cancelled.ToString(),
+            CancellationDate = today
+        });
+
+        var enrollmentAuditLog = new FinancialAuditLog
+        {
+            Id = Guid.NewGuid(),
+            GymId = gymId,
+            ActorUserId = actorUserId,
+            EntityType = nameof(Enrollment),
+            EntityId = enrollment.Id,
+            Action = FinancialAuditAction.Cancel,
+            PreviousValues = previousEnrollmentValues,
+            NewValues = newEnrollmentValues,
+            OccurredAt = now
+        };
+
+        FinancialAuditLog? chargeAuditLog = null;
         if (effectiveStatus == EnrollmentStatus.PendingPayment &&
             enrollment.Charge is not null &&
             (enrollment.Charge.Status == ChargeStatus.Pending ||
              enrollment.Charge.Status == ChargeStatus.Overdue))
         {
-            var previousValues = JsonSerializer.Serialize(new
+            var previousChargeValues = JsonSerializer.Serialize(new
             {
                 Status = enrollment.Charge.Status.ToString(),
                 enrollment.Charge.Amount,
                 enrollment.Charge.PaidAt
             });
 
-            enrollment.Charge.Status = ChargeStatus.Cancelled;
-            enrollment.Charge.UpdatedAt = now;
-
-            var newValues = JsonSerializer.Serialize(new
-            {
-                Status = enrollment.Charge.Status.ToString(),
-                enrollment.Charge.Amount,
-                enrollment.Charge.PaidAt
-            });
-
-            var auditLog = new FinancialAuditLog
+            chargeAuditLog = new FinancialAuditLog
             {
                 Id = Guid.NewGuid(),
                 GymId = gymId,
@@ -272,19 +288,35 @@ public class EnrollmentService
                 EntityType = "Charge",
                 EntityId = enrollment.Charge.Id,
                 Action = FinancialAuditAction.ChargeCancelled,
-                PreviousValues = previousValues,
-                NewValues = newValues,
+                PreviousValues = previousChargeValues,
+                NewValues = JsonSerializer.Serialize(new
+                {
+                    Status = ChargeStatus.Cancelled.ToString(),
+                    enrollment.Charge.Amount,
+                    enrollment.Charge.PaidAt
+                }),
                 OccurredAt = now
             };
-
-            await _financialAuditRepository.StageAsync(auditLog);
         }
 
         enrollment.Status = EnrollmentStatus.Cancelled;
         enrollment.CancellationDate = today;
-        enrollment.UpdatedAt = now;
+        enrollment.UpdatedAt = PostgresConcurrencyTimestamp.Next(
+            now,
+            enrollment.UpdatedAt);
 
-        await _enrollmentRepository.UpdateAsync(enrollment);
+        await _transaction.ExecuteAsync(async () =>
+        {
+            if (chargeAuditLog is not null)
+            {
+                enrollment.Charge!.Status = ChargeStatus.Cancelled;
+                enrollment.Charge.UpdatedAt = now;
+                await _financialAuditRepository.StageAsync(chargeAuditLog);
+            }
+
+            await _financialAuditRepository.StageAsync(enrollmentAuditLog);
+            await _enrollmentRepository.UpdateAsync(enrollment);
+        });
 
         return true;
     }

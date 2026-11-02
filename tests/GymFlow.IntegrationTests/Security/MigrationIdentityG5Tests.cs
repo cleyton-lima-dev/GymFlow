@@ -655,8 +655,24 @@ public partial class TenantEnrollmentAccessTests
                 Assert.Equal(PaymentMethod.Pix, charge.PaymentMethod);
                 Assert.NotNull(charge.PaidAt);
             }
-            var audit = Assert.Single(db.FinancialAuditLogs);
-            Assert.Equal(cancelled ? FinancialAuditAction.ChargeCancelled : FinancialAuditAction.PaymentConfirmed, audit.Action);
+            var audits = db.FinancialAuditLogs.ToList();
+            if (cancelled)
+            {
+                Assert.Equal(2, audits.Count);
+                var enrollmentAudit = Assert.Single(audits, audit => audit.Action == FinancialAuditAction.Cancel);
+                Assert.Equal(factory.EnabledGym, enrollmentAudit.GymId);
+                Assert.Equal(admin.Id, enrollmentAudit.ActorUserId);
+                Assert.Equal(nameof(Enrollment), enrollmentAudit.EntityType);
+                Assert.Equal(target.EnrollmentId, enrollmentAudit.EntityId);
+
+                var chargeAudit = Assert.Single(audits, audit => audit.Action == FinancialAuditAction.ChargeCancelled);
+                Assert.Equal(chargeId, chargeAudit.EntityId);
+            }
+            else
+            {
+                var audit = Assert.Single(audits);
+                Assert.Equal(FinancialAuditAction.PaymentConfirmed, audit.Action);
+            }
             Assert.Empty(db.MigrationExternalReferences.Where(reference => reference.MigrationSessionId == session));
             Assert.Equal(4, db.MigrationExternalReferences.Count(reference => reference.SourceNamespace == source));
             Assert.Single(db.Students.Where(student => student.GymId == factory.EnabledGym));

@@ -115,7 +115,9 @@ public class ChargeService
         charge.UpdatedAt = now;
 
         charge.Enrollment.Status = EnrollmentStatus.Active;
-        charge.Enrollment.UpdatedAt = now;
+        charge.Enrollment.UpdatedAt = PostgresConcurrencyTimestamp.Next(
+            now,
+            charge.Enrollment.UpdatedAt);
 
         var timeZone = _gymTimeZoneProvider.GetTimeZone(gymId);
 

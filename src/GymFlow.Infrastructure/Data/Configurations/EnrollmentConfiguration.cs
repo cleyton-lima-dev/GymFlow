@@ -44,6 +44,11 @@ public class EnrollmentConfiguration : IEntityTypeConfiguration<Enrollment>
         builder.Property(enrollment => enrollment.CreatedAt)
             .IsRequired();
 
+        // Concurrent cancellation attempts must not both commit an audit event.
+        // UpdatedAt already exists in the schema, so this does not require a migration.
+        builder.Property(enrollment => enrollment.UpdatedAt)
+            .IsConcurrencyToken();
+
         builder.HasOne(enrollment => enrollment.Student)
             .WithMany()
             .HasForeignKey(enrollment => enrollment.StudentId)
