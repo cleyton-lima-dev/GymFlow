@@ -48,7 +48,7 @@ public sealed class StudentImportService(
         if (existing?.State == (int)BatchState.Completed)
             return CompletedPreview(existing);
         if (existing is not null && existing.ExpiresAt <= timeProvider.GetUtcNow().UtcDateTime)
-            throw new InvalidOperationException("Esta prévia expirou. Selecione o arquivo novamente.");
+            throw new StudentImportStateConflictException("Esta prévia expirou. Selecione o arquivo novamente.");
 
         var previewRows = await BuildPreviewAsync(gymId, records, cancellationToken);
         var now = timeProvider.GetUtcNow().UtcDateTime;
@@ -80,7 +80,7 @@ public sealed class StudentImportService(
             if (raced is null) throw;
             if (raced.State == (int)BatchState.Completed) return CompletedPreview(raced);
             if (raced.ExpiresAt <= timeProvider.GetUtcNow().UtcDateTime)
-                throw new InvalidOperationException("Esta prévia expirou. Selecione o arquivo novamente.");
+                throw new StudentImportStateConflictException("Esta prévia expirou. Selecione o arquivo novamente.");
             return await PreviewAsync(gymId, request, cancellationToken);
         }
 
@@ -117,7 +117,7 @@ public sealed class StudentImportService(
                 await transaction.CommitAsync(cancellationToken);
                 return CompletedResult(latest);
             }
-            throw new InvalidOperationException("Esta prévia expirou ou já está em processamento. Gere uma nova prévia.");
+            throw new StudentImportStateConflictException("Esta prévia expirou ou já está em processamento. Gere uma nova prévia.");
         }
 
         var batch = await db.StudentImportBatches.SingleOrDefaultAsync(
@@ -130,15 +130,15 @@ public sealed class StudentImportService(
             return CompletedResult(batch);
         }
         if (batch.State != (int)BatchState.Processing || batch.ExpiresAt <= timeProvider.GetUtcNow().UtcDateTime)
-            throw new InvalidOperationException("Esta prévia expirou ou já está em processamento. Gere uma nova prévia.");
+            throw new StudentImportStateConflictException("Esta prévia expirou ou já está em processamento. Gere uma nova prévia.");
 
         var records = JsonSerializer.Deserialize<List<NormalizedInputRow>>(batch.PayloadJson ?? "[]", JsonOptions) ?? [];
         var savedPreview = JsonSerializer.Deserialize<List<StudentImportPreviewRow>>(batch.PreviewJson ?? "[]", JsonOptions) ?? [];
         if (records.Count == 0 || savedPreview.Count != records.Count)
-            throw new InvalidOperationException("A prévia não está mais disponível. Selecione o arquivo novamente.");
+            throw new StudentImportStateConflictException("A prévia não está mais disponível. Selecione o arquivo novamente.");
 
         var currentPreview = await BuildPreviewAsync(gymId, records, cancellationToken);
-        if (!SameCandidates(savedPreview, currentPreview))
+        if (!SameReviewSnapshot(savedPreview, currentPreview))
             throw new StudentImportReviewChangedException(currentPreview);
 
         var decisions = ValidateDecisions(request.Decisions, currentPreview);
@@ -339,7 +339,7 @@ public sealed class StudentImportService(
         return byRow;
     }
 
-    private static bool SameCandidates(
+    private static bool SameReviewSnapshot(
         IReadOnlyList<StudentImportPreviewRow> first,
         IReadOnlyList<StudentImportPreviewRow> second)
     {
@@ -348,17 +348,13 @@ public sealed class StudentImportService(
         foreach (var row in first)
         {
             if (!secondByRow.TryGetValue(row.RowNumber, out var other)) return false;
-            var left = CandidateKeys(row);
-            var right = CandidateKeys(other);
-            if (!left.SequenceEqual(right, StringComparer.Ordinal)) return false;
+            if (row.IsValid != other.IsValid ||
+                !row.Errors.SequenceEqual(other.Errors, StringComparer.Ordinal) ||
+                !row.Candidates.SequenceEqual(other.Candidates))
+                return false;
         }
         return true;
     }
-
-    private static IEnumerable<string> CandidateKeys(StudentImportPreviewRow row) =>
-        row.Candidates.Select(candidate =>
-            $"{candidate.StudentId}:{candidate.SourceRowNumber}:{candidate.MatchBy}")
-            .OrderBy(value => value, StringComparer.Ordinal);
 
     private static StudentImportPreviewResponse CompletedPreview(StudentImportBatch batch)
     {
@@ -414,7 +410,10 @@ public sealed class StudentImportService(
 }
 
 public sealed class StudentImportReviewChangedException(
-    IReadOnlyList<StudentImportPreviewRow> rows) : Exception("A lista de possíveis duplicidades foi alterada.")
+    IReadOnlyList<StudentImportPreviewRow> rows) : Exception(
+        "Os dados exibidos dos possíveis duplicados mudaram. Gere uma nova prévia antes de continuar.")
 {
     public IReadOnlyList<StudentImportPreviewRow> Rows { get; } = rows;
 }
+
+public sealed class StudentImportStateConflictException(string message) : InvalidOperationException(message);

@@ -112,8 +112,27 @@ class ApiClient {
     Map<String, String>? headers,
     required Map<String, dynamic> body,
     bool authenticated = true,
+    int? maxBodyBytes,
   }) async {
     final revision = _sessionRevision;
+    final Object encodedBody;
+    if (maxBodyBytes == null) {
+      encodedBody = jsonEncode(body);
+    } else {
+      final boundedBody = _BoundedJsonBody(maxBodyBytes);
+      try {
+        final encoder = JsonUtf8Encoder().startChunkedConversion(boundedBody);
+        encoder
+          ..add(body)
+          ..close();
+      } on _JsonBodyLimitExceeded {
+        throw const ApiException(
+          statusCode: 413,
+          message: 'The serialized request exceeds the configured size limit.',
+        );
+      }
+      encodedBody = boundedBody.takeBytes();
+    }
     final response = await _client
         .post(
           buildUri(path),
@@ -121,7 +140,7 @@ class ApiClient {
             headers: headers,
             authenticated: authenticated,
           ),
-          body: jsonEncode(body),
+          body: encodedBody,
         )
         .timeout(requestTimeout);
 
@@ -264,4 +283,30 @@ class ApiClient {
       path: path,
     )).bodyBytes;
   }
+}
+
+class _JsonBodyLimitExceeded implements Exception {
+  const _JsonBodyLimitExceeded();
+}
+
+class _BoundedJsonBody implements Sink<List<int>> {
+  _BoundedJsonBody(this.maxBytes);
+
+  final int maxBytes;
+  final BytesBuilder _bytes = BytesBuilder();
+  var _length = 0;
+
+  @override
+  void add(List<int> chunk) {
+    if (chunk.length > maxBytes - _length) {
+      throw const _JsonBodyLimitExceeded();
+    }
+    _length += chunk.length;
+    _bytes.add(chunk);
+  }
+
+  @override
+  void close() {}
+
+  Uint8List takeBytes() => _bytes.takeBytes();
 }

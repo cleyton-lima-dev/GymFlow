@@ -37,6 +37,15 @@ class _StudentImportViewState extends State<_StudentImportView> {
   bool _selectingFile = false;
   bool _allowPop = false;
   bool _handlingBack = false;
+  bool _confirmationInProgress = false;
+  bool _returningToList = false;
+  final _scrollController = ScrollController();
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -51,6 +60,7 @@ class _StudentImportViewState extends State<_StudentImportView> {
         if (!didPop) unawaited(_attemptBack(viewModel));
       },
       child: SingleChildScrollView(
+        controller: _scrollController,
         padding: const EdgeInsets.all(30),
         child: Center(
           child: ConstrainedBox(
@@ -58,6 +68,7 @@ class _StudentImportViewState extends State<_StudentImportView> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                if (viewModel.result == null) ...[
                 Row(
                   children: [
                     OutlinedButton.icon(
@@ -121,10 +132,7 @@ class _StudentImportViewState extends State<_StudentImportView> {
                   const SizedBox(height: 16),
                   _buildPreview(viewModel, colors),
                 ],
-                if (viewModel.result != null) ...[
-                  const SizedBox(height: 16),
-                  _buildResults(viewModel),
-                ],
+                ] else ..._buildResultScreen(viewModel, viewModel.result!),
               ],
             ),
           ),
@@ -201,21 +209,46 @@ class _StudentImportViewState extends State<_StudentImportView> {
         if (confirmed != true || !mounted) return;
       }
 
-      _navigateBack();
+      _navigateBack(viewModel);
     } finally {
       _handlingBack = false;
     }
   }
 
-  void _navigateBack() {
-    if (!mounted) return;
+  void _navigateBack(StudentImportViewModel viewModel) {
+    _returnToStudents(refreshStudents: viewModel.result != null);
+  }
+
+  void _returnToStudents({required bool refreshStudents}) {
+    if (!mounted || _returningToList) return;
+    _returningToList = true;
     if (!context.canPop()) {
       context.go('/students');
       return;
     }
     setState(() => _allowPop = true);
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) context.pop();
+      if (mounted) context.pop<bool>(refreshStudents);
+    });
+  }
+
+  void _startNewImport(StudentImportViewModel viewModel) {
+    if (!mounted || viewModel.isBusy) return;
+    viewModel.reset();
+    setState(() {
+      _previewPage = 0;
+      _resultPage = 0;
+      _returningToList = false;
+      _allowPop = false;
+    });
+    _scrollToTopAfterBuild();
+  }
+
+  void _scrollToTopAfterBuild() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && _scrollController.hasClients) {
+        _scrollController.jumpTo(0);
+      }
     });
   }
 
@@ -297,7 +330,12 @@ class _StudentImportViewState extends State<_StudentImportView> {
                   ? null
                   : () async {
                       await viewModel.createPreview();
-                      if (mounted) setState(() => _previewPage = 0);
+                      if (mounted) {
+                        setState(() => _previewPage = 0);
+                        if (viewModel.result != null) {
+                          _scrollToTopAfterBuild();
+                        }
+                      }
                     },
               icon: viewModel.isBusy
                   ? const SizedBox.square(
@@ -386,6 +424,7 @@ class _StudentImportViewState extends State<_StudentImportView> {
             ),
             const SizedBox(height: 8),
             FilledButton.icon(
+              key: const ValueKey('student-import-confirm'),
               onPressed: viewModel.canConfirm
                   ? () => _confirm(viewModel)
                   : null,
@@ -419,12 +458,20 @@ class _StudentImportViewState extends State<_StudentImportView> {
     }
 
     final decision = viewModel.decisions[row.rowNumber];
+    final isPossibleDuplicate = row.candidates.isNotEmpty;
     final options = row.candidates.isEmpty
         ? const {'Import': 'Importar', 'Ignore': 'Ignorar'}
-        : const {'ImportAsNew': 'Criar separado', 'Ignore': 'Ignorar'};
+        : const {
+            'Ignore': 'Ignorar',
+            'ImportAsNew': 'Criar cadastro separado',
+          };
     return Card(
       margin: const EdgeInsets.only(bottom: 9),
-      color: row.isValid ? null : colors.errorContainer.withValues(alpha: .4),
+      color: !row.isValid
+          ? colors.errorContainer.withValues(alpha: .4)
+          : isPossibleDuplicate
+          ? AvelriSemanticColors.warning.withValues(alpha: .12)
+          : null,
       child: Padding(
         padding: const EdgeInsets.all(12),
         child: Column(
@@ -444,6 +491,28 @@ class _StudentImportViewState extends State<_StudentImportView> {
                 Text(display(StudentImportField.birthDate)),
               ],
             ),
+            if (isPossibleDuplicate)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Icon(
+                      Icons.warning_amber_rounded,
+                      color: AvelriSemanticColors.warning,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Possível duplicidade: escolha Ignorar ou Criar cadastro separado.',
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             if (!row.isValid)
               Padding(
                 padding: const EdgeInsets.only(top: 8),
@@ -462,24 +531,46 @@ class _StudentImportViewState extends State<_StudentImportView> {
                 alignment: Alignment.centerRight,
                 child: SizedBox(
                   width: 190,
-                  child: DropdownButtonFormField<String>(
-                    initialValue: decision,
-                    decoration: const InputDecoration(labelText: 'Decisão'),
-                    hint: const Text('Escolha'),
-                    items: [
-                      for (final option in options.entries)
-                        DropdownMenuItem(
-                          value: option.key,
-                          child: Text(option.value),
+                  child: InputDecorator(
+                    decoration: InputDecoration(
+                      labelText: isPossibleDuplicate
+                          ? 'Decisão obrigatória'
+                          : 'Decisão',
+                    ),
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<String>(
+                        key: ValueKey(
+                          'student-import-decision-${row.rowNumber}',
                         ),
-                    ],
-                    onChanged: viewModel.isBusy
-                        ? null
-                        : (value) {
-                            if (value != null) {
-                              viewModel.chooseDecision(row.rowNumber, value);
-                            }
-                          },
+                        value: decision,
+                        isExpanded: true,
+                        hint: Text(
+                          isPossibleDuplicate
+                              ? 'Escolha uma decisão'
+                              : 'Escolha',
+                        ),
+                        items: [
+                          for (final option in options.entries)
+                            DropdownMenuItem(
+                              key: ValueKey(
+                                'student-import-decision-${row.rowNumber}-${option.key}',
+                              ),
+                              value: option.key,
+                              child: Text(option.value),
+                            ),
+                        ],
+                        onChanged: viewModel.isBusy
+                            ? null
+                            : (value) {
+                                if (value != null) {
+                                  viewModel.chooseDecision(
+                                    row.rowNumber,
+                                    value,
+                                  );
+                                }
+                              },
+                      ),
+                    ),
                   ),
                 ),
               ),
@@ -489,14 +580,108 @@ class _StudentImportViewState extends State<_StudentImportView> {
     );
   }
 
+  List<Widget> _buildResultScreen(
+    StudentImportViewModel viewModel,
+    StudentImportResult result,
+  ) {
+    final imported = result.rows.where((row) => row.status == 'Imported').length;
+    final ignored = result.rows.where((row) => row.status == 'Ignored').length;
+    final errors = result.rows.where((row) => row.status == 'Error').length;
+    final isPartial = imported > 0 && errors > 0;
+    final summary = result.alreadyCompleted
+        ? 'Este lote já havia sido concluído. Nenhum aluno foi criado novamente.'
+        : imported == 0
+        ? 'Nenhum aluno novo foi importado. Revise os registros ignorados ou com erro.'
+        : isPartial
+        ? 'A importação terminou parcialmente. Revise as linhas com erro.'
+        : 'Todos os registros foram processados sem erros.';
+    final colors = Theme.of(context).colorScheme;
+    final statusColor = errors > 0 ? colors.error : AvelriSemanticColors.success;
+
+    return [
+      Text(
+        'Importação concluída',
+        key: const ValueKey('student-import-result-title'),
+        style: Theme.of(context).textTheme.headlineMedium,
+      ),
+      const SizedBox(height: 16),
+      Card(
+        key: const ValueKey('student-import-result-summary'),
+        color: errors > 0 ? colors.errorContainer : colors.primaryContainer,
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(summary, style: Theme.of(context).textTheme.titleMedium),
+              if (result.alreadyCompleted) ...[
+                const SizedBox(height: 6),
+                const Text('Os totais abaixo são os resultados salvos do lote.'),
+              ],
+              const SizedBox(height: 14),
+              Wrap(
+                spacing: 12,
+                runSpacing: 8,
+                children: [
+                  _CountChip(label: 'Importados', count: imported),
+                  _CountChip(label: 'Ignorados', count: ignored),
+                  _CountChip(label: 'Erros', count: errors),
+                ],
+              ),
+              const SizedBox(height: 14),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(Icons.info_outline, color: statusColor),
+                  const SizedBox(width: 8),
+                  const Expanded(
+                    child: Text(
+                      'Importar alunos não cria contas nem libera acesso ao aplicativo. A ativação do acesso continua sendo uma ação explícita do Admin.',
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+      if (result.rows.isNotEmpty) ...[
+        const SizedBox(height: 16),
+        _buildResults(viewModel),
+      ],
+      const SizedBox(height: 20),
+      Wrap(
+        spacing: 12,
+        runSpacing: 8,
+        children: [
+          FilledButton.icon(
+            key: const ValueKey('student-import-view-students'),
+            onPressed: () => _returnToStudents(refreshStudents: true),
+            icon: const Icon(Icons.people_outline),
+            label: const Text('Ver alunos'),
+          ),
+          OutlinedButton.icon(
+            key: const ValueKey('student-import-new'),
+            onPressed: () => _startNewImport(viewModel),
+            icon: const Icon(Icons.upload_file_outlined),
+            label: const Text('Nova importação'),
+          ),
+        ],
+      ),
+    ];
+  }
+
   Widget _buildResults(StudentImportViewModel viewModel) {
     final result = viewModel.result!;
     final rows = result.rows;
     final start = _resultPage * _pageSize;
     final visible = rows.skip(start).take(_pageSize).toList();
+    final nameColumn = viewModel.mapping[StudentImportField.name];
     final namesByRow = {
-      for (final row in viewModel.source!.rows)
-        row.rowNumber: row.cells[viewModel.mapping[StudentImportField.name]!],
+      for (final row in viewModel.source?.rows ?? const [])
+        row.rowNumber: nameColumn != null && nameColumn < row.cells.length
+            ? row.cells[nameColumn]
+            : '',
     };
     return Card(
       child: Padding(
@@ -505,35 +690,10 @@ class _StudentImportViewState extends State<_StudentImportView> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Resultado da importação',
+              'Detalhes por linha',
               style: Theme.of(context).textTheme.titleLarge,
             ),
             const SizedBox(height: 8),
-            Wrap(
-              spacing: 12,
-              children: [
-                _CountChip(
-                  label: 'Importados',
-                  count: rows.where((row) => row.status == 'Imported').length,
-                ),
-                _CountChip(
-                  label: 'Ignorados',
-                  count: rows.where((row) => row.status == 'Ignored').length,
-                ),
-                _CountChip(
-                  label: 'Erros',
-                  count: rows.where((row) => row.status == 'Error').length,
-                ),
-              ],
-            ),
-            if (result.alreadyCompleted)
-              const Padding(
-                padding: EdgeInsets.only(top: 10),
-                child: Text(
-                  'Resultado recuperado de uma importação anterior; a operação não foi repetida.',
-                ),
-              ),
-            const SizedBox(height: 12),
             for (final row in visible)
               ListTile(
                 dense: true,
@@ -560,28 +720,40 @@ class _StudentImportViewState extends State<_StudentImportView> {
   }
 
   Future<void> _confirm(StudentImportViewModel viewModel) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Confirmar importação'),
-        content: const Text(
-          'Somente os novos cadastros serão criados. Dados existentes, contas, convites, matrículas, cobranças e acessos não serão alterados.',
+    if (_confirmationInProgress || !viewModel.canConfirm) return;
+    _confirmationInProgress = true;
+    try {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Confirmar importação'),
+          content: const Text(
+            'Somente os novos cadastros serão criados. Dados existentes, contas, convites, matrículas, cobranças e acessos não serão alterados.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Revisar'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Importar'),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Revisar'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Importar'),
-          ),
-        ],
-      ),
-    );
-    if (confirmed == true && mounted) {
+      );
+      if (confirmed != true || !mounted) return;
+
       await viewModel.confirmImport();
-      if (mounted) setState(() => _resultPage = 0);
+      if (!mounted) return;
+      if (viewModel.result != null && viewModel.errorMessage == null) {
+        setState(() => _resultPage = 0);
+        _scrollToTopAfterBuild();
+        return;
+      }
+      setState(() => _resultPage = 0);
+    } finally {
+      _confirmationInProgress = false;
     }
   }
 

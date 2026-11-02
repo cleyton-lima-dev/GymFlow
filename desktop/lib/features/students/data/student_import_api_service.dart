@@ -2,6 +2,8 @@ import 'package:avelri_gestao/core/network/api_client.dart';
 import 'package:avelri_gestao/features/students/models/student_import_preview.dart';
 
 class StudentImportApiService {
+  static const previewRequestBodyLimitBytes = 5_000_000;
+
   const StudentImportApiService(this._apiClient);
 
   final ApiClient _apiClient;
@@ -10,6 +12,7 @@ class StudentImportApiService {
     final response = await _apiClient.post(
       'api/students/imports/preview',
       body: {'rows': rows},
+      maxBodyBytes: previewRequestBodyLimitBytes,
     );
     if (response is! Map) {
       throw const FormatException('Resposta inválida da prévia de importação.');

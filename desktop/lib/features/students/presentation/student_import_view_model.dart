@@ -19,6 +19,7 @@ class StudentImportViewModel extends ChangeNotifier {
     for (final field in StudentImportField.values) field: null,
   };
   final Map<int, String?> decisions = {};
+  final Set<int> _explicitDuplicateDecisions = {};
   bool? newStudentsActive;
   bool isBusy = false;
   String? errorMessage;
@@ -37,13 +38,43 @@ class StudentImportViewModel extends ChangeNotifier {
 
   bool get canConfirm {
     final current = preview;
-    if (current == null || current.alreadyCompleted || isBusy) return false;
+    if (current == null ||
+        current.alreadyCompleted ||
+        result != null ||
+        isBusy) {
+      return false;
+    }
     final validRows = current.rows.where((row) => row.isValid).toList();
-    if (validRows.any((row) => decisions[row.rowNumber] == null)) return false;
+    for (final row in validRows) {
+      final decision = decisions[row.rowNumber];
+      if (row.candidates.isNotEmpty) {
+        if (!_explicitDuplicateDecisions.contains(row.rowNumber) ||
+            (decision != 'ImportAsNew' && decision != 'Ignore')) {
+          return false;
+        }
+      } else if (decision != 'Import' && decision != 'Ignore') {
+        return false;
+      }
+    }
     final hasImports = validRows.any(
       (row) => decisions[row.rowNumber] != 'Ignore',
     );
     return !hasImports || newStudentsActive != null;
+  }
+
+  void reset() {
+    if (isBusy) return;
+    source = null;
+    preview = null;
+    result = null;
+    for (final field in StudentImportField.values) {
+      mapping[field] = null;
+    }
+    decisions.clear();
+    _explicitDuplicateDecisions.clear();
+    newStudentsActive = null;
+    errorMessage = null;
+    notifyListeners();
   }
 
   void loadFile(String fileName, Uint8List? bytes) {
@@ -54,6 +85,7 @@ class StudentImportViewModel extends ChangeNotifier {
       preview = null;
       result = null;
       decisions.clear();
+      _explicitDuplicateDecisions.clear();
       newStudentsActive = null;
       for (final field in StudentImportField.values) {
         mapping[field] = _suggestColumn(source!.headers, field);
@@ -74,6 +106,7 @@ class StudentImportViewModel extends ChangeNotifier {
     preview = null;
     result = null;
     decisions.clear();
+    _explicitDuplicateDecisions.clear();
     newStudentsActive = null;
     errorMessage = null;
     notifyListeners();
@@ -126,6 +159,7 @@ class StudentImportViewModel extends ChangeNotifier {
               .where((row) => row.isValid && row.candidates.isEmpty)
               .map((row) => MapEntry(row.rowNumber, 'Import')),
         );
+      _explicitDuplicateDecisions.clear();
       newStudentsActive = null;
       if (preview!.alreadyCompleted) {
         result = StudentImportResult(
@@ -142,7 +176,16 @@ class StudentImportViewModel extends ChangeNotifier {
   }
 
   void chooseDecision(int rowNumber, String action) {
+    final row = preview?.rows.where((item) => item.rowNumber == rowNumber);
+    if (row == null || row.isEmpty || !row.first.isValid) return;
+    final allowedActions = row.first.candidates.isEmpty
+        ? const {'Import', 'Ignore'}
+        : const {'ImportAsNew', 'Ignore'};
+    if (!allowedActions.contains(action)) return;
     decisions[rowNumber] = action;
+    if (row.first.candidates.isNotEmpty) {
+      _explicitDuplicateDecisions.add(rowNumber);
+    }
     notifyListeners();
   }
 
@@ -192,7 +235,7 @@ class StudentImportViewModel extends ChangeNotifier {
         return 'A prévia mudou ou já foi processada. Gere a prévia novamente.';
       }
       if (exception.statusCode == 413) {
-        return 'O arquivo excede o limite permitido.';
+        return 'A prévia excede o limite de 5.000.000 bytes. Reduza o conteúdo dos campos mapeados ou divida o arquivo.';
       }
       return 'Não foi possível comunicar com o serviço de importação.';
     }

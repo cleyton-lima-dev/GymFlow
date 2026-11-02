@@ -107,4 +107,42 @@ void main() {
     model.dispose();
     api.close();
   });
+
+  test('students list shows readable message for server errors', () async {
+    final api = ApiClient(
+      baseUrl: 'https://synthetic.invalid',
+      client: MockClient((_) async => http.Response('internal error', 500)),
+    );
+    final model = StudentsViewModel(StudentsService(api));
+
+    await model.loadInitial();
+
+    expect(
+      model.errorMessage,
+      'O Avelri está temporariamente indisponível. Tente novamente.',
+    );
+
+    model.dispose();
+    api.close();
+  });
+
+  test('students list shows readable message for connection errors', () async {
+    final api = ApiClient(
+      baseUrl: 'https://synthetic.invalid',
+      client: MockClient((_) async {
+        throw http.ClientException('synthetic offline');
+      }),
+    );
+    final model = StudentsViewModel(StudentsService(api));
+
+    await model.loadInitial();
+
+    expect(
+      model.errorMessage,
+      'Não foi possível conectar ao servidor. Verifique sua conexão.',
+    );
+
+    model.dispose();
+    api.close();
+  });
 }

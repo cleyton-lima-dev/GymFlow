@@ -38,8 +38,21 @@ class StudentsPage extends StatelessWidget {
   }
 }
 
-class _StudentsView extends StatelessWidget {
+class _StudentsView extends StatefulWidget {
   const _StudentsView();
+
+  @override
+  State<_StudentsView> createState() => _StudentsViewState();
+}
+
+class _StudentsViewState extends State<_StudentsView> {
+  final _scrollController = ScrollController();
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -54,6 +67,7 @@ class _StudentsView extends StatelessWidget {
     final colorScheme = theme.colorScheme;
 
     return SingleChildScrollView(
+      controller: _scrollController,
       padding: const EdgeInsets.all(30),
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 1250),
@@ -87,7 +101,16 @@ class _StudentsView extends StatelessWidget {
                 final actions = [
                   if (erpEnabled)
                     OutlinedButton.icon(
-                      onPressed: () => context.push('/students/import'),
+                      onPressed: () async {
+                        final shouldRefresh = await context.push<bool>(
+                          '/students/import',
+                        );
+                        if (!context.mounted || shouldRefresh != true) return;
+                        if (_scrollController.hasClients) {
+                          _scrollController.jumpTo(0);
+                        }
+                        await viewModel.refresh();
+                      },
                       icon: const Icon(Icons.upload_file_outlined),
                       label: const Text('Importar CSV/XLSX'),
                     ),

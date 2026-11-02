@@ -240,19 +240,19 @@ class StudentsViewModel extends ChangeNotifier {
       }
 
       _errorMessage =
-          'NÃ£o foi possÃ­vel conectar ao servidor. Verifique sua conexÃ£o.';
+          'Não foi possível conectar ao servidor. Verifique sua conexão.';
     } on FormatException {
       if (_isDisposed || requestVersion != _requestVersion) {
         return;
       }
 
-      _errorMessage = 'NÃ£o foi possÃ­vel carregar os alunos. Tente novamente.';
+      _errorMessage = 'Não foi possível carregar os alunos. Tente novamente.';
     } catch (_) {
       if (_isDisposed || requestVersion != _requestVersion) {
         return;
       }
 
-      _errorMessage = 'NÃ£o foi possÃ­vel carregar os alunos. Tente novamente.';
+      _errorMessage = 'Não foi possível carregar os alunos. Tente novamente.';
     } finally {
       if (!_isDisposed && requestVersion == _requestVersion) {
         _isLoading = false;
@@ -281,14 +281,14 @@ class StudentsViewModel extends ChangeNotifier {
 
   String _messageFromApiException(ApiException exception) {
     if (exception.statusCode == 403) {
-      return 'VocÃª nÃ£o possui permissÃ£o para acessar os alunos.';
+      return 'Você não possui permissão para acessar os alunos.';
     }
 
     if (exception.statusCode >= 500) {
-      return 'O Avelri estÃ¡ temporariamente indisponÃ­vel. Tente novamente.';
+      return 'O Avelri está temporariamente indisponível. Tente novamente.';
     }
 
-    return 'NÃ£o foi possÃ­vel carregar os alunos. Tente novamente.';
+    return 'Não foi possível carregar os alunos. Tente novamente.';
   }
 
   void _notifySafely() {

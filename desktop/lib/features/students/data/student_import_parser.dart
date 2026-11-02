@@ -1,8 +1,8 @@
 import 'dart:convert';
-import 'dart:typed_data';
 
 import 'package:archive/archive.dart';
 import 'package:excel/excel.dart';
+import 'package:flutter/foundation.dart';
 
 const maxStudentImportFileBytes = 5 * 1024 * 1024;
 const maxStudentImportRows = 5000;
@@ -80,8 +80,10 @@ ParsedStudentImportFile _parseXlsx(String fileName, Uint8List bytes) {
       'O conteúdo do arquivo não corresponde a um XLSX válido.',
     );
   }
+  var stage = 'ZIP directory validation';
   try {
     _validateZipDirectory(bytes);
+    stage = 'ZIP extraction';
     final archive = ZipDecoder().decodeBytes(bytes);
     final files = archive.files.where((entry) => entry.isFile).toList();
     final expandedBytes = files.fold<int>(
@@ -96,12 +98,16 @@ ParsedStudentImportFile _parseXlsx(String fileName, Uint8List bytes) {
       );
     }
 
-    final workbook = Excel.decodeBytes(bytes);
+    stage = 'workbook relationship normalization';
+    final workbookBytes = _normalizeWorkbookPackageXml(archive, bytes);
+    stage = 'Excel workbook decoding';
+    final workbook = Excel.decodeBytes(workbookBytes);
     if (workbook.tables.isEmpty) {
       throw const StudentImportFileException(
         'A planilha não contém uma aba com dados.',
       );
     }
+    stage = 'first worksheet selection';
     final sheet = workbook.tables[workbook.tables.keys.first]!;
     if (sheet.maxRows > maxStudentImportRows + 1 ||
         sheet.maxColumns > maxStudentImportColumns) {
@@ -110,6 +116,7 @@ ParsedStudentImportFile _parseXlsx(String fileName, Uint8List bytes) {
       );
     }
     final records = <List<String>>[];
+    stage = 'worksheet cell conversion';
     for (final row in sheet.rows) {
       final values = <String>[];
       for (final cell in row) {
@@ -122,14 +129,123 @@ ParsedStudentImportFile _parseXlsx(String fileName, Uint8List bytes) {
       }
       records.add(values);
     }
+    stage = 'header and row validation';
     return _toParsedFile(fileName, records);
   } on StudentImportFileException {
     rethrow;
-  } catch (_) {
+  } catch (error, stackTrace) {
+    // Keep diagnostics useful without logging workbook content or exception
+    // messages that could contain values from a student's cells.
+    if (kDebugMode) {
+      final origin = stackTrace.toString().split('\n').take(4).join(' <- ');
+      debugPrint(
+        'Student XLSX parsing failed at $stage (${error.runtimeType}); $origin',
+      );
+    }
     throw const StudentImportFileException(
       'Não foi possível ler a primeira aba do XLSX.',
     );
   }
+}
+
+Uint8List _normalizeWorkbookPackageXml(
+  Archive archive,
+  Uint8List originalBytes,
+) {
+  var changed = false;
+  final packageXml = archive.files.where((entry) {
+    if (!entry.isFile) return false;
+    if (entry.name == 'xl/_rels/workbook.xml.rels' ||
+        entry.name == 'xl/workbook.xml' ||
+        entry.name == 'xl/styles.xml' ||
+        entry.name == 'xl/sharedStrings.xml') {
+      return true;
+    }
+    return entry.name.startsWith('xl/worksheets/') &&
+        entry.name.endsWith('.xml');
+  }).toList();
+
+  for (final entry in packageXml) {
+    entry.decompress();
+    final content = entry.content;
+    if (content is! List<int>) {
+      throw const StudentImportFileException(
+        'A estrutura XML do XLSX não pôde ser lida.',
+      );
+    }
+
+    final xml = utf8.decode(content, allowMalformed: false);
+    var normalizedXml = xml;
+    if (entry.name == 'xl/_rels/workbook.xml.rels') {
+      normalizedXml = normalizedXml.replaceAllMapped(
+        RegExp(r'''(Target\s*=\s*["'])/xl/'''),
+        (match) => match.group(1)!,
+      );
+    }
+
+    final spreadsheetPrefixes = RegExp(
+      r'''xmlns:([A-Za-z_][A-Za-z0-9_.-]*)\s*=\s*["']http://schemas\.openxmlformats\.org/spreadsheetml/2006/main["']''',
+    ).allMatches(normalizedXml).map((match) => match.group(1)!).toSet();
+    for (final prefix in spreadsheetPrefixes) {
+      final elementPrefix = RegExp('<(/?)${RegExp.escape(prefix)}:');
+      normalizedXml = normalizedXml.replaceAllMapped(
+        elementPrefix,
+        (match) => '<${match.group(1)}',
+      );
+    }
+
+    if (entry.name.startsWith('xl/worksheets/')) {
+      normalizedXml = _normalizeStringCellsWithoutFormulas(normalizedXml);
+    }
+    if (normalizedXml == xml) continue;
+    final normalizedBytes = utf8.encode(normalizedXml);
+    archive.addFile(
+      ArchiveFile(entry.name, normalizedBytes.length, normalizedBytes),
+    );
+    changed = true;
+  }
+
+  if (!changed) return originalBytes;
+  final encoded = ZipEncoder().encode(archive);
+  if (encoded == null) {
+    throw const StudentImportFileException(
+      'A estrutura do XLSX não pôde ser normalizada.',
+    );
+  }
+  return Uint8List.fromList(encoded);
+}
+
+String _normalizeStringCellsWithoutFormulas(String xml) {
+  final cellPattern = RegExp(r'<c\b([^>]*)>(.*?)</c>', dotAll: true);
+  final formulaPattern = RegExp(r'<(?:[A-Za-z_][A-Za-z0-9_.-]*:)?f(?:\s|/|>)');
+  final valuePattern = RegExp(r'<v(?:\s[^>]*)?>(.*?)</v>', dotAll: true);
+  final stringTypePattern = RegExp(r'''(\bt\s*=\s*)(["'])str\2''');
+
+  return xml.replaceAllMapped(cellPattern, (cellMatch) {
+    final attributes = cellMatch.group(1)!;
+    final body = cellMatch.group(2)!;
+    final typeMatch = stringTypePattern.firstMatch(attributes);
+    if (typeMatch == null || formulaPattern.hasMatch(body)) {
+      return cellMatch.group(0)!;
+    }
+
+    final valueMatch = valuePattern.firstMatch(body);
+    final normalizedBody = valueMatch == null
+        ? (body.trim().isEmpty ? '<is><t></t></is>' : null)
+        : body.replaceRange(
+            valueMatch.start,
+            valueMatch.end,
+            '<is><t>${valueMatch.group(1)!}</t></is>',
+          );
+    if (normalizedBody == null) return cellMatch.group(0)!;
+
+    final normalizedAttributes = attributes.replaceFirstMapped(
+      stringTypePattern,
+      (match) =>
+          '${match.group(1)!}${match.group(2)!}inlineStr${match.group(2)!}',
+    );
+    return '<c$normalizedAttributes>$normalizedBody</c>';
+  });
 }
 
 void _validateZipDirectory(Uint8List bytes) {
@@ -304,54 +420,139 @@ String _detectDelimiter(String text) {
       .key;
 }
 
+enum _CsvFieldState { unquoted, quoted, afterQuote }
+
 List<List<String>> _readCsv(String text, String delimiter) {
   final records = <List<String>>[];
   var row = <String>[];
   final cell = StringBuffer();
-  var quoted = false;
+  // Strict quoting: a quote starts only an empty field, and no whitespace is
+  // permitted between a closing quote and its delimiter or record ending.
+  var state = _CsvFieldState.unquoted;
+  var lineNumber = 1;
+  var columnNumber = 0;
+  var openingQuoteLine = 0;
+  var openingQuoteColumn = 0;
 
-  for (var index = 0; index < text.length; index++) {
+  void finishField() {
+    row.add(cell.toString());
+    cell.clear();
+    state = _CsvFieldState.unquoted;
+  }
+
+  void finishRecord() {
+    finishField();
+    records.add(row);
+    row = <String>[];
+  }
+
+  int lineEndingLength(int index) =>
+      text[index] == '\r' && index + 1 < text.length && text[index + 1] == '\n'
+      ? 2
+      : 1;
+
+  for (var index = 0; index < text.length;) {
     final character = text[index];
-    if (quoted) {
+
+    if (state == _CsvFieldState.quoted) {
       if (character == '"') {
         if (index + 1 < text.length && text[index + 1] == '"') {
           cell.write('"');
-          index++;
+          index += 2;
+          columnNumber += 2;
         } else {
-          quoted = false;
+          state = _CsvFieldState.afterQuote;
+          index++;
+          columnNumber++;
         }
-      } else {
-        cell.write(character);
+        continue;
       }
+
+      if (character == '\r' || character == '\n') {
+        final endingLength = lineEndingLength(index);
+        cell.write(text.substring(index, index + endingLength));
+        index += endingLength;
+        lineNumber++;
+        columnNumber = 0;
+        continue;
+      }
+
+      cell.write(character);
+      index++;
+      columnNumber++;
       continue;
     }
 
-    if (character == '"' && cell.isEmpty) {
-      quoted = true;
-    } else if (character == delimiter) {
-      row.add(cell.toString());
-      cell.clear();
-    } else if (character == '\n' || character == '\r') {
-      if (character == '\r' &&
-          index + 1 < text.length &&
-          text[index + 1] == '\n') {
+    if (state == _CsvFieldState.afterQuote) {
+      if (character == delimiter) {
+        finishField();
         index++;
+        columnNumber++;
+        continue;
       }
-      row.add(cell.toString());
-      cell.clear();
-      records.add(row);
-      row = <String>[];
-    } else {
-      cell.write(character);
+
+      if (character == '\r' || character == '\n') {
+        finishRecord();
+        index += lineEndingLength(index);
+        lineNumber++;
+        columnNumber = 0;
+        continue;
+      }
+
+      final message = character.trim().isEmpty
+          ? 'Espaços após aspas fechadas não são aceitos; use somente o '
+                'delimitador ou o fim da linha'
+          : 'Caractere inválido após aspas fechadas; use somente o '
+                'delimitador ou o fim da linha';
+      throw StudentImportFileException(
+        '$message (linha $lineNumber, coluna ${columnNumber + 1}).',
+      );
     }
+
+    if (character == '"') {
+      if (cell.isNotEmpty) {
+        throw StudentImportFileException(
+          'Aspas só podem iniciar um campo. Use aspas duplas escapadas dentro '
+          'de campos entre aspas (linha $lineNumber, coluna ${columnNumber + 1}).',
+        );
+      }
+      state = _CsvFieldState.quoted;
+      openingQuoteLine = lineNumber;
+      openingQuoteColumn = columnNumber + 1;
+      index++;
+      columnNumber++;
+      continue;
+    }
+
+    if (character == delimiter) {
+      finishField();
+      index++;
+      columnNumber++;
+      continue;
+    }
+
+    if (character == '\r' || character == '\n') {
+      finishRecord();
+      index += lineEndingLength(index);
+      lineNumber++;
+      columnNumber = 0;
+      continue;
+    }
+
+    cell.write(character);
+    index++;
+    columnNumber++;
   }
-  if (quoted) {
-    throw const StudentImportFileException(
-      'O CSV contém aspas sem fechamento.',
+
+  if (state == _CsvFieldState.quoted) {
+    throw StudentImportFileException(
+      'Aspas sem fechamento iniciadas na linha $openingQuoteLine, '
+      'coluna $openingQuoteColumn.',
     );
   }
-  if (cell.isNotEmpty || row.isNotEmpty) {
-    row.add(cell.toString());
+
+  if (cell.isNotEmpty || row.isNotEmpty || state == _CsvFieldState.afterQuote) {
+    finishField();
     records.add(row);
   }
   return records;
