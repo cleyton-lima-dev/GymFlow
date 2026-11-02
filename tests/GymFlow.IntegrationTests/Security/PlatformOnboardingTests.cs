@@ -13,6 +13,7 @@ using GymFlow.Application.Services;
 using GymFlow.Domain.Entities;
 using GymFlow.Domain.Enums;
 using GymFlow.Infrastructure.Data;
+using GymFlow.IntegrationTests.Infrastructure;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Data.Sqlite;
@@ -319,13 +320,14 @@ public sealed class PlatformOnboardingTests
                 services.RemoveAll<TimeProvider>(); services.AddSingleton<TimeProvider>(Clock);
                 if (postgres)
                 {
-                    var isolated = new NpgsqlConnectionStringBuilder(Environment.GetEnvironmentVariable("GYMFLOW_ISOLATED_POSTGRES"));
-                    if (isolated.Host != "127.0.0.1" || isolated.Port != 55439 || isolated.Database != "gymflow_codex_test_base" || isolated.Username != "gymflow_test")
-                        throw new InvalidOperationException("Only the verified disposable test cluster is allowed.");
-                    isolated.Pooling = false; adminConnection = isolated.ConnectionString;
-                    testDatabase = $"gymflow_platform77_{Guid.NewGuid():N}";
-                    using var connection = new NpgsqlConnection(adminConnection); connection.Open();
-                    using var create = new NpgsqlCommand($"CREATE DATABASE \"{testDatabase}\"", connection); create.ExecuteNonQuery();
+                    var isolated = DisposablePostgresCluster.BuildConnectionString(
+                        "GYMFLOW_ISOLATED_POSTGRES", "GYMFLOW_ISOLATED_POSTGRES_PORT",
+                        "gymflow_codex_test_base", "gymflow_test", "GYMFLOW_ISOLATED_POSTGRES_DATA_DIRECTORY");
+                    adminConnection = isolated.ConnectionString;
+                    testDatabase = DisposablePostgresCluster.NewDatabaseName("gymflow_platform77_");
+                    using var connection = new NpgsqlConnection(adminConnection);
+                    DisposablePostgresCluster.OpenVerifiedConnectionAsync(connection).GetAwaiter().GetResult();
+                    DisposablePostgresCluster.CreateDatabaseAsync(connection, testDatabase).GetAwaiter().GetResult();
                     isolated.Database = testDatabase;
                     services.AddDbContext<AppDbContext>(o => o.UseNpgsql(isolated.ConnectionString).AddInterceptors(new SaveInterceptor(this)));
                 }
@@ -335,7 +337,13 @@ public sealed class PlatformOnboardingTests
         public void Initialize(bool seedOperator = true)
         {
             using var scope = Services.CreateScope(); var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-            if (postgres) db.Database.Migrate(); else db.Database.EnsureCreated();
+            if (postgres)
+            {
+                DisposablePostgresCluster.RunWithVerifiedConnectionAsync(
+                    (NpgsqlConnection)db.Database.GetDbConnection(),
+                    () => { db.Database.Migrate(); return Task.CompletedTask; }).GetAwaiter().GetResult();
+            }
+            else db.Database.EnsureCreated();
             if (!seedOperator) return;
             if (db.PlatformOperators.Any()) return;
             db.PlatformOperators.Add(new PlatformOperator { Id = OperatorId, Email = Email, Name = "Operador sintético",
@@ -361,9 +369,9 @@ public sealed class PlatformOnboardingTests
             await base.DisposeAsync(); await sqlite.DisposeAsync();
             if (adminConnection is not null && testDatabase is not null)
             {
-                await using var connection = new NpgsqlConnection(adminConnection); await connection.OpenAsync();
-                // Only the database generated and owned by this fixture is removed.
-                await using var drop = new NpgsqlCommand($"DROP DATABASE \"{testDatabase}\" WITH (FORCE)", connection); await drop.ExecuteNonQueryAsync();
+                await using var connection = new NpgsqlConnection(adminConnection);
+                await DisposablePostgresCluster.OpenVerifiedConnectionAsync(connection);
+                await DisposablePostgresCluster.DropDatabaseAsync(connection, testDatabase);
             }
         }
         private sealed class SaveInterceptor(TestApi app) : SaveChangesInterceptor

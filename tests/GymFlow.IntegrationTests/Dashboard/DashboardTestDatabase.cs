@@ -1,4 +1,5 @@
 using GymFlow.Infrastructure.Data;
+using GymFlow.IntegrationTests.Infrastructure;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
@@ -22,30 +23,14 @@ internal sealed class DashboardTestDatabase(AppDbContext context, SqliteConnecti
         string? postgresDatabase = null;
         if (postgres)
         {
-            var connection = new NpgsqlConnectionStringBuilder(
-                Environment.GetEnvironmentVariable("GYMFLOW_ISOLATED_POSTGRES")
-                ?? throw new InvalidOperationException("The verified isolated PostgreSQL connection is not configured."));
-            if (connection.Host != "127.0.0.1" || connection.Port != 55439 ||
-                connection.Database != "gymflow_codex_test_base" || connection.Username != "gymflow_test")
-                throw new InvalidOperationException("Only the explicitly isolated local PostgreSQL cluster is allowed.");
-            connection.Pooling = false;
-            var expectedDataDirectory = Environment.GetEnvironmentVariable("GYMFLOW_ISOLATED_POSTGRES_DATA_DIRECTORY");
-            if (string.IsNullOrWhiteSpace(expectedDataDirectory) || !Path.IsPathFullyQualified(expectedDataDirectory) ||
-                !File.Exists(Path.Combine(expectedDataDirectory, "PG_VERSION")))
-                throw new InvalidOperationException("The verified disposable PostgreSQL data directory is required.");
-
+            var connection = DisposablePostgresCluster.BuildConnectionString(
+                "GYMFLOW_ISOLATED_POSTGRES", "GYMFLOW_ISOLATED_POSTGRES_PORT",
+                "gymflow_codex_test_base", "gymflow_test", "GYMFLOW_ISOLATED_POSTGRES_DATA_DIRECTORY");
             postgresAdmin = connection.ConnectionString;
             await using var admin = new NpgsqlConnection(postgresAdmin);
-            await admin.OpenAsync();
-            await using var check = new NpgsqlCommand("SELECT current_setting('data_directory')", admin);
-            var actual = (string)(await check.ExecuteScalarAsync())!;
-            if (!string.Equals(Path.GetFullPath(actual).TrimEnd(Path.DirectorySeparatorChar),
-                    Path.GetFullPath(expectedDataDirectory).TrimEnd(Path.DirectorySeparatorChar), StringComparison.OrdinalIgnoreCase))
-                throw new InvalidOperationException("PostgreSQL is not the verified disposable cluster. No test database was created.");
-
-            postgresDatabase = $"gymflow_codex_test_dashboard_{Guid.NewGuid():N}";
-            await using var create = new NpgsqlCommand($"CREATE DATABASE \"{postgresDatabase}\"", admin);
-            await create.ExecuteNonQueryAsync();
+            await DisposablePostgresCluster.OpenVerifiedConnectionAsync(admin);
+            postgresDatabase = DisposablePostgresCluster.NewDatabaseName("gymflow_codex_test_dashboard_");
+            await DisposablePostgresCluster.CreateDatabaseAsync(admin, postgresDatabase);
             connection.Database = postgresDatabase;
             options.UseNpgsql(connection.ConnectionString);
         }
@@ -57,7 +42,16 @@ internal sealed class DashboardTestDatabase(AppDbContext context, SqliteConnecti
         }
         if (interceptor != null) options.AddInterceptors(interceptor);
         var db = new AppDbContext(options.Options);
-        await db.Database.EnsureCreatedAsync(); // Brand-new test DB only; no migrations.
+        if (postgres)
+        {
+            await DisposablePostgresCluster.RunWithVerifiedConnectionAsync(
+                (NpgsqlConnection)db.Database.GetDbConnection(),
+                () => db.Database.EnsureCreatedAsync()); // Brand-new harness-owned test DB only; no migrations.
+        }
+        else
+        {
+            await db.Database.EnsureCreatedAsync();
+        }
         return new DashboardTestDatabase(db, sqlite, postgresAdmin, postgresDatabase);
     }
 
@@ -68,9 +62,8 @@ internal sealed class DashboardTestDatabase(AppDbContext context, SqliteConnecti
         if (PostgresDatabase is not null)
         {
             await using var admin = new NpgsqlConnection(PostgresAdmin);
-            await admin.OpenAsync();
-            await using var drop = new NpgsqlCommand($"DROP DATABASE \"{PostgresDatabase}\" WITH (FORCE)", admin);
-            await drop.ExecuteNonQueryAsync();
+            await DisposablePostgresCluster.OpenVerifiedConnectionAsync(admin);
+            await DisposablePostgresCluster.DropDatabaseAsync(admin, PostgresDatabase);
         }
     }
 }

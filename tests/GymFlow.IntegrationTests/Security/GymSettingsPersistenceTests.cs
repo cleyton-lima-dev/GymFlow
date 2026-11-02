@@ -7,11 +7,13 @@ using GymFlow.Application.Interfaces.Time;
 using GymFlow.Application.Services;
 using GymFlow.Domain.Enums;
 using GymFlow.Infrastructure.Data;
+using GymFlow.IntegrationTests.Infrastructure;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Npgsql;
 
 namespace GymFlow.IntegrationTests.Security;
 
@@ -210,7 +212,9 @@ public partial class TenantEnrollmentAccessTests
         {
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
             var migrator = db.GetService<IMigrator>();
-            await migrator.MigrateAsync("20261011034816_AddCheckIns");
+            await DisposablePostgresCluster.RunWithVerifiedConnectionAsync(
+                (NpgsqlConnection)db.Database.GetDbConnection(),
+                () => migrator.MigrateAsync("20261011034816_AddCheckIns"));
 
             // This is a historical schema from before SeparateStudentIdentity. Seed its
             // real legacy shape directly; the current EF model includes columns that did
@@ -231,7 +235,9 @@ public partial class TenantEnrollmentAccessTests
                 INSERT INTO "Enrollments" ("Id", "StudentId", "PlanId", "StartDate", "EndDate", "Status", "PlanName", "PlanPrice", "PlanDurationMonths", "PlanBillingCycle", "CreatedAt")
                 VALUES ({enrollmentId}, {studentId}, {planId}, {start}, {originalEnd}, {enrollmentStatus}, {planName}, {price}, {durationMonths}, {billingCycle}, {createdAt});
                 """);
-            await db.Database.MigrateAsync();
+            await DisposablePostgresCluster.RunWithVerifiedConnectionAsync(
+                (NpgsqlConnection)db.Database.GetDbConnection(),
+                () => db.Database.MigrateAsync());
             Assert.Empty(await db.Database.GetPendingMigrationsAsync());
             Assert.Contains("20261012203545_AddGymSettingsAndAudit", await db.Database.GetAppliedMigrationsAsync());
         }

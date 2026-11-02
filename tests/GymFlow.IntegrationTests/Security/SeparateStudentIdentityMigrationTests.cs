@@ -1,5 +1,6 @@
 using GymFlow.Domain.Enums;
 using GymFlow.Infrastructure.Data;
+using GymFlow.IntegrationTests.Infrastructure;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
@@ -17,32 +18,15 @@ public sealed class SeparateStudentIdentityMigrationTests
     public async Task PostgreSql_BackfillPreservesLegacyAuthenticationAndBlocks(bool postgres)
     {
         Assert.True(postgres);
-        var adminConnection = new NpgsqlConnectionStringBuilder(
-            Environment.GetEnvironmentVariable("GYMFLOW_ISOLATED_POSTGRES"));
-        Assert.Equal("127.0.0.1", adminConnection.Host);
-        Assert.Equal(55439, adminConnection.Port);
-        Assert.Equal("gymflow_codex_test_base", adminConnection.Database);
-        Assert.Equal("gymflow_test", adminConnection.Username);
-
-        var expectedDataDirectory = Environment.GetEnvironmentVariable(
-            "GYMFLOW_ISOLATED_POSTGRES_DATA_DIRECTORY");
-        Assert.False(string.IsNullOrWhiteSpace(expectedDataDirectory));
-        Assert.True(File.Exists(Path.Combine(expectedDataDirectory!, "PG_VERSION")));
+        var adminConnection = DisposablePostgresCluster.BuildConnectionString(
+            "GYMFLOW_ISOLATED_POSTGRES", "GYMFLOW_ISOLATED_POSTGRES_PORT",
+            "gymflow_codex_test_base", "gymflow_test", "GYMFLOW_ISOLATED_POSTGRES_DATA_DIRECTORY");
 
         await using var admin = new NpgsqlConnection(adminConnection.ConnectionString);
-        await admin.OpenAsync();
-        await using (var verify = new NpgsqlCommand(
-            "SELECT current_setting('data_directory')", admin))
-        {
-            var actual = (string)(await verify.ExecuteScalarAsync())!;
-            Assert.Equal(Path.GetFullPath(expectedDataDirectory!).TrimEnd(Path.DirectorySeparatorChar),
-                Path.GetFullPath(actual).TrimEnd(Path.DirectorySeparatorChar),
-                StringComparer.OrdinalIgnoreCase);
-        }
+        await DisposablePostgresCluster.OpenVerifiedConnectionAsync(admin);
 
-        var database = $"gymflow_codex_test_{Guid.NewGuid():N}";
-        await using (var create = new NpgsqlCommand($"CREATE DATABASE \"{database}\"", admin))
-            await create.ExecuteNonQueryAsync();
+        var database = DisposablePostgresCluster.NewDatabaseName("gymflow_codex_test_");
+        await DisposablePostgresCluster.CreateDatabaseAsync(admin, database);
 
         var testConnection = new NpgsqlConnectionStringBuilder(adminConnection.ConnectionString)
         {
@@ -56,7 +40,9 @@ public sealed class SeparateStudentIdentityMigrationTests
                 .Options;
             await using var db = new AppDbContext(options);
             var migrator = db.GetService<IMigrator>();
-            await migrator.MigrateAsync(PreviousMigration);
+            await DisposablePostgresCluster.RunWithVerifiedConnectionAsync(
+                (NpgsqlConnection)db.Database.GetDbConnection(),
+                () => migrator.MigrateAsync(PreviousMigration));
 
             var now = new DateTime(2026, 10, 13, 12, 0, 0, DateTimeKind.Utc);
             var cases = new[]
@@ -69,7 +55,7 @@ public sealed class SeparateStudentIdentityMigrationTests
 
             await using (var connection = new NpgsqlConnection(testConnection.ConnectionString))
             {
-                await connection.OpenAsync();
+                await DisposablePostgresCluster.OpenVerifiedConnectionAsync(connection);
                 foreach (var state in cases)
                 {
                     var userId = Guid.NewGuid();
@@ -106,11 +92,13 @@ public sealed class SeparateStudentIdentityMigrationTests
                 }
             }
 
-            await migrator.MigrateAsync(TargetMigration);
+            await DisposablePostgresCluster.RunWithVerifiedConnectionAsync(
+                (NpgsqlConnection)db.Database.GetDbConnection(),
+                () => migrator.MigrateAsync(TargetMigration));
 
             await using (var verification = new NpgsqlConnection(testConnection.ConnectionString))
             {
-                await verification.OpenAsync();
+                await DisposablePostgresCluster.OpenVerifiedConnectionAsync(verification);
                 await using var verifyRows = new NpgsqlCommand("""
                     SELECT s."Id", s."UserId", u."IsActive", s."InactivationReason", s."ArchivedAt",
                            s."IsActive", s."AppAccessEnabled"
@@ -145,8 +133,7 @@ public sealed class SeparateStudentIdentityMigrationTests
         }
         finally
         {
-            await using var drop = new NpgsqlCommand($"DROP DATABASE \"{database}\" WITH (FORCE)", admin);
-            await drop.ExecuteNonQueryAsync();
+            await DisposablePostgresCluster.DropDatabaseAsync(admin, database);
         }
     }
 

@@ -6,6 +6,7 @@ using GymFlow.Application.Services;
 using GymFlow.Domain.Entities;
 using GymFlow.Domain.Enums;
 using GymFlow.Infrastructure.Data;
+using GymFlow.IntegrationTests.Infrastructure;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -21,6 +22,7 @@ using Microsoft.Extensions.Logging;
 using Npgsql;
 using System.Data.Common;
 using System.Collections.Concurrent;
+using GymFlow.Api.Controllers;
 
 namespace GymFlow.IntegrationTests.Security;
 
@@ -230,6 +232,7 @@ public partial class TenantEnrollmentAccessTests
     [InlineData("disabled", false, 0)]
     [InlineData("missing", false, 10)]
     [InlineData("disabled", false, 10)]
+    [InlineData("enabled", true, 0)]
     public Task PostgreSql_Reactivation_UsesTenantPolicyAndPreservesManualBlock(string mode, bool manual, int start) =>
         CheckReactivation(true, mode, manual, start);
 
@@ -595,7 +598,10 @@ public partial class TenantEnrollmentAccessTests
             (await client.PostAsJsonAsync("/api/auth/login", new { enabled.Email, Password = TestApi.Password })).StatusCode);
     }
 
-    private sealed class TestApi(bool usePostgres = false, bool migrateSchema = false) : WebApplicationFactory<Program>
+    private sealed class TestApi(
+        bool usePostgres = false,
+        bool migrateSchema = false,
+        bool cancellationPostgres = false) : WebApplicationFactory<Program>
     {
         public const string Password = "synthetic-password-123";
         public Guid EnabledGym { get; } = Guid.NewGuid();
@@ -603,10 +609,12 @@ public partial class TenantEnrollmentAccessTests
         public Guid DisabledGym { get; } = Guid.NewGuid();
         public Guid LegacyGym { get; } = Guid.NewGuid();
         public string EnabledFlag { get; init; } = "true";
+        public string EnabledTimeZone { get; init; } = "UTC";
         public IGymErpPolicy? ErpPolicyOverride { get; init; }
         public Func<AppDbContext, Task>? BeforeNextAsyncSave { get; set; }
         public Func<AppDbContext, Task>? BeforeEveryAsyncSave { get; set; }
         public Func<AppDbContext, Task>? BeforeNextTransaction { get; set; }
+        public Func<AppDbContext, Task>? BeforeEveryTransaction { get; set; }
         public Action<AppDbContext>? AfterNextAsyncSave { get; set; }
         private const string SqliteConnectionString = "Data Source=TenantEnrollmentAccessTests;Mode=Memory;Cache=Shared";
         private readonly SqliteConnection _connection = new(SqliteConnectionString);
@@ -614,7 +622,10 @@ public partial class TenantEnrollmentAccessTests
         private string? _postgresDatabase;
         private bool _initialized;
         private readonly ConcurrentQueue<string> _capturedExceptions = new();
+        private readonly ConcurrentQueue<string> _capturedStudentImportDatabaseDiagnostics = new();
         public string CapturedExceptions => string.Join(Environment.NewLine, _capturedExceptions);
+        public IReadOnlyList<string> CapturedStudentImportDatabaseDiagnostics =>
+            _capturedStudentImportDatabaseDiagnostics.ToArray();
 
         protected override IHost CreateHost(IHostBuilder builder)
         {
@@ -637,7 +648,7 @@ public partial class TenantEnrollmentAccessTests
                 [$"GymFeatures:{DisabledGym:D}:ErpEnabled"] = "false",
                 [$"GymTimeZones:{DisabledGym:D}"] = "UTC",
                 [$"GymTimeZones:{LegacyGym:D}"] = "UTC",
-                [$"GymTimeZones:{EnabledGym:D}"] = "UTC",
+                [$"GymTimeZones:{EnabledGym:D}"] = EnabledTimeZone,
                 [$"GymTimeZones:{OtherEnabledGym:D}"] = "UTC"
             }));
             return base.CreateHost(builder);
@@ -665,33 +676,31 @@ public partial class TenantEnrollmentAccessTests
                 services.RemoveAll<IDbContextOptionsConfiguration<AppDbContext>>();
                 if (usePostgres)
                 {
-                    var isolated = new NpgsqlConnectionStringBuilder(
-                        Environment.GetEnvironmentVariable("GYMFLOW_ISOLATED_POSTGRES"));
-                    if (isolated.Host != "127.0.0.1" || isolated.Port != 55439 ||
-                        isolated.Database != "gymflow_codex_test_base" || isolated.Username != "gymflow_test")
-                        throw new InvalidOperationException("Only the explicitly isolated local test cluster is allowed.");
-                    isolated.Pooling = false;
-                    var expectedDataDirectory = Environment.GetEnvironmentVariable("GYMFLOW_ISOLATED_POSTGRES_DATA_DIRECTORY");
-                    if (string.IsNullOrWhiteSpace(expectedDataDirectory) ||
-                        !Path.IsPathFullyQualified(expectedDataDirectory) ||
-                        !File.Exists(Path.Combine(expectedDataDirectory, "PG_VERSION")))
-                        throw new InvalidOperationException("The verified disposable cluster data directory is required.");
+                    var postgresVariable = cancellationPostgres
+                        ? "GYMFLOW_CANCELLATION_POSTGRES"
+                        : "GYMFLOW_ISOLATED_POSTGRES";
+                    var portVariable = cancellationPostgres
+                        ? "GYMFLOW_CANCELLATION_POSTGRES_PORT"
+                        : "GYMFLOW_ISOLATED_POSTGRES_PORT";
+                    var dataDirectoryVariable = cancellationPostgres
+                        ? "GYMFLOW_CANCELLATION_POSTGRES_DATA_DIRECTORY"
+                        : "GYMFLOW_ISOLATED_POSTGRES_DATA_DIRECTORY";
+                    var expectedDatabase = cancellationPostgres
+                        ? "gymflow_issue130_cancel_test_base"
+                        : "gymflow_codex_test_base";
+                    var expectedUser = cancellationPostgres ? "gymflow_cancel_test" : "gymflow_test";
+                    var isolated = DisposablePostgresCluster.BuildConnectionString(
+                        postgresVariable, portVariable, expectedDatabase, expectedUser, dataDirectoryVariable);
                     _postgresAdmin = isolated.ConnectionString;
                     using var admin = new NpgsqlConnection(_postgresAdmin);
-                    admin.Open();
-                    using (var verify = new NpgsqlCommand("SELECT current_setting('data_directory')", admin))
-                    {
-                        var actualDataDirectory = (string)verify.ExecuteScalar()!;
-                        if (!string.Equals(Path.GetFullPath(actualDataDirectory).TrimEnd(Path.DirectorySeparatorChar),
-                            Path.GetFullPath(expectedDataDirectory).TrimEnd(Path.DirectorySeparatorChar), StringComparison.OrdinalIgnoreCase))
-                            throw new InvalidOperationException("PostgreSQL is not the verified disposable cluster. No test database was created.");
-                    }
-                    _postgresDatabase = $"gymflow_codex_test_{Guid.NewGuid():N}";
-                    using var create = new NpgsqlCommand($"CREATE DATABASE \"{_postgresDatabase}\"", admin);
-                    create.ExecuteNonQuery();
+                    DisposablePostgresCluster.OpenVerifiedConnectionAsync(admin).GetAwaiter().GetResult();
+                    _postgresDatabase = DisposablePostgresCluster.NewDatabaseName(
+                        cancellationPostgres ? "gymflow_cancel_test_" : "gymflow_codex_test_");
+                    DisposablePostgresCluster.CreateDatabaseAsync(admin, _postgresDatabase).GetAwaiter().GetResult();
                     isolated.Database = _postgresDatabase;
                     services.AddDbContext<AppDbContext>(options => options.UseNpgsql(isolated.ConnectionString)
-                        .AddInterceptors(new BeforeSaveInterceptor(this), new BeforeTransactionInterceptor(this)));
+                        .AddInterceptors(new VerifyDisposablePostgresConnectionInterceptor(),
+                            new BeforeSaveInterceptor(this), new BeforeTransactionInterceptor(this)));
                 }
                 else
                 {
@@ -711,7 +720,16 @@ public partial class TenantEnrollmentAccessTests
                 if (migrateSchema)
                 {
                     if (!usePostgres) throw new InvalidOperationException("Migration validation requires the isolated PostgreSQL fixture.");
-                    db.Database.Migrate();
+                    DisposablePostgresCluster.RunWithVerifiedConnectionAsync(
+                        (NpgsqlConnection)db.Database.GetDbConnection(),
+                        () => { db.Database.Migrate(); return Task.CompletedTask; }).GetAwaiter().GetResult();
+                }
+                else if (usePostgres)
+                {
+                    // EF's database creator must control this connection's open/close lifecycle.
+                    // The connection interceptor verifies the harness-owned server immediately
+                    // after EF opens it and before EF sends EnsureCreated's first command.
+                    db.Database.EnsureCreatedAsync().GetAwaiter().GetResult();
                 }
                 else db.Database.EnsureCreated();
                 _initialized = true;
@@ -779,9 +797,8 @@ public partial class TenantEnrollmentAccessTests
             if (_postgresDatabase is not null)
             {
                 await using var admin = new NpgsqlConnection(_postgresAdmin);
-                await admin.OpenAsync();
-                await using var drop = new NpgsqlCommand($"DROP DATABASE \"{_postgresDatabase}\" WITH (FORCE)", admin);
-                await drop.ExecuteNonQueryAsync();
+                await DisposablePostgresCluster.OpenVerifiedConnectionAsync(admin);
+                await DisposablePostgresCluster.DropDatabaseAsync(admin, _postgresDatabase);
             }
         }
 
@@ -810,6 +827,25 @@ public partial class TenantEnrollmentAccessTests
             }
         }
 
+        private sealed class VerifyDisposablePostgresConnectionInterceptor : DbConnectionInterceptor
+        {
+            public override void ConnectionOpened(DbConnection connection, ConnectionEndEventData eventData) =>
+                VerifyConnectionAsync(connection).GetAwaiter().GetResult();
+
+            public override Task ConnectionOpenedAsync(
+                DbConnection connection,
+                ConnectionEndEventData eventData,
+                CancellationToken cancellationToken = default) => VerifyConnectionAsync(connection);
+
+            private static Task VerifyConnectionAsync(DbConnection connection)
+            {
+                if (connection is not NpgsqlConnection postgresConnection)
+                    throw new InvalidOperationException("The PostgreSQL test context opened an unexpected connection type.");
+
+                return DisposablePostgresCluster.VerifyOwnedConnectionAsync(postgresConnection);
+            }
+        }
+
         private sealed class BeforeTransactionInterceptor(TestApi factory) : DbTransactionInterceptor
         {
             public override async ValueTask<InterceptionResult<DbTransaction>> TransactionStartingAsync(
@@ -819,6 +855,8 @@ public partial class TenantEnrollmentAccessTests
                 var callback = factory.BeforeNextTransaction;
                 factory.BeforeNextTransaction = null;
                 if (callback is not null) await callback((AppDbContext)eventData.Context!);
+                var everyCallback = factory.BeforeEveryTransaction;
+                if (everyCallback is not null) await everyCallback((AppDbContext)eventData.Context!);
                 return result;
             }
         }
@@ -832,11 +870,14 @@ public partial class TenantEnrollmentAccessTests
         private sealed class CapturingExceptionLogger(string categoryName, TestApi factory) : ILogger
         {
             public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
-            public bool IsEnabled(LogLevel logLevel) => logLevel >= LogLevel.Error;
+            public bool IsEnabled(LogLevel logLevel) => logLevel >= LogLevel.Warning;
             public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception,
                 Func<TState, Exception?, string> formatter)
             {
                 if (exception is not null) factory._capturedExceptions.Enqueue($"{categoryName}: {exception}");
+                if (categoryName == typeof(StudentImportsController).FullName &&
+                    eventId.Id == 13001 && logLevel >= LogLevel.Warning)
+                    factory._capturedStudentImportDatabaseDiagnostics.Enqueue(formatter(state, null));
             }
         }
     }

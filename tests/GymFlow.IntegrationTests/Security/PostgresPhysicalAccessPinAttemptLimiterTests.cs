@@ -1,6 +1,7 @@
 using GymFlow.Application.Interfaces.Security;
 using GymFlow.Domain.Entities;
 using GymFlow.Infrastructure.Data;
+using GymFlow.IntegrationTests.Infrastructure;
 using GymFlow.Infrastructure.Security;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
@@ -191,38 +192,23 @@ public sealed class PostgresPhysicalAccessPinAttemptLimiterTests
     private static async Task WithDisposableDatabaseAsync(Func<TestDatabase, Task> test)
     {
         // Never consume application configuration or a development/production connection.
-        var connection = new NpgsqlConnectionStringBuilder(
-            Environment.GetEnvironmentVariable("GYMFLOW_ISOLATED_POSTGRES")
-            ?? throw new InvalidOperationException("The isolated PostgreSQL connection is required."));
-        if (connection.Host != "127.0.0.1" || connection.Port != 55439 ||
-            connection.Database != "gymflow_codex_test_base" || connection.Username != "gymflow_test")
-            throw new InvalidOperationException("Only the explicitly isolated loopback PostgreSQL cluster is allowed.");
-        connection.Pooling = false;
-        var expectedDataDirectory = Environment.GetEnvironmentVariable("GYMFLOW_ISOLATED_POSTGRES_DATA_DIRECTORY");
-        if (string.IsNullOrWhiteSpace(expectedDataDirectory) || !Path.IsPathFullyQualified(expectedDataDirectory) ||
-            !File.Exists(Path.Combine(expectedDataDirectory, "PG_VERSION")))
-            throw new InvalidOperationException("The verified disposable PostgreSQL data directory is required.");
+        var connection = DisposablePostgresCluster.BuildConnectionString(
+            "GYMFLOW_ISOLATED_POSTGRES", "GYMFLOW_ISOLATED_POSTGRES_PORT",
+            "gymflow_codex_test_base", "gymflow_test", "GYMFLOW_ISOLATED_POSTGRES_DATA_DIRECTORY");
 
         await using var admin = new NpgsqlConnection(connection.ConnectionString);
-        await admin.OpenAsync();
-        await using (var verify = new NpgsqlCommand("SELECT current_setting('data_directory')", admin))
-        {
-            var actual = (string)(await verify.ExecuteScalarAsync())!;
-            if (!string.Equals(Path.GetFullPath(actual).TrimEnd(Path.DirectorySeparatorChar),
-                    Path.GetFullPath(expectedDataDirectory).TrimEnd(Path.DirectorySeparatorChar), StringComparison.OrdinalIgnoreCase))
-                throw new InvalidOperationException("PostgreSQL is not the verified disposable cluster. No test database was created.");
-        }
-
-        var databaseName = $"gymflow_codex_test_pin_{Guid.NewGuid():N}";
+        await DisposablePostgresCluster.OpenVerifiedConnectionAsync(admin);
+        var databaseName = DisposablePostgresCluster.NewDatabaseName("gymflow_codex_test_pin_");
         try
         {
-            await using (var create = new NpgsqlCommand($"CREATE DATABASE \"{databaseName}\"", admin))
-                await create.ExecuteNonQueryAsync();
+            await DisposablePostgresCluster.CreateDatabaseAsync(admin, databaseName);
             connection.Database = databaseName;
             var database = new TestDatabase(connection.ConnectionString);
             await using (var setup = database.CreateContext())
             {
-                await setup.Database.MigrateAsync();
+                await DisposablePostgresCluster.RunWithVerifiedConnectionAsync(
+                    (NpgsqlConnection)setup.Database.GetDbConnection(),
+                    () => setup.Database.MigrateAsync());
                 var applied = (await setup.Database.GetAppliedMigrationsAsync()).ToArray();
                 Assert.Contains("20261023215000_OnePhysicalAccessPinPerStudent", applied);
                 Assert.Contains("20261023223000_PersistPhysicalAccessPinAttempts", applied);
@@ -233,8 +219,7 @@ public sealed class PostgresPhysicalAccessPinAttemptLimiterTests
         finally
         {
             // Covers migration/setup failures as well as assertions, without retaining pooled connections.
-            await using var drop = new NpgsqlCommand($"DROP DATABASE IF EXISTS \"{databaseName}\" WITH (FORCE)", admin);
-            await drop.ExecuteNonQueryAsync();
+            await DisposablePostgresCluster.DropDatabaseAsync(admin, databaseName, ifExists: true);
         }
     }
 
