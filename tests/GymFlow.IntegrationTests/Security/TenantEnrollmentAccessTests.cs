@@ -691,7 +691,9 @@ public partial class TenantEnrollmentAccessTests
                     var expectedUser = cancellationPostgres ? "gymflow_cancel_test" : "gymflow_test";
                     var isolated = DisposablePostgresCluster.BuildConnectionString(
                         postgresVariable, portVariable, expectedDatabase, expectedUser, dataDirectoryVariable);
-                    _postgresAdmin = isolated.ConnectionString;
+                    _postgresAdmin = cancellationPostgres
+                        ? DisposablePostgresCluster.CreateVerifiedAdministrativeConnectionString()
+                        : isolated.ConnectionString;
                     using var admin = new NpgsqlConnection(_postgresAdmin);
                     DisposablePostgresCluster.OpenVerifiedConnectionAsync(admin).GetAwaiter().GetResult();
                     _postgresDatabase = DisposablePostgresCluster.NewDatabaseName(

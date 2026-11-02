@@ -64,6 +64,19 @@ internal static class DisposablePostgresCluster
         return CreateConnectionString(owned, expectedDatabase, expectedUser);
     }
 
+    public static string CreateVerifiedAdministrativeConnectionString()
+    {
+        var owned = RequireOwnedCluster();
+        EnsureOwnedCluster(owned);
+        if (Volatile.Read(ref owned.BackendIdentityVerified) != 1)
+        {
+            throw new InvalidOperationException(
+                "The harness administrative connection is unavailable before cluster identity is verified.");
+        }
+
+        return CreateConnectionString(owned, StandardDatabase, StandardUser).ConnectionString;
+    }
+
     public static async Task VerifyIdentityAsync(
         NpgsqlConnection connection,
         string expectedDatabase,
@@ -85,7 +98,14 @@ internal static class DisposablePostgresCluster
             throw new InvalidOperationException("The protected Issue #130 PostgreSQL data directory is not allowed.");
         }
 
-        await VerifyBackendIdentityAsync(connection, owned, expectedDatabase, expectedUser);
+        if (expectedUser == CancellationUser)
+        {
+            await VerifyRestrictedBackendIdentityAsync(connection, owned, expectedDatabase, expectedUser);
+        }
+        else
+        {
+            await VerifyBackendIdentityAsync(connection, owned, expectedDatabase, expectedUser);
+        }
     }
 
     public static async Task VerifyOwnedConnectionAsync(NpgsqlConnection connection)
@@ -163,7 +183,11 @@ internal static class DisposablePostgresCluster
         }
 
         EnsureOwnedCluster(owned);
-        await using var create = new NpgsqlCommand($"CREATE DATABASE \"{databaseName}\"", adminConnection);
+        var databaseOwner = databaseName.StartsWith("gymflow_cancel_test_", StringComparison.Ordinal)
+            ? CancellationUser
+            : StandardUser;
+        await using var create = new NpgsqlCommand(
+            $"CREATE DATABASE \"{databaseName}\" OWNER \"{databaseOwner}\"", adminConnection);
         await create.ExecuteNonQueryAsync();
         if (!owned.CreatedDatabases.TryAdd(databaseName, 0) || !owned.ReservedDatabases.TryRemove(databaseName, out _))
         {
@@ -465,7 +489,7 @@ internal static class DisposablePostgresCluster
             EnsureDatabaseAbsent(bootstrap, CancellationDatabase);
             EnsureOwnedCluster(owner);
             ExecuteDdl(bootstrap,
-                $"CREATE ROLE \"{CancellationUser}\" LOGIN CREATEDB PASSWORD '{cancellationPassword}'");
+                $"CREATE ROLE \"{CancellationUser}\" LOGIN PASSWORD '{cancellationPassword}'");
             ExecuteDdl(bootstrap,
                 $"CREATE DATABASE \"{CancellationDatabase}\" OWNER \"{CancellationUser}\"");
             return owner;
@@ -546,6 +570,64 @@ internal static class DisposablePostgresCluster
         {
             throw new InvalidOperationException(
                 $"Owned PostgreSQL identity verification failed for: {string.Join(", ", failedChecks)}; no test operation was performed.");
+        }
+
+        Volatile.Write(ref owner.BackendIdentityVerified, 1);
+    }
+
+    private static async Task VerifyRestrictedBackendIdentityAsync(
+        NpgsqlConnection connection,
+        OwnedCluster owner,
+        string expectedDatabase,
+        string expectedUser)
+    {
+        EnsureOwnedCluster(owner);
+        if (expectedUser != CancellationUser || Volatile.Read(ref owner.BackendIdentityVerified) != 1)
+        {
+            throw new InvalidOperationException(
+                "A restricted PostgreSQL test connection requires a previously verified harness cluster identity.");
+        }
+
+        await using var command = new NpgsqlCommand("""
+            SELECT current_database(), current_user, host(inet_server_addr()),
+                   family(inet_server_addr()), inet_server_port(),
+                   current_setting('server_version_num')::integer, current_setting('application_name'),
+                   EXISTS (SELECT 1 FROM pg_database WHERE datname = 'gymflow_dev'),
+                   EXISTS (SELECT 1 FROM pg_database WHERE datname = 'gymflow_issue130_manual_20261026'),
+                   EXISTS (SELECT 1 FROM pg_database WHERE datname = 'issue130_restore_avelri'),
+                   EXISTS (SELECT 1 FROM pg_database WHERE datname = 'issue130_erp_work_20261101')
+            """, connection);
+        await using var reader = await command.ExecuteReaderAsync();
+        if (!await reader.ReadAsync())
+        {
+            throw new InvalidOperationException("The restricted PostgreSQL backend identity could not be read.");
+        }
+
+        var serverAddressHost = reader.IsDBNull(2) ? string.Empty : reader.GetString(2);
+        var serverAddressFamily = reader.IsDBNull(3) ? -1 : reader.GetInt32(3);
+        var serverPort = reader.GetInt32(4);
+        var failedChecks = new List<string>();
+        if (reader.GetString(0) != expectedDatabase) failedChecks.Add("database");
+        if (reader.GetString(1) != expectedUser) failedChecks.Add("user");
+        var serverAddressParsed = IPAddress.TryParse(serverAddressHost, out var serverAddress);
+        var addressFamilyMatches = serverAddressParsed &&
+            serverAddressFamily == (serverAddress!.AddressFamily == AddressFamily.InterNetwork ? 4 : 6);
+        var normalizedServerAddress = serverAddressParsed && serverAddress!.IsIPv4MappedToIPv6
+            ? serverAddress.MapToIPv4()
+            : serverAddress;
+        if (!addressFamilyMatches || normalizedServerAddress is null || !IPAddress.IsLoopback(normalizedServerAddress))
+            failedChecks.Add("loopback address");
+        if (serverPort != owner.Port) failedChecks.Add("port");
+        if (reader.GetInt32(5) is < 170000 or >= 180000) failedChecks.Add("PostgreSQL 17 version");
+        if (reader.GetString(6) != ApplicationNameFor(owner)) failedChecks.Add("harness execution identity");
+        if (reader.GetBoolean(7)) failedChecks.Add("gymflow_dev exclusion");
+        if (reader.GetBoolean(8)) failedChecks.Add("manual database exclusion");
+        if (reader.GetBoolean(9)) failedChecks.Add("Issue #130 recovery database exclusion");
+        if (reader.GetBoolean(10)) failedChecks.Add("Issue #130 work database exclusion");
+        if (failedChecks.Count > 0)
+        {
+            throw new InvalidOperationException(
+                $"Restricted PostgreSQL identity verification failed for: {string.Join(", ", failedChecks)}; no test operation was performed.");
         }
     }
 
@@ -1066,6 +1148,7 @@ internal static class DisposablePostgresCluster
         public string SuperuserPassword { get; } = superuserPassword;
         public string CancellationPassword { get; } = cancellationPassword;
         public int PostgresProcessId { get; set; }
+        public int BackendIdentityVerified;
         public System.Collections.Concurrent.ConcurrentDictionary<string, byte> CreatedDatabases { get; } = new(StringComparer.OrdinalIgnoreCase);
         public System.Collections.Concurrent.ConcurrentDictionary<string, byte> ReservedDatabases { get; } = new(StringComparer.OrdinalIgnoreCase);
     }
