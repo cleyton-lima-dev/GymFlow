@@ -4,6 +4,7 @@ using System.Net.Sockets;
 using System.Security.AccessControl;
 using System.Security.Cryptography;
 using System.Security.Principal;
+using System.Runtime.CompilerServices;
 using System.Text;
 using Npgsql;
 
@@ -32,6 +33,8 @@ internal static class DisposablePostgresCluster
 
     private static readonly HashSet<int> ReservedPorts = [5432, 49357, 55439, 55442, 55444];
     private static readonly object Sync = new();
+    private static readonly object ConnectionProofSync = new();
+    private static readonly ConditionalWeakTable<NpgsqlConnection, OwnedConnectionProof> ConnectionProofs = new();
     private static OwnedCluster? _owned;
     private static bool _processExitRegistered;
 
@@ -86,25 +89,36 @@ internal static class DisposablePostgresCluster
     {
         var owned = RequireOwnedCluster();
         EnsureOwnedCluster(owned);
-        ValidateConnectionForOwnedCluster(connection, owned, expectedDatabase, expectedUser, expectedPort);
-        if (connection.State != System.Data.ConnectionState.Open)
+        var proof = ValidateConnectionForOwnedCluster(
+            connection, owned, expectedDatabase, expectedUser, expectedPort, allowPendingProof: true);
+        try
         {
-            throw new InvalidOperationException("The owned PostgreSQL connection must be open before identity verification.");
-        }
+            if (connection.State != System.Data.ConnectionState.Open)
+            {
+                throw new InvalidOperationException("The owned PostgreSQL connection must be open before identity verification.");
+            }
 
-        var configuredDataDirectory = Environment.GetEnvironmentVariable(dataDirectoryEnvironmentVariable);
-        if (IsProtectedDataDirectory(configuredDataDirectory))
-        {
-            throw new InvalidOperationException("The protected Issue #130 PostgreSQL data directory is not allowed.");
-        }
+            var configuredDataDirectory = Environment.GetEnvironmentVariable(dataDirectoryEnvironmentVariable);
+            if (IsProtectedDataDirectory(configuredDataDirectory))
+            {
+                throw new InvalidOperationException("The protected Issue #130 PostgreSQL data directory is not allowed.");
+            }
 
-        if (expectedUser == CancellationUser)
-        {
-            await VerifyRestrictedBackendIdentityAsync(connection, owned, expectedDatabase, expectedUser);
+            if (expectedUser == CancellationUser)
+            {
+                await VerifyRestrictedBackendIdentityAsync(connection, owned, expectedDatabase, expectedUser);
+            }
+            else
+            {
+                await VerifyBackendIdentityAsync(connection, owned, expectedDatabase, expectedUser);
+            }
+
+            MarkConnectionBackendIdentityVerified(connection, owned, expectedDatabase, expectedUser, proof);
         }
-        else
+        catch
         {
-            await VerifyBackendIdentityAsync(connection, owned, expectedDatabase, expectedUser);
+            RemoveConnectionProof(connection, proof);
+            throw;
         }
     }
 
@@ -128,18 +142,22 @@ internal static class DisposablePostgresCluster
         var expectedUser = requested.Username ??
             throw new InvalidOperationException("The owned PostgreSQL connection has no user identity.");
         ValidateConnectionForOwnedCluster(connection, owned, expectedDatabase, expectedUser, owned.Port);
-        if (connection.State != System.Data.ConnectionState.Open)
-        {
-            await connection.OpenAsync();
-        }
-
         try
         {
+            if (connection.State != System.Data.ConnectionState.Open)
+            {
+                await connection.OpenAsync();
+            }
+
             await VerifyIdentityAsync(connection, expectedDatabase, expectedUser, owned.Port, string.Empty);
         }
         catch
         {
-            await connection.CloseAsync();
+            if (connection.State != System.Data.ConnectionState.Closed)
+            {
+                await connection.CloseAsync();
+            }
+            RemoveConnectionProof(connection);
             throw;
         }
     }
@@ -235,12 +253,6 @@ internal static class DisposablePostgresCluster
         ArgumentNullException.ThrowIfNull(operation);
         var owned = RequireOwnedCluster();
         EnsureOwnedCluster(owned);
-        var requested = new NpgsqlConnectionStringBuilder(connection.ConnectionString);
-        var expectedDatabase = requested.Database ??
-            throw new InvalidOperationException("The owned PostgreSQL connection has no database identity.");
-        var expectedUser = requested.Username ??
-            throw new InvalidOperationException("The owned PostgreSQL connection has no user identity.");
-        ValidateConnectionForOwnedCluster(connection, owned, expectedDatabase, expectedUser, owned.Port);
         var openedHere = connection.State != System.Data.ConnectionState.Open;
         await OpenVerifiedConnectionAsync(connection);
 
@@ -631,12 +643,13 @@ internal static class DisposablePostgresCluster
         }
     }
 
-    private static void ValidateConnectionForOwnedCluster(
+    private static OwnedConnectionProof ValidateConnectionForOwnedCluster(
         NpgsqlConnection connection,
         OwnedCluster owner,
         string expectedDatabase,
         string expectedUser,
-        int expectedPort)
+        int expectedPort,
+        bool allowPendingProof = false)
     {
         var requested = new NpgsqlConnectionStringBuilder(connection.ConnectionString);
         var allowedKeys = new HashSet<string>(
@@ -659,20 +672,100 @@ internal static class DisposablePostgresCluster
         if (requested.Port != owner.Port || requested.Port != expectedPort) mismatches.Add("port");
         if (requested.Database != expectedDatabase) mismatches.Add("database");
         if (requested.Username != expectedUser) mismatches.Add("username");
-        // Npgsql intentionally omits the password from ConnectionString after a successful open
-        // unless Persist Security Info is enabled. Closed connections must still carry this run's
-        // harness-generated password; an open connection has already authenticated to the server.
-        if (connection.State != System.Data.ConnectionState.Open &&
-            requested.Password != PasswordFor(owner, expectedUser))
-            mismatches.Add("password");
         if (requested.Pooling) mismatches.Add("pooling");
         if (requested.SslMode != SslMode.Disable) mismatches.Add("SSL mode");
         if (requested.ApplicationName != ApplicationNameFor(owner)) mismatches.Add("harness execution identity");
+
+        var expectedPassword = PasswordFor(owner, expectedUser);
+        OwnedConnectionProof proof;
+        lock (ConnectionProofSync)
+        {
+            if (ConnectionProofs.TryGetValue(connection, out var existingProof))
+            {
+                proof = existingProof;
+                if (!ProofMatchesConnection(proof, owner, requested, expectedDatabase, expectedUser))
+                    mismatches.Add("harness connection ownership");
+                if (!proof.BackendIdentityVerified && !allowPendingProof)
+                    mismatches.Add("unverified harness connection");
+                if (!string.IsNullOrEmpty(requested.Password) && requested.Password != expectedPassword)
+                    mismatches.Add("password");
+            }
+            else
+            {
+                proof = null!;
+                if (connection.State != System.Data.ConnectionState.Closed || requested.Password != expectedPassword)
+                {
+                    mismatches.Add("original credential or connection ownership");
+                }
+                else if (mismatches.Count == 0)
+                {
+                    proof = new OwnedConnectionProof(owner.RunId, requested);
+                    ConnectionProofs.Add(connection, proof);
+                }
+            }
+        }
+
         if (mismatches.Count > 0)
         {
             throw new InvalidOperationException(
                 $"The PostgreSQL connection is not the active harness-owned identity; mismatched fields: " +
                 string.Join(", ", mismatches) + ". Credential values are intentionally omitted.");
+        }
+
+        return proof;
+    }
+
+    private static bool ProofMatchesConnection(
+        OwnedConnectionProof proof,
+        OwnedCluster owner,
+        NpgsqlConnectionStringBuilder requested,
+        string expectedDatabase,
+        string expectedUser) =>
+        proof.RunId == owner.RunId &&
+        proof.Host == requested.Host &&
+        proof.Port == requested.Port &&
+        proof.Database == expectedDatabase &&
+        proof.Database == requested.Database &&
+        proof.Username == expectedUser &&
+        proof.Username == requested.Username &&
+        proof.ApplicationName == requested.ApplicationName &&
+        proof.Pooling == requested.Pooling &&
+        proof.SslMode == requested.SslMode &&
+        proof.Timeout == requested.Timeout &&
+        proof.CommandTimeout == requested.CommandTimeout;
+
+    private static void MarkConnectionBackendIdentityVerified(
+        NpgsqlConnection connection,
+        OwnedCluster owner,
+        string expectedDatabase,
+        string expectedUser,
+        OwnedConnectionProof proof)
+    {
+        var requested = new NpgsqlConnectionStringBuilder(connection.ConnectionString);
+        lock (ConnectionProofSync)
+        {
+            if (!ConnectionProofs.TryGetValue(connection, out var currentProof) ||
+                !ReferenceEquals(currentProof, proof) ||
+                !ProofMatchesConnection(proof, owner, requested, expectedDatabase, expectedUser))
+            {
+                throw new InvalidOperationException("The PostgreSQL connection identity changed during verification.");
+            }
+
+            proof.MarkBackendIdentityVerified();
+        }
+    }
+
+    private static void RemoveConnectionProof(
+        NpgsqlConnection connection,
+        OwnedConnectionProof? expectedProof = null)
+    {
+        lock (ConnectionProofSync)
+        {
+            if (ConnectionProofs.TryGetValue(connection, out var currentProof) &&
+                (expectedProof is null || ReferenceEquals(currentProof, expectedProof)))
+            {
+                ConnectionProofs.Remove(connection);
+            }
         }
     }
 
@@ -1121,6 +1214,25 @@ internal static class DisposablePostgresCluster
         {
             throw new InvalidOperationException("The PostgreSQL test cluster was not created in its private temporary directory.");
         }
+    }
+
+    private sealed class OwnedConnectionProof(string runId, NpgsqlConnectionStringBuilder connection)
+    {
+        private int _backendIdentityVerified;
+
+        public string RunId { get; } = runId;
+        public string Host { get; } = connection.Host;
+        public int Port { get; } = connection.Port;
+        public string Database { get; } = connection.Database;
+        public string Username { get; } = connection.Username;
+        public string ApplicationName { get; } = connection.ApplicationName;
+        public bool Pooling { get; } = connection.Pooling;
+        public SslMode SslMode { get; } = connection.SslMode;
+        public int Timeout { get; } = connection.Timeout;
+        public int CommandTimeout { get; } = connection.CommandTimeout;
+        public bool BackendIdentityVerified => Volatile.Read(ref _backendIdentityVerified) == 1;
+
+        public void MarkBackendIdentityVerified() => Interlocked.Exchange(ref _backendIdentityVerified, 1);
     }
 
     private sealed class OwnedCluster(

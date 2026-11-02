@@ -211,6 +211,105 @@ public sealed class DisposablePostgresClusterProtectionTests
             Environment.SetEnvironmentVariable("GYMFLOW_POSTGRES_BIN", originalPostgresBin);
         }
     }
+
+    [HarnessOwnedPostgresFact]
+    public async Task VerifiedConnectionCanReopenButCannotReuseProofAfterIdentitySubstitution()
+    {
+        var originalConnection = Environment.GetEnvironmentVariable("GYMFLOW_TEST_GUARD_CONNECTION");
+        var originalPort = Environment.GetEnvironmentVariable("GYMFLOW_TEST_GUARD_PORT");
+        var originalDataDirectory = Environment.GetEnvironmentVariable("GYMFLOW_TEST_GUARD_DATA");
+        const string optInPassword = "synthetic-guard-only";
+        var dataDirectory = Path.Combine(Path.GetTempPath(), "not-created", "connection-proof");
+        Environment.SetEnvironmentVariable("GYMFLOW_TEST_GUARD_CONNECTION",
+            $"Host=127.0.0.1;Port=55439;Database=gymflow_codex_test_base;Username=gymflow_test;Password={optInPassword};SSL Mode=Disable");
+        Environment.SetEnvironmentVariable("GYMFLOW_TEST_GUARD_PORT", "55439");
+        Environment.SetEnvironmentVariable("GYMFLOW_TEST_GUARD_DATA", dataDirectory);
+
+        try
+        {
+            var baseConnection = DisposablePostgresCluster.BuildConnectionString(
+                "GYMFLOW_TEST_GUARD_CONNECTION",
+                "GYMFLOW_TEST_GUARD_PORT",
+                "gymflow_codex_test_base",
+                "gymflow_test",
+                "GYMFLOW_TEST_GUARD_DATA");
+            var identity = DisposablePostgresCluster.CurrentOwnedIdentityForTests();
+            var originalOwnedConnectionString = baseConnection.ConnectionString;
+            await using var trusted = new NpgsqlConnection(originalOwnedConnectionString);
+
+            await DisposablePostgresCluster.OpenVerifiedConnectionAsync(trusted);
+            await trusted.CloseAsync();
+            await DisposablePostgresCluster.RunWithVerifiedConnectionAsync(trusted, () => Task.CompletedTask);
+            await trusted.CloseAsync();
+
+            var incorrectCredential = new NpgsqlConnectionStringBuilder(originalOwnedConnectionString)
+            {
+                Password = "synthetic-wrong-credential"
+            };
+            await using (var invalid = new NpgsqlConnection(incorrectCredential.ConnectionString))
+            {
+                var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                    DisposablePostgresCluster.RunWithVerifiedConnectionAsync(invalid, () => Task.CompletedTask));
+                Assert.Contains("credential", exception.Message, StringComparison.OrdinalIgnoreCase);
+                Assert.DoesNotContain("synthetic-wrong-credential", exception.Message, StringComparison.Ordinal);
+                Assert.Equal(System.Data.ConnectionState.Closed, invalid.State);
+            }
+
+            var otherPort = identity.Port == 65001 ? 65002 : 65001;
+            var mutations = new (string Name, Action<NpgsqlConnectionStringBuilder> Apply)[]
+            {
+                ("host", value => value.Host = "localhost"),
+                ("port", value => value.Port = otherPort),
+                ("database", value => value.Database = "issue130_restore_avelri"),
+                ("username", value => value.Username = "issue130_restore"),
+                ("ApplicationName", value => value.ApplicationName = "external-connection")
+            };
+
+            foreach (var mutation in mutations)
+            {
+                var changed = new NpgsqlConnectionStringBuilder(originalOwnedConnectionString);
+                mutation.Apply(changed);
+                trusted.ConnectionString = changed.ConnectionString;
+                var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                    DisposablePostgresCluster.RunWithVerifiedConnectionAsync(trusted, () => Task.CompletedTask));
+                Assert.NotEmpty(exception.Message);
+                Assert.Equal(System.Data.ConnectionState.Closed, trusted.State);
+
+                trusted.ConnectionString = originalOwnedConnectionString;
+                await DisposablePostgresCluster.RunWithVerifiedConnectionAsync(trusted, () => Task.CompletedTask);
+                await trusted.CloseAsync();
+            }
+
+            var redactedReplacement = trusted.ConnectionString;
+            var replacementBuilder = new NpgsqlConnectionStringBuilder(redactedReplacement);
+            Assert.True(string.IsNullOrEmpty(replacementBuilder.Password));
+            await using (var replacement = new NpgsqlConnection(redactedReplacement))
+            {
+                var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                    DisposablePostgresCluster.RunWithVerifiedConnectionAsync(replacement, () => Task.CompletedTask));
+                Assert.Contains("credential", exception.Message, StringComparison.OrdinalIgnoreCase);
+                Assert.Equal(System.Data.ConnectionState.Closed, replacement.State);
+            }
+
+            var protectedTarget = new NpgsqlConnectionStringBuilder(originalOwnedConnectionString)
+            {
+                Database = "issue130_restore_avelri",
+                Username = "issue130_restore"
+            };
+            await using (var protectedConnection = new NpgsqlConnection(protectedTarget.ConnectionString))
+            {
+                await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                    DisposablePostgresCluster.RunWithVerifiedConnectionAsync(protectedConnection, () => Task.CompletedTask));
+                Assert.Equal(System.Data.ConnectionState.Closed, protectedConnection.State);
+            }
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("GYMFLOW_TEST_GUARD_CONNECTION", originalConnection);
+            Environment.SetEnvironmentVariable("GYMFLOW_TEST_GUARD_PORT", originalPort);
+            Environment.SetEnvironmentVariable("GYMFLOW_TEST_GUARD_DATA", originalDataDirectory);
+        }
+    }
 }
 
 public sealed class HarnessOwnedPostgresFactAttribute : FactAttribute
