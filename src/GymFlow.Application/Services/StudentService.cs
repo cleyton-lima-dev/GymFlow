@@ -382,26 +382,36 @@ public class StudentService
     }
 
     public async Task<(bool Enabled, string? Token, DateTime? ExpiresAt)?> SetAppAccessAsync(
-        Guid studentId, Guid gymId, bool enabled)
+        Guid studentId, Guid gymId, bool enabled, string? email = null)
     {
         var student = await _studentRepository.GetByIdAndGymIdAsync(studentId, gymId);
         if (student is null || student.ArchivedAt is not null || !student.IsActive)
             return null;
 
-        if (enabled && string.IsNullOrWhiteSpace(student.Email))
-            throw new ArgumentException("Informe o e-mail do aluno antes de habilitar o aplicativo.");
-        if (enabled && !new EmailAddressAttribute().IsValid(student.Email))
-            throw new ArgumentException("O e-mail do aluno é inválido.");
-
         var now = DateTime.UtcNow;
         string? token = null;
-        student.AppAccessEnabled = enabled;
-        student.AppInviteTokenHash = null;
-        student.AppInviteExpiresAt = null;
+        string? normalizedEmail = null;
+
         if (enabled && student.UserId is null)
         {
-            if (await _userRepository.GetByEmailAsync(student.Email!) is not null)
-                throw new ArgumentException("Já existe uma conta com este e-mail.");
+            normalizedEmail = NormalizeEmail(email ?? student.Email);
+            if (normalizedEmail is null)
+                throw new ArgumentException("Informe o e-mail do aluno antes de habilitar o aplicativo.");
+            if (!new EmailAddressAttribute().IsValid(normalizedEmail))
+                throw new ArgumentException("O e-mail do aluno é inválido.");
+
+            PersistenceTextPolicy.ValidateMaxLength(
+                normalizedEmail,
+                PersistenceTextPolicy.EmailMaxLength,
+                "O e-mail");
+
+            if (await _userRepository.GetByEmailAsync(normalizedEmail) is not null)
+            {
+                throw new StudentIdentityConflictException(
+                    "Já existe uma conta usando este e-mail.");
+            }
+
+            student.Email = normalizedEmail;
             token = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
             student.AppInviteTokenHash = HashToken(token);
             student.AppInviteExpiresAt = now.AddHours(24);
@@ -411,6 +421,13 @@ public class StudentService
             // Only an explicit Admin operation may restore an existing digital account.
             student.User.IsActive = true;
             student.User.UpdatedAt = now;
+        }
+
+        student.AppAccessEnabled = enabled;
+        if (!enabled || student.UserId is not null)
+        {
+            student.AppInviteTokenHash = null;
+            student.AppInviteExpiresAt = null;
         }
         student.UpdatedAt = now;
         await _studentRepository.UpdateAsync(student);

@@ -195,9 +195,37 @@ Usuário autenticado com token ainda válido armazenado no dispositivo.
 ### Resultado esperado
 
 - aluno criado;
-- `User` criado com perfil `Student`;
+- somente um registro `Student` criado, sem registro `User`;
+- e-mail e demais dados de contato opcionais; senha não solicitada;
+- acesso ao aplicativo desabilitado e nenhum convite emitido;
+- nenhuma matrícula, plano ou cobrança criada;
 - aluno vinculado automaticamente à academia do Administrador;
 - novo cadastro aparece na listagem.
+
+---
+
+## ADM-002A — Liberar acesso e entregar convite
+
+**Perfil:** Administrador
+
+### Passos
+
+1. Abrir os detalhes de um aluno sem e-mail e selecionar **Habilitar acesso**.
+2. Informar um e-mail válido; repetir a liberação usando e-mail já cadastrado.
+3. Na emissão, abrir cada canal: e-mail e WhatsApp.
+4. Conferir a mensagem preenchida e confirmar o envio manualmente no aplicativo externo.
+
+### Resultado esperado
+
+- e-mail é normalizado e salvo junto com o acesso e o convite pendente;
+- e-mail inválido ou já associado a uma identidade é rejeitado sem persistência parcial;
+- a tela oferece mensagem com link de ativação e expiração de 24 horas;
+- os canais apenas abrem o cliente de e-mail ou o seletor de contatos do WhatsApp; o envio não é automático;
+- o login permanece associado ao e-mail, inclusive quando a entrega é pelo WhatsApp;
+- não há `User` nem senha administrativa antes de o aluno concluir a ativação;
+- Professor recebe `403` e Admin de outra academia não altera nem consulta o convite;
+- token expirado, revogado ou reutilizado não ativa a conta;
+- liberar acesso não cria matrícula ou cobrança e continua sujeito ao gating financeiro da academia.
 
 ---
 

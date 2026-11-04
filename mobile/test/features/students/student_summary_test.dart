@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:gymflow/features/students/models/paged_students_response.dart';
 import 'package:gymflow/features/students/models/student_summary.dart';
 
 void main() {
@@ -29,5 +30,28 @@ void main() {
     });
 
     expect(student.email, 'aluno@example.test');
+  });
+
+  test('paged student listing accepts an item with null email', () {
+    final page = PagedStudentsResponse.fromJson({
+      'items': [
+        {
+          'id': 'student-id',
+          'name': 'Aluno sem conta',
+          'email': null,
+          'phone': null,
+          'birthDate': null,
+          'isActive': true,
+          'createdAt': '2026-10-19T12:00:00Z',
+        },
+      ],
+      'page': 1,
+      'pageSize': 20,
+      'totalCount': 1,
+      'totalPages': 1,
+    });
+
+    expect(page.items.single.email, isNull);
+    expect(page.items.single.name, 'Aluno sem conta');
   });
 }

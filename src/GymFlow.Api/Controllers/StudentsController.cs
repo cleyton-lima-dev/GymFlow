@@ -36,13 +36,21 @@ public class StudentsController : ControllerBase
         Response.Headers.CacheControl = "no-store";
         try
         {
-            var result = await _studentService.SetAppAccessAsync(id, gymId, request.Enabled);
+            var result = await _studentService.SetAppAccessAsync(
+                id,
+                gymId,
+                request.Enabled,
+                request.Email);
             return result is null ? NotFound() : Ok(new
             {
                 enabled = result.Value.Enabled,
                 token = result.Value.Token,
                 expiresAt = result.Value.ExpiresAt
             });
+        }
+        catch (StudentIdentityConflictException ex)
+        {
+            return Conflict(new { message = ex.Message });
         }
         catch (ArgumentException ex) { return BadRequest(new { message = ex.Message }); }
     }

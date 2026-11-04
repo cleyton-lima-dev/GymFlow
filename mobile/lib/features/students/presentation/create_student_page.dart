@@ -162,8 +162,8 @@ class _CreateStudentViewState extends State<_CreateStudentView> {
                     const SizedBox(height: 8),
 
                     Text(
-                      'Cadastre o aluno no Avelri Gestão. O acesso ao '
-                          'aplicativo é ativado separadamente por convite.',
+                      'Cadastre o aluno no Avelri Gestão. A liberação de '
+                          'acesso ao aplicativo acontece separadamente.',
                       style: theme.textTheme.bodyLarge?.copyWith(
                         color: colorScheme.onSurfaceVariant,
                         height: 1.45,
@@ -350,8 +350,11 @@ class _CreateStudentViewState extends State<_CreateStudentView> {
                                 const SizedBox(width: 12),
                                 Expanded(
                                   child: Text(
-                                    'A senha cadastrada será utilizada '
-                                        'pelo aluno para acessar o Avelri.',
+                                    'Este cadastro não libera acesso ao '
+                                        'aplicativo. Para ativar o acesso, '
+                                        'o Admin deverá informar um e-mail '
+                                        'válido e liberar o acesso '
+                                        'separadamente.',
                                     style: theme.textTheme.bodyMedium
                                         ?.copyWith(
                                       height: 1.4,

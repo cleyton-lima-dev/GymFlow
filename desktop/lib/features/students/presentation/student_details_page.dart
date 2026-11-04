@@ -14,16 +14,28 @@ import 'package:avelri_gestao/features/students/data/students_service.dart';
 import 'package:avelri_gestao/features/students/presentation/student_details_view_model.dart';
 import 'package:avelri_gestao/features/students/presentation/student_financial_history_section.dart';
 import 'package:avelri_gestao/features/students/presentation/student_physical_access_section.dart';
+import 'package:avelri_gestao/features/students/presentation/student_invite_share_links.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 const _studentAppBaseUrl = String.fromEnvironment(
   'STUDENT_APP_URL',
   defaultValue: 'https://avelri.pages.dev',
 );
 
+typedef InviteUrlLauncher = Future<bool> Function(Uri uri);
+
+Future<bool> _launchInviteUrl(Uri uri) =>
+    launchUrl(uri, mode: LaunchMode.externalApplication);
+
 class StudentDetailsPage extends StatelessWidget {
-  const StudentDetailsPage({required this.studentId, super.key});
+  const StudentDetailsPage({
+    required this.studentId,
+    this.launchInviteUrl = _launchInviteUrl,
+    super.key,
+  });
 
   final String studentId;
+  final InviteUrlLauncher launchInviteUrl;
 
   @override
   Widget build(BuildContext context) {
@@ -38,13 +50,15 @@ class StudentDetailsPage extends StatelessWidget {
         studentId,
         erpEnabled: erpEnabled,
       )..load(),
-      child: const _StudentDetailsView(),
+      child: _StudentDetailsView(launchInviteUrl: launchInviteUrl),
     );
   }
 }
 
 class _StudentDetailsView extends StatelessWidget {
-  const _StudentDetailsView();
+  const _StudentDetailsView({required this.launchInviteUrl});
+
+  final InviteUrlLauncher launchInviteUrl;
 
   @override
   Widget build(BuildContext context) {
@@ -393,7 +407,7 @@ class _StudentDetailsView extends StatelessWidget {
                     ),
                     const SizedBox(height: 8),
                     const Text(
-                      'O aluno precisa de um e-mail válido. Após receber o convite, ele cria a própria senha. O Admin não define nem visualiza essa senha.',
+                      'O aluno precisa de um e-mail válido. Após receber o convite, ele cria a própria senha. O Admin não define nem visualiza essa senha. A liberação também respeita as regras de matrícula ativa configuradas para a academia.',
                     ),
                     const SizedBox(height: 8),
                     Text(
@@ -441,49 +455,106 @@ class _StudentDetailsView extends StatelessWidget {
 
                               if (result.token != null) {
                                 final token = result.token!;
+                                final inviteEmail =
+                                    viewModel.student?.email.trim() ??
+                                    student.email.trim();
                                 final inviteLink = Uri.parse(_studentAppBaseUrl)
                                     .replace(
                                       path: '/ativar',
                                       queryParameters: {'token': token},
                                     )
                                     .toString();
+                                final emailLink = StudentInviteShareLinks.email(
+                                  email: inviteEmail,
+                                  inviteLink: inviteLink,
+                                );
+                                final whatsappLink =
+                                    StudentInviteShareLinks.whatsapp(
+                                      email: inviteEmail,
+                                      inviteLink: inviteLink,
+                                    );
+
                                 await showDialog<void>(
                                   context: context,
-                                  builder: (dialogContext) => AlertDialog(
-                                    title: const Text(
-                                      'Convite para o aplicativo',
-                                    ),
-                                    content: Column(
-                                      mainAxisSize: MainAxisSize.min,
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        const Text(
-                                          'Envie este código ao aluno para que ele defina a própria senha.',
+                                  builder: (dialogContext) {
+                                    Future<void> openInviteChannel(
+                                      Uri uri,
+                                      String channel,
+                                    ) async {
+                                      final opened = await launchInviteUrl(uri);
+                                      if (!dialogContext.mounted) return;
+                                      if (!opened) {
+                                        ScaffoldMessenger.of(
+                                          context,
+                                        ).showSnackBar(
+                                          SnackBar(
+                                            content: Text(
+                                              'Não foi possível abrir $channel. Copie o convite para compartilhar manualmente.',
+                                            ),
+                                            backgroundColor: colorScheme.error,
+                                          ),
+                                        );
+                                        return;
+                                      }
+                                      Navigator.pop(dialogContext);
+                                    }
+
+                                    return AlertDialog(
+                                      title: const Text(
+                                        'Convite para o aplicativo',
+                                      ),
+                                      content: Column(
+                                        mainAxisSize: MainAxisSize.min,
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          const Text(
+                                            'Escolha um canal. A mensagem será preparada para revisão; o envio não é automático. O convite vale por 24 horas.',
+                                          ),
+                                          const SizedBox(height: 12),
+                                          SelectableText(inviteLink),
+                                        ],
+                                      ),
+                                      actions: [
+                                        TextButton.icon(
+                                          onPressed: () => openInviteChannel(
+                                            emailLink,
+                                            'o aplicativo de e-mail',
+                                          ),
+                                          icon: const Icon(
+                                            Icons.email_outlined,
+                                          ),
+                                          label: const Text('Abrir e-mail'),
                                         ),
-                                        const SizedBox(height: 12),
-                                        SelectableText(inviteLink),
+                                        TextButton.icon(
+                                          onPressed: () => openInviteChannel(
+                                            whatsappLink,
+                                            'o WhatsApp',
+                                          ),
+                                          icon: const Icon(
+                                            Icons.chat_outlined,
+                                          ),
+                                          label: const Text('Abrir WhatsApp'),
+                                        ),
+                                        TextButton(
+                                          onPressed: () async {
+                                            await Clipboard.setData(
+                                              ClipboardData(text: inviteLink),
+                                            );
+                                            if (dialogContext.mounted) {
+                                              Navigator.pop(dialogContext);
+                                            }
+                                          },
+                                          child: const Text('Copiar convite'),
+                                        ),
+                                        TextButton(
+                                          onPressed: () =>
+                                              Navigator.pop(dialogContext),
+                                          child: const Text('Fechar'),
+                                        ),
                                       ],
-                                    ),
-                                    actions: [
-                                      TextButton(
-                                        onPressed: () async {
-                                          await Clipboard.setData(
-                                            ClipboardData(text: inviteLink),
-                                          );
-                                          if (dialogContext.mounted) {
-                                            Navigator.pop(dialogContext);
-                                          }
-                                        },
-                                        child: const Text('Copiar convite'),
-                                      ),
-                                      TextButton(
-                                        onPressed: () =>
-                                            Navigator.pop(dialogContext),
-                                        child: const Text('Fechar'),
-                                      ),
-                                    ],
-                                  ),
+                                    );
+                                  },
                                 );
                               }
                               if (!context.mounted) return;

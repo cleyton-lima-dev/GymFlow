@@ -14,6 +14,54 @@ namespace GymFlow.IntegrationTests.Security;
 // Financial setup is deliberately absent from every compatibility scenario.
 public partial class TenantEnrollmentAccessTests
 {
+    [Fact]
+    public async Task StudentCreate_AdminCanCreateWithoutEmail_ProfessorCannotCreate()
+    {
+        await using var factory = new TestApi();
+        var gym = factory.EnabledGym;
+        var admin = factory.AddUser(gym, UserRole.Admin);
+        var professor = factory.AddUser(gym, UserRole.Professor);
+        using var client = factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new("Bearer", factory.Token(admin));
+
+        var created = await client.PostAsJsonAsync("/api/students", new
+        {
+            Name = "Admin Student Without Email"
+        });
+        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+
+        var registry = await client.GetFromJsonAsync<JsonElement>("/api/students");
+        var item = Assert.Single(registry.GetProperty("items").EnumerateArray());
+        var studentId = item.GetProperty("id").GetGuid();
+        Assert.Equal(JsonValueKind.Null, item.GetProperty("email").ValueKind);
+        factory.WithDb(db =>
+        {
+            var student = db.Students.Single(s => s.Id == studentId);
+            Assert.Equal(gym, student.GymId);
+            Assert.Null(student.UserId);
+            Assert.False(student.AppAccessEnabled);
+            Assert.Null(student.AppInviteTokenHash);
+            Assert.Empty(db.Enrollments.Where(e => e.StudentId == studentId));
+            Assert.Empty(db.Charges);
+            Assert.Equal(2, db.Users.Count());
+        });
+
+        var enableWithoutEmail = await client.PostAsJsonAsync(
+            $"/api/students/{studentId}/app-access", new { Enabled = true });
+        Assert.Equal(HttpStatusCode.BadRequest, enableWithoutEmail.StatusCode);
+
+        client.DefaultRequestHeaders.Authorization = new("Bearer", factory.Token(professor));
+        var forbidden = await client.PostAsJsonAsync("/api/students", new
+        {
+            Name = "Professor Must Not Create"
+        });
+        Assert.Equal(HttpStatusCode.Forbidden, forbidden.StatusCode);
+
+        client.DefaultRequestHeaders.Authorization = new("Bearer", factory.Token(admin));
+        var afterProfessorAttempt = await client.GetFromJsonAsync<JsonElement>("/api/students");
+        Assert.Single(afterProfessorAttempt.GetProperty("items").EnumerateArray());
+    }
+
     [Theory]
     [InlineData("missing")]
     [InlineData("disabled")]

@@ -438,6 +438,49 @@ public partial class TenantEnrollmentAccessTests
     public Task IndependentStudent_CrudInvitationAndTenantIsolation_Sqlite() =>
         CheckIndependentStudentAsync(false);
 
+    [Fact]
+    public async Task IndependentStudent_AdminReenablesExistingAccountWithoutReplacingIdentityOrPassword()
+    {
+        await using var factory = new TestApi { EnabledFlag = "false" };
+        var admin = factory.AddUser(factory.EnabledGym, UserRole.Admin);
+        var existing = factory.AddUser(factory.EnabledGym);
+        var passwordHash = existing.PasswordHash;
+        Guid studentId = default;
+        var userCount = 0;
+        factory.WithDb(db =>
+        {
+            var student = db.Students.Single(item => item.UserId == existing.Id);
+            studentId = student.Id;
+            student.AppAccessEnabled = false;
+            db.Users.Single(user => user.Id == existing.Id).IsActive = false;
+            userCount = db.Users.Count();
+        });
+
+        using var client = factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization =
+            new AuthenticationHeaderValue("Bearer", factory.Token(admin));
+        var released = await client.PostAsJsonAsync($"/api/students/{studentId}/app-access",
+            new { enabled = true });
+        Assert.Equal(HttpStatusCode.OK, released.StatusCode);
+        using var response = JsonDocument.Parse(await released.Content.ReadAsStringAsync());
+        Assert.Equal(JsonValueKind.Null, response.RootElement.GetProperty("token").ValueKind);
+
+        factory.WithDb(db =>
+        {
+            var student = db.Students.Single(item => item.Id == studentId);
+            var user = db.Users.Single(item => item.Id == existing.Id);
+            Assert.Equal(existing.Id, student.UserId);
+            Assert.True(student.AppAccessEnabled);
+            Assert.Null(student.AppInviteTokenHash);
+            Assert.Equal(passwordHash, user.PasswordHash);
+            Assert.True(user.IsActive);
+            Assert.Equal(userCount, db.Users.Count());
+        });
+        var login = await client.PostAsJsonAsync("/api/auth/login",
+            new { email = existing.Email, password = TestApi.Password });
+        Assert.Equal(HttpStatusCode.OK, login.StatusCode);
+    }
+
     [PostgresTheory]
     [InlineData(true)]
     public Task IndependentStudent_CrudInvitationAndTenantIsolation_PostgreSql(bool postgres) =>
@@ -550,6 +593,9 @@ public partial class TenantEnrollmentAccessTests
             Assert.Equal(JsonValueKind.Null, professorJson.RootElement.GetProperty("email").ValueKind);
             Assert.Equal(JsonValueKind.Null, professorJson.RootElement.GetProperty("userId").ValueKind);
         }
+        Assert.Equal(HttpStatusCode.Forbidden,
+            (await client.PostAsJsonAsync($"/api/students/{studentId}/app-access",
+                new { enabled = true, email = "student121@example.test" })).StatusCode);
         client.DefaultRequestHeaders.Authorization =
             new AuthenticationHeaderValue("Bearer", factory.Token(admin));
 
@@ -600,15 +646,38 @@ public partial class TenantEnrollmentAccessTests
         Assert.Equal(HttpStatusCode.BadRequest,
             (await client.PostAsJsonAsync($"/api/students/{studentId}/app-access",
                 new { enabled = true })).StatusCode);
-        Assert.Equal(HttpStatusCode.NoContent,
-            (await client.PutAsJsonAsync($"/api/students/{studentId}",
-                new { name = "Aluno sem conta", email = "student121@example.test" })).StatusCode);
+        var duplicateIdentity = factory.AddUser(factory.EnabledGym, UserRole.Admin);
+        Assert.Equal(HttpStatusCode.Conflict,
+            (await client.PostAsJsonAsync($"/api/students/{studentId}/app-access",
+                new { enabled = true, email = $"  {duplicateIdentity.Email.ToUpperInvariant()}  " })).StatusCode);
+        factory.WithDb(db =>
+        {
+            var student = db.Students.Single(item => item.Id == studentId);
+            Assert.Null(student.Email);
+            Assert.False(student.AppAccessEnabled);
+            Assert.Null(student.AppInviteTokenHash);
+        });
         var inviteResponse = await client.PostAsJsonAsync($"/api/students/{studentId}/app-access",
-            new { enabled = true });
+            new { enabled = true, email = "  STUDENT121@EXAMPLE.TEST  " });
         Assert.Equal(HttpStatusCode.OK, inviteResponse.StatusCode);
         var invite = JsonDocument.Parse(await inviteResponse.Content.ReadAsStringAsync());
         var oldToken = invite.RootElement.GetProperty("token").GetString();
         Assert.NotNull(oldToken);
+        Assert.Equal(JsonValueKind.String, invite.RootElement.GetProperty("token").ValueKind);
+        var expiresAt = invite.RootElement.GetProperty("expiresAt").GetDateTime();
+        Assert.InRange(expiresAt - DateTime.UtcNow,
+            TimeSpan.FromHours(23), TimeSpan.FromHours(24));
+        factory.WithDb(db =>
+        {
+            var student = db.Students.Single(item => item.Id == studentId);
+            Assert.Equal("student121@example.test", student.Email);
+            Assert.True(student.AppAccessEnabled);
+            Assert.Null(student.UserId);
+            Assert.NotNull(student.AppInviteTokenHash);
+            Assert.NotEqual(oldToken, student.AppInviteTokenHash);
+            Assert.Empty(db.Users.Where(user => user.Email == student.Email));
+            Assert.Single(db.Enrollments.Where(enrollment => enrollment.StudentId == studentId));
+        });
         client.DefaultRequestHeaders.Authorization = null;
         var validInvite = await client.PostAsJsonAsync("/api/students/app-activate/validate",
             new { token = oldToken });

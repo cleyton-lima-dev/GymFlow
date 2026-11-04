@@ -209,14 +209,18 @@ Assim, a inativação do usuário invalida o uso subsequente de tokens anteriorm
 
 O cadastro de novos alunos é exclusivo do Administrador.
 
-Ao cadastrar um aluno, o sistema cria:
-
-- um registro `User` com perfil `Student`;
-- um registro `Student` vinculado a esse usuário.
-
-O aluno recebe automaticamente o mesmo `GymId` do Administrador autenticado.
+O cadastro inicial cria somente um registro `Student`, associado ao mesmo
+`GymId` do Administrador autenticado. Não cria um registro `User` e não
+habilita acesso ao aplicativo.
 
 O cliente não pode informar outro `GymId` para esse cadastro.
+
+O cadastro inicial não solicita nem aceita senha, não emite convite e não cria
+matrícula, plano ou cobrança. O registro aparece nas listagens de alunos do
+mesmo `GymId`.
+
+O Professor pode consultar alunos, mas não pode cadastrá-los. A criação é
+restrita ao perfil `Admin` também na API.
 
 ---
 
@@ -225,14 +229,39 @@ O cliente não pode informar outro `GymId` para esse cadastro.
 O cadastro pode conter:
 
 - nome;
-- e-mail;
-- senha inicial;
+- e-mail opcional;
 - telefone;
 - data de nascimento.
 
-Nome e e-mail possuem limites definidos pela política de persistência.
+O nome é obrigatório. Se informado, o e-mail deve ser válido e é normalizado
+antes da persistência. No cadastro inicial, o e-mail é um dado de contato e
+não cria uma identidade de login. A unicidade da identidade é verificada ao
+liberar acesso ao aplicativo.
 
 O telefone, quando informado, possui limite máximo de 20 caracteres.
+
+Um aluno sem e-mail pode permanecer cadastrado no ERP, mas não pode ativar ou
+usar o aplicativo. No Avelri Gestão Desktop, somente o Admin pode liberar o
+acesso. Se o aluno ainda não tiver e-mail, a tela solicita um endereço válido
+na liberação; o backend o normaliza, valida a unicidade global da identidade e
+persiste o endereço junto com a emissão do convite. Um conflito não deixa o
+e-mail parcialmente persistido.
+
+A liberação emite um token aleatório de uso único, armazenando somente seu hash
+e definindo validade de 24 horas. Ela não cria `User`: a conta e a senha são
+criadas quando o aluno abre o convite e define a própria senha. A emissão não
+recria uma conta existente nem redefine sua senha. A troca de e-mail revoga
+um convite ainda pendente.
+
+O Admin pode preparar a mensagem para o aplicativo de e-mail ou para o
+WhatsApp. O Desktop abre o canal escolhido com o texto e o link preenchidos;
+o envio depende da revisão e confirmação do Admin no aplicativo externo e
+não é automático pelo Avelri. O WhatsApp é somente um canal de entrega; o
+login e a identidade continuam vinculados ao e-mail.
+
+Habilitar o acesso não ignora a política financeira: quando a academia exige
+matrícula ativa, a autorização de login continua sujeita a essa condição.
+Professor não pode liberar acesso.
 
 ---
 
@@ -240,7 +269,9 @@ O telefone, quando informado, possui limite máximo de 20 caracteres.
 
 Somente o Administrador pode ativar ou desativar um aluno.
 
-A inativação altera o estado do usuário relacionado ao aluno.
+A inativação altera o estado do registro do aluno. A reativação restaura esse
+estado sem criar uma identidade de login nem excluir os dados existentes. O
+acesso ao aplicativo só é possível quando o Admin o tiver liberado.
 
 Um aluno inativo:
 
@@ -249,8 +280,6 @@ Um aluno inativo:
 - não consegue realizar login;
 - não pode receber um novo treino;
 - não pode registrar execução de treino.
-
-A reativação restaura o acesso sem excluir os dados já existentes.
 
 ---
 

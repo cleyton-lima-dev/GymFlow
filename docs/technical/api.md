@@ -533,6 +533,49 @@ Principais respostas:
 
 O aluno criado pertence automaticamente à mesma academia do Admin autenticado.
 
+O corpo aceita `name` obrigatório e os campos opcionais `email`, `phone` e
+`birthDate`. O e-mail pode ser `null`; quando informado, deve ser válido e é
+normalizado. O cadastro não recebe senha, não cria `User`, não libera acesso,
+não emite convite e não cria matrícula, plano ou cobrança. A resposta de
+sucesso é `201 Created` com uma mensagem; a listagem fornece os dados do
+registro, inclusive `email: null` quando ausente.
+
+A liberação de acesso é uma ação separada do Admin e exige e-mail válido. O
+fluxo verifica a unicidade global do e-mail ao emitir o convite; o registro
+`User` é criado quando o aluno conclui a ativação.
+
+### Liberar acesso e emitir convite de ativação
+
+```http
+POST /api/students/{id}/app-access
+```
+
+**Perfil:** `Admin`. O aluno é localizado pelo `id` e pelo `GymId` do token;
+Professor recebe `403` e uma academia diferente recebe `404`.
+
+Para um aluno ainda sem conta, o corpo aceita `enabled: true` e um `email`
+opcional quando ele já está salvo no cadastro. Se o aluno não tiver endereço,
+o Desktop solicita um e-mail válido e envia-o nesta mesma operação. O backend
+remove espaços, normaliza para minúsculas, valida o formato e o tamanho e
+verifica a unicidade global antes de persistir o e-mail e habilitar o acesso.
+O e-mail e o convite pendente são salvos na mesma atualização; duplicidade
+responde `409 Conflict` sem persistir o novo endereço e ausência ou formato
+inválido responde `400 Bad Request`.
+
+A resposta de emissão contém o token de ativação e a expiração, com
+`Cache-Control: no-store`. O token tem 256 bits aleatórios, é guardado no banco
+somente como SHA-256 e expira em 24 horas. Validação e ativação rejeitam token
+expirado, revogado ou já usado. A ativação pública aplica a política existente
+de senha, cria o `User` do aluno e vincula-o ao `Student`; não redefine nem
+recria contas já vinculadas.
+
+O Desktop oferece `mailto:` e link de compartilhamento do WhatsApp com a
+mensagem preenchida para o Admin revisar. Esses canais apenas abrem aplicativos
+externos; o Avelri não envia a mensagem automaticamente. No WhatsApp, o Admin
+escolhe o destinatário, e o login continua sendo o e-mail do aluno. Habilitar
+o acesso não contorna o gating de matrícula ativa quando a política financeira
+da academia estiver habilitada.
+
 ---
 
 ## 14.2 Listar Alunos
@@ -577,6 +620,9 @@ nome
 e-mail
 telefone
 ```
+
+O campo `email` de cada item pode ser `null` para alunos cadastrados sem
+e-mail. A listagem permanece restrita ao `GymId` da identidade autenticada.
 
 ---
 

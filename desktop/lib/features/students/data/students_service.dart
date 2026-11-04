@@ -11,10 +11,17 @@ class StudentsService {
 
   final ApiClient _apiClient;
 
-  Future<String?> setAppAccess(String studentId, bool enabled) async {
+  Future<String?> setAppAccess(
+    String studentId,
+    bool enabled, {
+    String? email,
+  }) async {
     final response = await _apiClient.post(
       'api/students/$studentId/app-access',
-      body: {'enabled': enabled},
+      body: {
+        'enabled': enabled,
+        if (email != null) 'email': email.trim(),
+      },
     );
     if (response is! Map) {
       throw const FormatException('Invalid app access response.');

@@ -73,23 +73,25 @@ class StudentDetailsViewModel extends ChangeNotifier {
     _appAccessErrorMessage = null;
     notifyListeners();
     try {
-      final normalizedEmail = email?.trim();
-      if (enabled && normalizedEmail != null && normalizedEmail.isNotEmpty) {
-        await _studentsService.updateStudent(
-          studentId: _studentId,
-          name: currentStudent.name,
-          email: normalizedEmail,
-          phone: currentStudent.phone,
-          birthDate: currentStudent.birthDate,
-        );
-        _student = _copyStudent(currentStudent, email: normalizedEmail);
-      }
-      final token = await _studentsService.setAppAccess(_studentId, enabled);
-      _student = _copyStudent(_student!, appAccessEnabled: enabled);
+      final normalizedEmail = email?.trim().toLowerCase();
+      final token = await _studentsService.setAppAccess(
+        _studentId,
+        enabled,
+        email: enabled && normalizedEmail?.isNotEmpty == true
+            ? normalizedEmail
+            : null,
+      );
+      _student = _copyStudent(
+        currentStudent,
+        email: enabled && normalizedEmail?.isNotEmpty == true
+            ? normalizedEmail
+            : currentStudent.email,
+        appAccessEnabled: enabled,
+      );
       return (succeeded: true, token: token);
     } on ApiException catch (exception) {
       if (exception.statusCode == 409) {
-        _appAccessErrorMessage = 'O convite foi alterado ou usado por outra operação. Atualizando os dados do aluno.';
+        _appAccessErrorMessage = _messageFromApiException(exception);
         try {
           _student = await _studentsService.getStudentById(_studentId);
         } catch (_) {
