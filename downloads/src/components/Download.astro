@@ -1,0 +1,23 @@
+---
+import { desktopRelease } from '../data/release';
+---
+
+<section class="download-section section-space" id="download" aria-labelledby="download-title">
+  <div class="container">
+    <div class="download-panel">
+      <div class="download-main">
+        <p class="eyebrow">DOWNLOAD OFICIAL</p>
+        <h2 id="download-title">Avelri Gestão<br /><span>para Windows.</span></h2>
+        <p>O instalador oficial ainda não está disponível neste portal. A publicação será habilitada quando versão, requisitos e arquivo forem confirmados.</p>
+        <button class="button button-disabled" type="button" disabled aria-describedby="download-status">Download indisponível</button>
+        <p class="download-status" id="download-status" role="status"><span class="status-dot" aria-hidden="true"></span> Aguardando publicação oficial</p>
+      </div>
+      <div class="download-details" aria-label="Informações da distribuição">
+        <div class="download-detail"><span>Plataforma</span><strong>Windows Desktop</strong></div>
+        <div class="download-detail"><span>Versão</span><strong>{desktopRelease.version ?? 'A divulgar'}</strong></div>
+        <div class="download-detail"><span>Requisitos</span><strong>{desktopRelease.requirements ?? 'A confirmar'}</strong></div>
+        <div class="download-detail"><span>Instalação</span><strong>Instruções serão publicadas com o instalador.</strong></div>
+      </div>
+    </div>
+  </div>
+</section>

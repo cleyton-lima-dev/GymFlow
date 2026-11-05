@@ -1,0 +1,46 @@
+---
+const features = [
+  {
+    number: '01',
+    title: 'Gestão de alunos',
+    description: 'Cadastros e informações dos alunos acessíveis na rotina de gestão.',
+    symbol: '◎',
+  },
+  {
+    number: '02',
+    title: 'Planos e matrículas',
+    description: 'Organização dos planos e acompanhamento das matrículas da academia.',
+    symbol: '▤',
+  },
+  {
+    number: '03',
+    title: 'Controle financeiro',
+    description: 'Visibilidade sobre cobranças e informações financeiras da operação.',
+    symbol: '◫',
+  },
+] as const;
+---
+
+<section class="features-section section-space" id="funcionalidades" aria-labelledby="features-title">
+  <div class="container">
+    <div class="section-intro">
+      <div>
+        <p class="eyebrow">FUNCIONALIDADES</p>
+        <h2 id="features-title">O essencial, no mesmo ambiente.</h2>
+      </div>
+      <p>Ferramentas para acompanhar as áreas centrais da gestão da academia.</p>
+    </div>
+    <div class="feature-grid">
+      {features.map((feature) => (
+        <article class="feature-card">
+          <div class="feature-card-top">
+            <span class="feature-symbol" aria-hidden="true">{feature.symbol}</span>
+            <span class="feature-number">{feature.number} / 03</span>
+          </div>
+          <h3>{feature.title}</h3>
+          <p>{feature.description}</p>
+        </article>
+      ))}
+    </div>
+  </div>
+</section>

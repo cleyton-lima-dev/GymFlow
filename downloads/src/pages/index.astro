@@ -1,0 +1,23 @@
+---
+import SiteLayout from '../layouts/SiteLayout.astro';
+import Header from '../components/Header.astro';
+import Hero from '../components/Hero.astro';
+import ProductPreview from '../components/ProductPreview.astro';
+import Features from '../components/Features.astro';
+import Download from '../components/Download.astro';
+import Footer from '../components/Footer.astro';
+---
+
+<SiteLayout
+  title="Avelri Downloads | Avelri Gestão para Windows"
+  description="Conheça o Avelri Gestão Desktop e acompanhe a disponibilidade do instalador oficial para Windows."
+>
+  <Header />
+  <main id="conteudo">
+    <Hero />
+    <ProductPreview />
+    <Features />
+    <Download />
+  </main>
+  <Footer />
+</SiteLayout>
