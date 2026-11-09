@@ -7,6 +7,7 @@ import 'package:avelri_gestao/app/session/erp_feature_controller.dart';
 import 'package:avelri_gestao/app/theme/branding_controller.dart';
 import 'package:avelri_gestao/app/theme/brand_contrast.dart';
 import 'package:avelri_gestao/core/network/erp_access_policy.dart';
+import 'package:avelri_gestao/features/updates/presentation/update_dialog.dart';
 
 class ManagementShellPage extends StatelessWidget {
   const ManagementShellPage({
@@ -184,57 +185,74 @@ class ManagementShellPage extends StatelessWidget {
                       borderRadius: BorderRadius.circular(14),
                       border: Border.all(color: theme.dividerColor),
                     ),
-                    child: Row(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        CircleAvatar(
-                          radius: 18,
-                          backgroundColor: sidebarForeground.withValues(
-                            alpha: 0.12,
-                          ),
-                          child: Text(
-                            _initials(session.user?.name),
-                            style: TextStyle(
-                              color: sidebarForeground,
-                              fontWeight: FontWeight.w800,
-                              fontSize: 12,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                session.user?.name ?? '',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
+                        Row(
+                          children: [
+                            CircleAvatar(
+                              radius: 18,
+                              backgroundColor: sidebarForeground.withValues(
+                                alpha: 0.12,
+                              ),
+                              child: Text(
+                                _initials(session.user?.name),
                                 style: TextStyle(
-                                  color: colorScheme.onSurface,
+                                  color: sidebarForeground,
+                                  fontWeight: FontWeight.w800,
                                   fontSize: 12,
-                                  fontWeight: FontWeight.w700,
                                 ),
                               ),
-                              const SizedBox(height: 2),
-                              Text(
-                                'Administrador',
-                                style: TextStyle(
-                                  color: colorScheme.onSurfaceVariant,
-                                  fontSize: 10,
-                                ),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    session.user?.name ?? '',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      color: colorScheme.onSurface,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    'Administrador',
+                                    style: TextStyle(
+                                      color: colorScheme.onSurfaceVariant,
+                                      fontSize: 10,
+                                    ),
+                                  ),
+                                ],
                               ),
-                            ],
-                          ),
+                            ),
+                            IconButton(
+                              tooltip: 'Sair',
+                              visualDensity: VisualDensity.compact,
+                              onPressed: session.logout,
+                              icon: Icon(
+                                Icons.logout_rounded,
+                                color: colorScheme.onSurfaceVariant,
+                                size: 19,
+                              ),
+                            ),
+                          ],
                         ),
-                        IconButton(
-                          tooltip: 'Sair',
-                          visualDensity: VisualDensity.compact,
-                          onPressed: session.logout,
-                          icon: Icon(
-                            Icons.logout_rounded,
-                            color: colorScheme.onSurfaceVariant,
-                            size: 19,
+                        const SizedBox(height: 8),
+                        TextButton.icon(
+                          onPressed: () => showDialog<void>(
+                            context: context,
+                            builder: (_) => const UpdateDialog(),
                           ),
+                          icon: const Icon(
+                            Icons.system_update_alt_rounded,
+                            size: 17,
+                          ),
+                          label: const Text('Verificar atualizações'),
                         ),
                       ],
                     ),

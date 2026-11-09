@@ -83,6 +83,7 @@ class InstallerDownloadService {
   Future<InstallerDownloadResult> download(
     ReleaseManifest release, {
     DownloadCancellation? cancellation,
+    void Function(int receivedBytes, int totalBytes)? onProgress,
   }) async {
     final url = release.installerUrl;
     if (url.scheme != 'https' || !_allowedOrigins.contains(url.origin)) {
@@ -169,6 +170,7 @@ class InstallerDownloadService {
         }
         await output.writeFrom(chunk);
         digestInput.add(chunk);
+        onProgress?.call(receivedBytes, release.installerSizeBytes);
       }
       digestInput.close();
       await output.flush();

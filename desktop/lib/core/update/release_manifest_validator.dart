@@ -35,6 +35,20 @@ final class ReleaseManifest {
   final String installerSha256;
 }
 
+sealed class ReleaseInspection {
+  const ReleaseInspection();
+}
+
+final class CurrentRelease extends ReleaseInspection {
+  const CurrentRelease();
+}
+
+final class AvailableRelease extends ReleaseInspection {
+  const AvailableRelease(this.manifest);
+
+  final ReleaseManifest manifest;
+}
+
 class InstalledRelease {
   InstalledRelease({
     required this.appId,
@@ -141,6 +155,22 @@ class ReleaseManifestValidator {
     required String signatureBase64,
     required String keyId,
   }) async {
+    final inspection = await inspect(
+      manifestBytes: manifestBytes,
+      signatureBase64: signatureBase64,
+      keyId: keyId,
+    );
+    if (inspection is AvailableRelease) return inspection.manifest;
+    throw const ManifestValidationException(ManifestRejection.downgrade);
+  }
+
+  /// A signed release equal to the installed build is current. Older signed
+  /// releases remain rejected, so a replay cannot be presented as up to date.
+  Future<ReleaseInspection> inspect({
+    required List<int> manifestBytes,
+    required String signatureBase64,
+    required String keyId,
+  }) async {
     final key = _trustedPublicKeys[keyId];
     if (key == null) {
       throw const ManifestValidationException(ManifestRejection.untrustedKey);
@@ -198,11 +228,15 @@ class ReleaseManifestValidator {
     if (!manifest.expiresAt.isAfter(now)) {
       throw const ManifestValidationException(ManifestRejection.expired);
     }
+    if (manifest.version.compareTo(installed.version) == 0 &&
+        manifest.build == installed.build) {
+      return const CurrentRelease();
+    }
     if (manifest.version.compareTo(installed.version) < 0 ||
         manifest.build <= installed.build) {
       throw const ManifestValidationException(ManifestRejection.downgrade);
     }
-    return manifest;
+    return AvailableRelease(manifest);
   }
 
   ReleaseManifest _parseManifest(List<int> bytes) {
