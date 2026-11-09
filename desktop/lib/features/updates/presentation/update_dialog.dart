@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -28,7 +29,11 @@ class _UpdateDialogState extends State<UpdateDialog> {
     _controller =
         widget.controller ??
         UpdateController.forDesktop(
-          requestDesktopShutdown: () => SystemNavigator.pop(),
+          requestDesktopShutdown: () async {
+            await ServicesBinding.instance.exitApplication(
+              ui.AppExitType.required,
+            );
+          },
         );
     _controller.addListener(_refresh);
     if (_ownsController || _controller.installedVersion == null) {
