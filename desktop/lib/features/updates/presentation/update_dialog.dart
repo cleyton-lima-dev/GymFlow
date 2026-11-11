@@ -9,10 +9,11 @@ import 'package:avelri_gestao/core/update/release_manifest_validator.dart';
 import 'update_controller.dart';
 
 class UpdateDialog extends StatefulWidget {
-  const UpdateDialog({this.controller, super.key});
+  const UpdateDialog({this.controller, this.checkOnOpen = false, super.key});
 
   /// A supplied controller is useful for isolated widget tests.
   final UpdateController? controller;
+  final bool checkOnOpen;
 
   @override
   State<UpdateDialog> createState() => _UpdateDialogState();
@@ -38,6 +39,8 @@ class _UpdateDialogState extends State<UpdateDialog> {
     _controller.addListener(_refresh);
     if (_ownsController || _controller.installedVersion == null) {
       unawaited(_controller.initialize());
+    } else if (widget.checkOnOpen) {
+      unawaited(_controller.check());
     }
   }
 
@@ -48,8 +51,12 @@ class _UpdateDialogState extends State<UpdateDialog> {
   @override
   void dispose() {
     _controller.removeListener(_refresh);
-    _controller.cancelDownload();
-    if (_ownsController) _controller.dispose();
+    if (_ownsController) {
+      _controller.cancelDownload();
+      _controller.dispose();
+    } else {
+      unawaited(_controller.handleDialogClosed());
+    }
     super.dispose();
   }
 

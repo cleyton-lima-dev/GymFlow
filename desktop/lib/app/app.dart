@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
@@ -12,6 +14,8 @@ import 'package:avelri_gestao/app/theme/app_theme.dart';
 import 'package:avelri_gestao/app/theme/branding_controller.dart';
 import 'package:avelri_gestao/app/theme/default_branding.dart';
 import 'package:avelri_gestao/core/network/api_client.dart';
+import 'package:avelri_gestao/features/updates/presentation/update_check_scheduler.dart';
+import 'package:avelri_gestao/features/updates/presentation/update_controller.dart';
 
 class AvelriGestaoApp extends StatefulWidget {
   const AvelriGestaoApp({
@@ -20,6 +24,7 @@ class AvelriGestaoApp extends StatefulWidget {
     required this.erpFeatureController,
     required this.apiClient,
     required this.router,
+    this.updateController,
     super.key,
   });
 
@@ -28,6 +33,7 @@ class AvelriGestaoApp extends StatefulWidget {
   final ErpFeatureController erpFeatureController;
   final ApiClient apiClient;
   final GoRouter router;
+  final UpdateController? updateController;
 
   @override
   State<AvelriGestaoApp> createState() => _AvelriGestaoAppState();
@@ -36,14 +42,38 @@ class AvelriGestaoApp extends StatefulWidget {
 class _AvelriGestaoAppState extends State<AvelriGestaoApp>
     with WidgetsBindingObserver {
   Timer? _featureRefresh;
+  late final UpdateController _updateController;
+  late final UpdateCheckScheduler _updateCheckScheduler;
+  late final bool _ownsUpdateController;
 
   @override
   void initState() {
     super.initState();
+    _ownsUpdateController = widget.updateController == null;
+    _updateController =
+        widget.updateController ??
+        UpdateController.forDesktop(
+          requestDesktopShutdown: () async {
+            await ServicesBinding.instance.exitApplication(
+              ui.AppExitType.required,
+            );
+          },
+        );
+    _updateCheckScheduler = UpdateCheckScheduler(controller: _updateController);
+    widget.sessionController.addListener(_sessionChanged);
     WidgetsBinding.instance.addObserver(this);
     _featureRefresh = Timer.periodic(
       const Duration(minutes: 1),
       (_) => _refreshFeatures(),
+    );
+    _sessionChanged();
+  }
+
+  void _sessionChanged() {
+    unawaited(
+      _updateCheckScheduler.handleSessionStatus(
+        widget.sessionController.status,
+      ),
     );
   }
 
@@ -57,12 +87,18 @@ class _AvelriGestaoAppState extends State<AvelriGestaoApp>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) _refreshFeatures();
+    if (state == AppLifecycleState.resumed) {
+      _refreshFeatures();
+      unawaited(_updateCheckScheduler.onAppResumed());
+    }
   }
 
   @override
   void dispose() {
     _featureRefresh?.cancel();
+    widget.sessionController.removeListener(_sessionChanged);
+    _updateCheckScheduler.dispose();
+    if (_ownsUpdateController) _updateController.dispose();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -72,6 +108,9 @@ class _AvelriGestaoAppState extends State<AvelriGestaoApp>
     return MultiProvider(
       providers: [
         Provider<ApiClient>.value(value: widget.apiClient),
+        ChangeNotifierProvider<UpdateController>.value(
+          value: _updateController,
+        ),
         ChangeNotifierProvider.value(value: widget.sessionController),
         ChangeNotifierProvider.value(value: widget.brandingController),
         ChangeNotifierProvider.value(value: widget.erpFeatureController),

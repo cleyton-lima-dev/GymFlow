@@ -8,6 +8,7 @@ import 'package:avelri_gestao/core/update/installer_download_service.dart';
 import 'package:avelri_gestao/core/update/release_manifest_validator.dart';
 import 'package:avelri_gestao/core/update/signed_manifest_reader.dart';
 import 'package:avelri_gestao/core/update/update_distribution_config.dart';
+import 'package:avelri_gestao/core/update/update_state_store.dart';
 import 'package:avelri_gestao/core/update/windows_installer_service.dart';
 
 enum UpdateViewState {
@@ -60,7 +61,10 @@ final class UpdateController extends ChangeNotifier {
     required this.manifestReader,
     required this.downloadServiceFactory,
     required this.installerServiceFactory,
-  });
+    UpdateStateStore? stateStore,
+    DateTime Function()? clock,
+  }) : stateStore = stateStore ?? InMemoryUpdateStateStore(),
+       _clock = clock ?? DateTime.now;
 
   factory UpdateController.forDesktop({
     required Future<void> Function() requestDesktopShutdown,
@@ -74,6 +78,7 @@ final class UpdateController extends ChangeNotifier {
       installed: installed,
       requestDesktopShutdown: requestDesktopShutdown,
     ),
+    stateStore: FileUpdateStateStore.applicationSupport(),
   );
 
   final UpdateDistributionConfig? config;
@@ -81,6 +86,8 @@ final class UpdateController extends ChangeNotifier {
   final SignedManifestReader manifestReader;
   final DownloadServiceFactory downloadServiceFactory;
   final InstallerServiceFactory installerServiceFactory;
+  final UpdateStateStore stateStore;
+  final DateTime Function() _clock;
 
   UpdateViewState state = UpdateViewState.notConfigured;
   InstalledAppVersion? installedVersion;
@@ -94,6 +101,29 @@ final class UpdateController extends ChangeNotifier {
   bool _disposed = false;
   bool _retryDownload = false;
   bool _installerStarted = false;
+  bool _automaticChecksUnavailable = false;
+  DateTime? _lastCheckAtUtc;
+  Future<void>? _pendingRestore;
+
+  bool get isBusy => _busy;
+
+  bool get shouldDeferAutomaticCheck =>
+      _busy ||
+      state == UpdateViewState.ready ||
+      state == UpdateViewState.started;
+
+  bool get hasPendingUpdate {
+    final release = availableRelease;
+    if (release == null || !release.expiresAt.isAfter(_clock().toUtc())) {
+      return false;
+    }
+    final installed = installedVersion;
+    if (installed == null) return true;
+    final comparison = ReleaseVersion.parse(installed.version)
+        .compareTo(release.version);
+    return comparison < 0 ||
+        (comparison == 0 && installed.build < release.build);
+  }
 
   Future<void> initialize() async {
     try {
@@ -106,43 +136,197 @@ final class UpdateController extends ChangeNotifier {
     }
   }
 
-  Future<void> check() async {
+  Future<void> check() => _check();
+
+  Future<void> _check({bool attemptAlreadyPersisted = false}) async {
     final distribution = config;
     if (distribution == null || _disposed || _busy) return;
+    final pendingRestore = _pendingRestore;
+    if (pendingRestore != null) await pendingRestore;
+    if (_disposed || _busy) return;
     _setState(UpdateViewState.checking);
-    availableRelease = null;
     errorMessage = null;
     _retryDownload = false;
+    if (!attemptAlreadyPersisted) {
+      _lastCheckAtUtc = _clock().toUtc();
+      try {
+        await stateStore.writeLastCheckAt(_lastCheckAtUtc!);
+        _automaticChecksUnavailable = false;
+      } on Object {
+        // Manual checks still work, but auto checks stop if their schedule
+        // cannot be persisted safely.
+        _automaticChecksUnavailable = true;
+      }
+    }
     try {
       final local = installedVersion ??= await versionReader.read();
-      final installed = InstalledRelease(
-        appId: distribution.appId,
-        channel: distribution.channel,
-        platform: 'windows-x64',
-        version: local.version,
-        build: local.build,
-      );
+      final installed = _installedRelease(distribution, local);
       _installer ??= installerServiceFactory(installed);
       final payload = await manifestReader.read(distribution);
       if (_disposed) return;
-      final result =
-          await ReleaseManifestValidator(
-            installed: installed,
-            trustedPublicKeys: {distribution.keyId: distribution.publicKey},
-          ).inspect(
-            manifestBytes: payload.bytes,
-            signatureBase64: payload.signatureBase64,
-            keyId: distribution.keyId,
-          );
+      final result = await _inspect(distribution, installed, payload);
       if (_disposed) return;
       if (result is CurrentRelease) {
+        availableRelease = null;
+        await _clearCachedManifest();
         _setState(UpdateViewState.current);
       } else if (result is AvailableRelease) {
         availableRelease = result.manifest;
+        try {
+          await stateStore.writePendingManifest(payload);
+        } on Object {
+          // The verified result remains usable in memory if local storage fails.
+        }
         _setState(UpdateViewState.available);
       }
     } on Object {
       _fail('Não foi possível verificar a atualização com segurança.');
+    }
+  }
+
+  /// Restores only a cached payload that passes the same signature, identity,
+  /// compatibility, installed-version, and expiry checks as a network response.
+  Future<void> restoreCachedAvailability() async {
+    if (config == null || _disposed) return;
+    final existing = _pendingRestore;
+    if (existing != null) return existing;
+    final restore = _restoreCachedAvailability();
+    _pendingRestore = restore;
+    try {
+      await restore;
+    } finally {
+      if (identical(_pendingRestore, restore)) _pendingRestore = null;
+    }
+  }
+
+  Future<void> _restoreCachedAvailability() async {
+    final distribution = config;
+    if (distribution == null || _disposed) return;
+    try {
+      _lastCheckAtUtc = (await stateStore.readLastCheckAt())?.toUtc();
+      final payload = await stateStore.readPendingManifest();
+      if (payload == null || _disposed) return;
+      final local = installedVersion ??= await versionReader.read();
+      final installed = _installedRelease(distribution, local);
+      final result = await _inspect(distribution, installed, payload);
+      if (_disposed) return;
+      if (result is AvailableRelease) {
+        availableRelease = result.manifest;
+        _setState(UpdateViewState.available);
+      } else {
+        availableRelease = null;
+        await _clearCachedManifest();
+        _notify();
+      }
+    } on Object {
+      availableRelease = null;
+      await _clearCachedManifest();
+      _notify();
+    }
+  }
+
+  Future<bool> checkIfDue({
+    Duration interval = const Duration(hours: 12),
+  }) async {
+    if (config == null ||
+        _disposed ||
+        shouldDeferAutomaticCheck ||
+        _automaticChecksUnavailable) {
+      return false;
+    }
+    DateTime? lastCheck = _lastCheckAtUtc;
+    if (lastCheck == null) {
+      try {
+        lastCheck = (await stateStore.readLastCheckAt())?.toUtc();
+        _lastCheckAtUtc = lastCheck;
+      } on Object {
+        _automaticChecksUnavailable = true;
+        return false;
+      }
+    }
+    if (_disposed || shouldDeferAutomaticCheck) return false;
+    final now = _clock().toUtc();
+    if (lastCheck != null &&
+        !lastCheck.isAfter(now) &&
+        now.isBefore(lastCheck.add(interval))) {
+      return false;
+    }
+    final attemptAt = now;
+    try {
+      await stateStore.writeLastCheckAt(attemptAt);
+      _lastCheckAtUtc = attemptAt;
+      _automaticChecksUnavailable = false;
+    } on Object {
+      _automaticChecksUnavailable = true;
+      return false;
+    }
+    await _check(attemptAlreadyPersisted: true);
+    return true;
+  }
+
+  Future<Duration?> timeUntilCheckDue({
+    Duration interval = const Duration(hours: 12),
+  }) async {
+    if (config == null || _disposed || _automaticChecksUnavailable) return null;
+    DateTime? lastCheck = _lastCheckAtUtc;
+    if (lastCheck == null) {
+      try {
+        lastCheck = (await stateStore.readLastCheckAt())?.toUtc();
+        _lastCheckAtUtc = lastCheck;
+      } on Object {
+        _automaticChecksUnavailable = true;
+        return null;
+      }
+    }
+    if (lastCheck == null || lastCheck.isAfter(_clock().toUtc())) {
+      return Duration.zero;
+    }
+    final remaining = lastCheck.add(interval).difference(_clock().toUtc());
+    return remaining.isNegative ? Duration.zero : remaining;
+  }
+
+  Duration? get timeUntilPendingReleaseExpires {
+    if (state == UpdateViewState.downloading ||
+        state == UpdateViewState.ready ||
+        state == UpdateViewState.installing ||
+        state == UpdateViewState.started) {
+      return null;
+    }
+    final release = availableRelease;
+    if (release == null) return null;
+    final remaining = release.expiresAt.difference(_clock().toUtc());
+    return remaining.isNegative ? Duration.zero : remaining;
+  }
+
+  Future<void> expirePendingAvailability() async {
+    final release = availableRelease;
+    if (release == null || release.expiresAt.isAfter(_clock().toUtc())) return;
+    if (state == UpdateViewState.downloading ||
+        state == UpdateViewState.ready ||
+        state == UpdateViewState.installing ||
+        state == UpdateViewState.started) {
+      return;
+    }
+    availableRelease = null;
+    errorMessage = 'A atualização disponível expirou. Verifique novamente.';
+    if (state == UpdateViewState.available) state = UpdateViewState.error;
+    await _clearCachedManifest();
+    _notify();
+  }
+
+  Future<void> handleDialogClosed() async {
+    if (_installerStarted || state == UpdateViewState.installing) return;
+    cancelDownload();
+    final download = verifiedDownload;
+    if (download == null) return;
+    verifiedDownload = null;
+    await _removeVerifiedFile(download);
+    if (state == UpdateViewState.ready || state == UpdateViewState.error) {
+      state = hasPendingUpdate
+          ? UpdateViewState.available
+          : UpdateViewState.notConfigured;
+      errorMessage = null;
+      _notify();
     }
   }
 
@@ -219,6 +403,40 @@ final class UpdateController extends ChangeNotifier {
   }
 
   Future<void> retry() => _retryDownload ? download() : check();
+
+  InstalledRelease _installedRelease(
+    UpdateDistributionConfig distribution,
+    InstalledAppVersion local,
+  ) => InstalledRelease(
+    appId: distribution.appId,
+    channel: distribution.channel,
+    platform: 'windows-x64',
+    version: local.version,
+    build: local.build,
+  );
+
+  Future<ReleaseInspection> _inspect(
+    UpdateDistributionConfig distribution,
+    InstalledRelease installed,
+    SignedManifestPayload payload,
+  ) =>
+      ReleaseManifestValidator(
+        installed: installed,
+        trustedPublicKeys: {distribution.keyId: distribution.publicKey},
+        clock: _clock,
+      ).inspect(
+        manifestBytes: payload.bytes,
+        signatureBase64: payload.signatureBase64,
+        keyId: distribution.keyId,
+      );
+
+  Future<void> _clearCachedManifest() async {
+    try {
+      await stateStore.clearPendingManifest();
+    } on Object {
+      // An unreadable cache is revalidated before it can ever be shown again.
+    }
+  }
 
   bool get _busy =>
       state == UpdateViewState.checking ||

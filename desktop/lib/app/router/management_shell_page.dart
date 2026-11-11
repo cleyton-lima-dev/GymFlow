@@ -7,6 +7,8 @@ import 'package:avelri_gestao/app/session/erp_feature_controller.dart';
 import 'package:avelri_gestao/app/theme/branding_controller.dart';
 import 'package:avelri_gestao/app/theme/brand_contrast.dart';
 import 'package:avelri_gestao/core/network/erp_access_policy.dart';
+import 'package:avelri_gestao/features/updates/presentation/update_availability_banner.dart';
+import 'package:avelri_gestao/features/updates/presentation/update_controller.dart';
 import 'package:avelri_gestao/features/updates/presentation/update_dialog.dart';
 
 class ManagementShellPage extends StatelessWidget {
@@ -82,6 +84,10 @@ class ManagementShellPage extends StatelessWidget {
     final session = context.watch<SessionController>();
     final branding = context.watch<BrandingController>().branding;
     final features = context.watch<ErpFeatureController>();
+    final updates = context.watch<UpdateController?>();
+    final pendingRelease = updates?.hasPendingUpdate == true
+        ? updates?.availableRelease
+        : null;
     final gymId = session.user?.gymId;
     final erpEnabled = gymId != null && features.isEnabledForGym(gymId);
     final navigationItems = _navigationItems
@@ -246,7 +252,10 @@ class ManagementShellPage extends StatelessWidget {
                         TextButton.icon(
                           onPressed: () => showDialog<void>(
                             context: context,
-                            builder: (_) => const UpdateDialog(),
+                            builder: (_) => UpdateDialog(
+                              controller: context.read<UpdateController?>(),
+                              checkOnOpen: true,
+                            ),
                           ),
                           icon: const Icon(
                             Icons.system_update_alt_rounded,
@@ -310,6 +319,26 @@ class ManagementShellPage extends StatelessWidget {
                     ],
                   ),
                 ),
+                if (location == '/dashboard' &&
+                    updates != null &&
+                    pendingRelease != null)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(30, 16, 30, 0),
+                    child: Align(
+                      alignment: Alignment.topLeft,
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 1250),
+                        child: UpdateAvailabilityBanner(
+                          version: pendingRelease.version.toString(),
+                          accentColor: branding.primaryColor,
+                          onPressed: () => showDialog<void>(
+                            context: context,
+                            builder: (_) => UpdateDialog(controller: updates),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
                 Expanded(child: child),
               ],
             ),
