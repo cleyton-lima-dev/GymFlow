@@ -18,12 +18,96 @@ class StudentDetailsViewModel extends ChangeNotifier {
   StudentSummary? _student;
   bool _isLoading = false;
   bool _isUpdatingStatus = false;
+  bool _isUpdatingAppAccess = false;
   String? _errorMessage;
+  String? _appAccessErrorMessage;
 
   StudentSummary? get student => _student;
   bool get isLoading => _isLoading;
   bool get isUpdatingStatus => _isUpdatingStatus;
+  bool get isUpdatingAppAccess => _isUpdatingAppAccess;
   String? get errorMessage => _errorMessage;
+  String? get appAccessErrorMessage => _appAccessErrorMessage;
+
+  Future<({bool succeeded, String? token, DateTime? expiresAt})> setAppAccess({
+    required bool enabled,
+    String? email,
+  }) async {
+    if (_isUpdatingAppAccess) {
+      return (succeeded: false, token: null, expiresAt: null);
+    }
+
+    final currentStudent = _student;
+    if (currentStudent == null) {
+      _appAccessErrorMessage = 'Não foi possível carregar os dados do aluno.';
+      notifyListeners();
+      return (succeeded: false, token: null, expiresAt: null);
+    }
+
+    _isUpdatingAppAccess = true;
+    _appAccessErrorMessage = null;
+    notifyListeners();
+
+    try {
+      final normalizedEmail = email?.trim().toLowerCase();
+      final result = await _studentsService.setAppAccess(
+        studentId: _studentId,
+        enabled: enabled,
+        email: enabled && normalizedEmail?.isNotEmpty == true
+            ? normalizedEmail
+            : null,
+      );
+
+      _student = _copyStudent(
+        currentStudent,
+        email: enabled && normalizedEmail?.isNotEmpty == true
+            ? normalizedEmail
+            : currentStudent.email,
+        appAccessEnabled: enabled,
+      );
+      if (result.token == null) {
+        try {
+          _student = await _studentsService.getStudentById(_studentId);
+        } catch (_) {
+          // The access operation succeeded; keep its result if refresh fails.
+        }
+      }
+
+      return (
+        succeeded: true,
+        token: result.token,
+        expiresAt: result.expiresAt,
+      );
+    } on ApiException catch (exception) {
+      _appAccessErrorMessage = _appAccessMessageFromApiException(exception);
+      if (exception.statusCode == 409) {
+        try {
+          _student = await _studentsService.getStudentById(_studentId);
+        } catch (_) {
+          // Keep the conflict message if the follow-up read also fails.
+        }
+      }
+      return (succeeded: false, token: null, expiresAt: null);
+    } on TimeoutException {
+      _appAccessErrorMessage =
+          'A operação demorou mais que o esperado. Verifique o estado do acesso antes de tentar novamente.';
+      return (succeeded: false, token: null, expiresAt: null);
+    } on http.ClientException {
+      _appAccessErrorMessage =
+          'Não foi possível conectar ao servidor. Verifique sua conexão.';
+      return (succeeded: false, token: null, expiresAt: null);
+    } on FormatException {
+      _appAccessErrorMessage = 'O servidor retornou uma resposta inválida.';
+      return (succeeded: false, token: null, expiresAt: null);
+    } catch (_) {
+      _appAccessErrorMessage =
+          'Não foi possível liberar o acesso ao aplicativo.';
+      return (succeeded: false, token: null, expiresAt: null);
+    } finally {
+      _isUpdatingAppAccess = false;
+      notifyListeners();
+    }
+  }
 
   Future<void> load() async {
     if (_isLoading) {
@@ -112,4 +196,34 @@ class StudentDetailsViewModel extends ChangeNotifier {
 
     return 'Não foi possível carregar os dados do aluno.';
   }
+
+  String _appAccessMessageFromApiException(ApiException exception) {
+    return switch (exception.statusCode) {
+      400 => 'Informe um e-mail válido para liberar o acesso ao aplicativo.',
+      401 => 'Sua sessão expirou. Entre novamente para continuar.',
+      403 => 'Somente um Admin autorizado pode liberar o acesso.',
+      404 => 'Aluno não encontrado ou indisponível para liberação.',
+      409 => 'Já existe uma conta usando este e-mail.',
+      >= 500 => 'O Avelri está temporariamente indisponível. Tente novamente.',
+      _ => 'Não foi possível liberar o acesso ao aplicativo.',
+    };
+  }
+
+  StudentSummary _copyStudent(
+    StudentSummary student, {
+    String? email,
+    bool? appAccessEnabled,
+  }) =>
+      StudentSummary(
+        id: student.id,
+        name: student.name,
+        email: email ?? student.email,
+        phone: student.phone,
+        birthDate: student.birthDate,
+        isActive: student.isActive,
+        createdAt: student.createdAt,
+        archivedAt: student.archivedAt,
+        appAccessEnabled: appAccessEnabled ?? student.appAccessEnabled,
+        userId: student.userId,
+      );
 }

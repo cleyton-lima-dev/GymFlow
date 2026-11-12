@@ -3,6 +3,7 @@ import 'package:gymflow/core/network/api_client.dart';
 import 'package:gymflow/features/home/presentation/widgets/professor_admin_bottom_navigation.dart';
 import 'package:gymflow/features/students/data/students_service.dart';
 import 'package:gymflow/features/students/models/student_summary.dart';
+import 'package:gymflow/features/students/presentation/student_app_access_section.dart';
 import 'package:gymflow/features/students/presentation/student_details_view_model.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
@@ -290,6 +291,10 @@ class _StudentDetailsContent extends StatelessWidget {
                     ),
                   ],
                 ),
+
+                const SizedBox(height: 20),
+
+                StudentAppAccessSection(student: student),
 
                 const SizedBox(height: 20),
               ],

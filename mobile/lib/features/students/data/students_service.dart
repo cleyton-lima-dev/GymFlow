@@ -78,6 +78,41 @@ class StudentsService {
     return StudentSummary.fromJson(Map<String, dynamic>.from(response));
   }
 
+  Future<({String? token, DateTime? expiresAt})> setAppAccess({
+    required String studentId,
+    required bool enabled,
+    String? email,
+  }) async {
+    final normalizedEmail = email?.trim().toLowerCase();
+    final response = await _apiClient.post(
+      'api/students/$studentId/app-access',
+      body: {
+        'enabled': enabled,
+        if (normalizedEmail != null && normalizedEmail.isNotEmpty)
+          'email': normalizedEmail,
+      },
+    );
+
+    if (response is! Map) {
+      throw const FormatException('Invalid app access response.');
+    }
+
+    final responseBody = Map<String, dynamic>.from(response);
+    final token = responseBody['token'];
+    final expiresAt = responseBody['expiresAt'];
+    if (token != null && token is! String) {
+      throw const FormatException('Invalid app access token response.');
+    }
+    if (expiresAt != null && expiresAt is! String) {
+      throw const FormatException('Invalid app access expiration response.');
+    }
+
+    return (
+      token: token as String?,
+      expiresAt: expiresAt == null ? null : DateTime.parse(expiresAt as String),
+    );
+  }
+
   Future<StudentSummary> getMe() async {
     final response = await _apiClient.get('api/students/me');
 
