@@ -1,10 +1,16 @@
+# Supply an unmodified x64 package from https://aka.ms/vc14/vc_redist.x64.exe.
+# Bundling it requires licensed Visual Studio redistribution rights; the caller
+# must explicitly confirm those rights. The pinned hash/version are in the .iss.
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)]
     [ValidatePattern('^[0-9a-f]{40}$')]
     [string]$SourceCommit,
     [string]$FlutterExecutable = 'C:\flutter\bin\flutter.bat',
-    [string]$InnoSetupCompiler
+    [string]$InnoSetupCompiler,
+    [Parameter(Mandatory = $true)]
+    [string]$VCRedistPath,
+    [switch]$MicrosoftRedistributionRightsConfirmed
 )
 
 Set-StrictMode -Version Latest
@@ -22,6 +28,8 @@ $expectedProductionAppId = 'B46B7D1A-6E54-4C0A-A1E2-5F41C6D92837'
 $repoRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
 $productionIss = Join-Path $PSScriptRoot 'AvelriGestao-Production.iss'
 $homologationIss = Join-Path $PSScriptRoot 'AvelriGestao-Homologacao.iss'
+$vcRedistHelper = Join-Path $PSScriptRoot 'Install-VCRedistElevated.ps1'
+$redistributionTermsDoc = Join-Path $PSScriptRoot 'MicrosoftVCRedist-Redistribution-Conditions.md'
 
 if ($SourceCommit -notmatch '^[0-9a-f]{40}$') {
     throw 'SourceCommit must be an explicit full lowercase Git commit SHA.'
@@ -32,6 +40,18 @@ if (-not (Test-Path -LiteralPath $productionIss -PathType Leaf)) {
 if (-not (Test-Path -LiteralPath $homologationIss -PathType Leaf)) {
     throw 'Homologation Inno Setup script is missing; Production AppId uniqueness cannot be confirmed.'
 }
+if (-not (Test-Path -LiteralPath $vcRedistHelper -PathType Leaf)) {
+    throw 'The Visual C++ prerequisite elevation helper is missing.'
+}
+if (-not (Test-Path -LiteralPath $redistributionTermsDoc -PathType Leaf)) {
+    throw 'The Microsoft Visual C++ redistribution conditions checklist is missing.'
+}
+if (-not $MicrosoftRedistributionRightsConfirmed) {
+    throw 'Confirm licensed Visual Studio use and redistribution rights for the exact edition/channel (including Insiders, if applicable) before bundling the Microsoft Visual C++ Redistributable.'
+}
+if (-not (Test-Path -LiteralPath $VCRedistPath -PathType Leaf)) {
+    throw 'The explicitly supplied offline Microsoft Visual C++ x64 Redistributable is missing.'
+}
 if (-not (Test-Path -LiteralPath $FlutterExecutable -PathType Leaf)) {
     throw 'The explicitly configured Flutter launcher is unavailable.'
 }
@@ -40,6 +60,57 @@ if (-not (Test-Path -LiteralPath $InnoSetupCompiler -PathType Leaf)) {
 }
 $productionIssText = [IO.File]::ReadAllText($productionIss)
 $homologationIssText = [IO.File]::ReadAllText($homologationIss)
+$vcRedistVersionParts = @('Major', 'Minor', 'Build', 'Revision') | ForEach-Object {
+    $partMatch = [regex]::Match($productionIssText, '(?m)^#define VCRedist' + $_ + '\s+(?<value>\d+)\s*$')
+    if (-not $partMatch.Success) { throw ('Production installer has no pinned VCRedist' + $_ + ' version component.') }
+    [int]$partMatch.Groups['value'].Value
+}
+$homologationVersionParts = @('Major', 'Minor', 'Build', 'Revision') | ForEach-Object {
+    $partMatch = [regex]::Match($homologationIssText, '(?m)^#define VCRedist' + $_ + '\s+(?<value>\d+)\s*$')
+    if (-not $partMatch.Success) { throw ('Homologation installer has no pinned VCRedist' + $_ + ' version component.') }
+    [int]$partMatch.Groups['value'].Value
+}
+$vcRedistHashMatch = [regex]::Match($productionIssText, '(?m)^#define VCRedistSha256 "(?<value>[0-9A-Fa-f]{64})"\s*$')
+$homologationHashMatch = [regex]::Match($homologationIssText, '(?m)^#define VCRedistSha256 "(?<value>[0-9A-Fa-f]{64})"\s*$')
+if (-not $vcRedistHashMatch.Success) {
+    throw 'The Production installer must pin the exact Visual C++ Redistributable SHA-256.'
+}
+$vcRedistVersion = [string]::Join('.', $vcRedistVersionParts)
+$vcRedistExpectedHash = $vcRedistHashMatch.Groups['value'].Value
+if ([string]::Join('.', $homologationVersionParts) -cne $vcRedistVersion -or
+    -not $homologationHashMatch.Success -or
+    $homologationHashMatch.Groups['value'].Value -cne $vcRedistExpectedHash -or
+    $vcRedistVersion -cne '14.52.37029.0' -or
+    $vcRedistExpectedHash -cne '9C02C9ED120F671B900E6B9471D890E3B2414117A7E53F4AE2E855466FA2B7C9') {
+    throw 'Production and Homologation must both pin the approved Microsoft Visual C++ x64 14.52.37029.0 package.'
+}
+foreach ($installerScript in @($productionIssText, $homologationIssText)) {
+    if ($installerScript -notmatch '(?m)^PrivilegesRequired=lowest\s*$' -or
+        $installerScript -notmatch '(?m)^Source: "\{#VCRedistPath\}"; DestName: "vc_redist\.x64\.exe"; Flags: dontcopy noencryption\s*$' -or
+        $installerScript -notmatch '(?m)^Source: "Install-VCRedistElevated\.ps1"; Flags: dontcopy noencryption\s*$' -or
+        $installerScript -notmatch '(?m)^function PrepareToInstall\(' -or
+        $installerScript -notmatch 'HasRequiredVCRuntime' -or
+        $installerScript -notmatch 'ExtractTemporaryFile\(' -or
+        $installerScript -notmatch 'GetSHA256OfFile\(RedistPath\)') {
+        throw 'Both installer identities must carry the same fail-closed, per-user Visual C++ prerequisite flow.'
+    }
+    if ($installerScript -notmatch '(?m)^#if MicrosoftRedistributionRightsConfirmed != 1\s*$') {
+        throw 'Each installer requires a compile-time legal-redistribution attestation.'
+    }
+}
+$vcRedistItem = Get-Item -LiteralPath $VCRedistPath
+$VCRedistPath = $vcRedistItem.FullName
+$vcRedistActualHash = (Get-FileHash -LiteralPath $VCRedistPath -Algorithm SHA256).Hash
+$vcRedistSignature = Get-AuthenticodeSignature -LiteralPath $VCRedistPath
+if ($vcRedistItem.Length -eq 0 -or
+    $vcRedistActualHash -cne $vcRedistExpectedHash -or
+    $vcRedistItem.VersionInfo.FileVersion -cne $vcRedistVersion -or
+    $vcRedistSignature.Status.ToString() -cne 'Valid' -or
+    $null -eq $vcRedistSignature.SignerCertificate -or
+    $vcRedistSignature.SignerCertificate.GetNameInfo(
+        [Security.Cryptography.X509Certificates.X509NameType]::SimpleName, $false) -cne 'Microsoft Corporation') {
+    throw 'The Visual C++ Redistributable failed pinned SHA-256, version, or Microsoft Authenticode verification.'
+}
 $productionAppIdMatch = [regex]::Match($productionIssText, '(?m)^AppId=\{\{(?<id>[0-9A-Fa-f-]{36})\}')
 $homologationAppIdMatch = [regex]::Match($homologationIssText, '(?m)^AppId=\{\{(?<id>[0-9A-Fa-f-]{36})\}')
 if (-not $productionAppIdMatch.Success -or
@@ -152,7 +223,8 @@ try {
         ('flutter build windows --release --no-pub --build-name=' + $appVersion + ' --build-number=' + $buildNumber +
             ' --dart-define=APP_ENV=production --dart-define=API_BASE_URL=' + $expectedApiBaseUrl)
         ('ISCC.exe /DAppSource=<ReleaseDir> /DBuildMetadata=<BuildInfo> /DInstallerOutput=<InstallerDir> /DAppVersion=' +
-            $appVersion + ' /DBuildNumber=' + $buildNumber + ' /DCommitShort=' + $commitShort + ' AvelriGestao-Production.iss')
+            $appVersion + ' /DBuildNumber=' + $buildNumber + ' /DCommitShort=' + $commitShort +
+            ' /DVCRedistPath=<VerifiedOfflineRedistributable> AvelriGestao-Production.iss')
     )
     [IO.File]::WriteAllText($commandPath, ([string]::Join("`r`n", $commandLines) + "`r`n"), (New-Object Text.UTF8Encoding($false)))
 
@@ -182,6 +254,24 @@ try {
         throw 'Expected exactly one complete Windows Release output with Flutter assets.'
     }
     $appSource = $releaseExecutables[0].Directory.FullName
+    $compilerInfoFiles = @(Get-ChildItem -LiteralPath (Join-Path $desktopRoot 'build\windows') `
+        -Filter 'CMakeCXXCompiler.cmake' -File -Recurse -ErrorAction SilentlyContinue)
+    if ($compilerInfoFiles.Count -ne 1) {
+        throw 'Expected exactly one CMake C++ compiler provenance file for the Windows Release build.'
+    }
+    $compilerInfo = [IO.File]::ReadAllText($compilerInfoFiles[0].FullName)
+    $msvcVersionMatch = [regex]::Match($compilerInfo,
+        '(?m)^set\(CMAKE_CXX_COMPILER_VERSION "(?<version>19\.\d+\.\d+\.\d+)"\)\s*$')
+    if ($compilerInfo -notmatch '(?m)^set\(CMAKE_CXX_COMPILER_ID "MSVC"\)\s*$' -or
+        -not $msvcVersionMatch.Success) {
+        throw 'Windows Release C++ compiler is not a recognized MSVC v14 toolset.'
+    }
+    $msvcVersion = [Version]$msvcVersionMatch.Groups['version'].Value
+    $minimumRuntimeForBuild = New-Object Version(14, $msvcVersion.Minor, $msvcVersion.Build, $msvcVersion.Revision)
+    if ([Version]$vcRedistVersion -lt $minimumRuntimeForBuild) {
+        throw ('Bundled Visual C++ Redistributable ' + $vcRedistVersion +
+            ' is older than the MSVC runtime required by this build: ' + $minimumRuntimeForBuild + '.')
+    }
     $buildMetadata = Join-Path $runRoot 'Avelri-Build-Info.txt'
     $metadataLines = @(
         'Product=Avelri Gestao'
@@ -191,6 +281,11 @@ try {
         ('API_BASE_URL=' + $expectedApiBaseUrl)
         ('BuildScriptSHA256=' + (Get-FileHash -LiteralPath $MyInvocation.MyCommand.Path -Algorithm SHA256).Hash)
         ('InstallerScriptSHA256=' + (Get-FileHash -LiteralPath $productionIss -Algorithm SHA256).Hash)
+        ('VCRedistHelperSHA256=' + (Get-FileHash -LiteralPath $vcRedistHelper -Algorithm SHA256).Hash)
+        ('VCRedistVersion=' + $vcRedistVersion)
+        ('VCRedistSHA256=' + $vcRedistActualHash)
+        'VCRedistAuthenticode=Valid (Microsoft Corporation)'
+        ('MSVCCompilerVersion=' + $msvcVersion)
         ('FlutterSdkVersion=' + $flutterVersion)
         ('FlutterSdkRevision=' + $flutterRevision)
         ('InnoSetupCompiler=' + $isccVersion)
@@ -207,6 +302,8 @@ try {
         ('/DAppVersion=' + $appVersion) `
         ('/DBuildNumber=' + $buildNumber) `
         ('/DCommitShort=' + $commitShort) `
+        ('/DVCRedistPath=' + $VCRedistPath) `
+        '/DMicrosoftRedistributionRightsConfirmed=1' `
         $productionIss *> $compilerLog
     $compilerExitCode = $LASTEXITCODE
     Add-ExitCodeEvidence -Stage 'inno_setup_compile' -ExitCode $compilerExitCode
@@ -228,6 +325,8 @@ try {
     Write-Output ('API_BASE_URL=' + $expectedApiBaseUrl)
     Write-Output ('Installer=' + $installerPath)
     Write-Output ('SHA256=' + $installerHash)
+    Write-Output ('VCRedistVersion=' + $vcRedistVersion)
+    Write-Output ('VCRedistSHA256=' + $vcRedistActualHash)
     Write-Output ('BuildManifest=' + $buildMetadata)
     Write-Output ('ExitCodes=' + $exitCodePath)
     Write-Output ('BuildCommands=' + $commandPath)
