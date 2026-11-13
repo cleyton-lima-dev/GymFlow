@@ -1,0 +1,27 @@
+# Issue #131 cutover template. Do not deploy until the runbook preconditions pass.
+# This phase must have no [http_service] and no [[services]] section.
+# Keep the existing public IP allocations; removing services is the intended
+# ingress control, subject to the Machine-config verification in the runbook.
+app = "gymflow-api-prod"
+primary_region = "gru"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  "GymTimeZones__91f3fdb7-22b9-43ee-8a10-5e411c44cfbe" = "America/Sao_Paulo"
+  Cors__AllowedOrigins = "https://avelri.pages.dev"
+  ASPNETCORE_ENVIRONMENT = "Production"
+  ASPNETCORE_URLS = "http://+:8080"
+  Jwt__Issuer = "GymFlow.Api"
+  Jwt__Audience = "GymFlow.Mobile"
+  Jwt__ExpirationMinutes = "10080"
+  "GymTimeZones__11111111-1111-1111-1111-111111111111" = "America/Sao_Paulo"
+  Platform__Enabled = "true"
+  StudentLifecycle__Enabled = "false"
+  StudentImportCleanup__Enabled = "false"
+
+[[vm]]
+  cpu_kind = "shared"
+  cpus = 1
+  memory = "512mb"
