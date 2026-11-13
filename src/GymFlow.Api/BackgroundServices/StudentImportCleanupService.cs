@@ -1,13 +1,21 @@
 using GymFlow.Api.Services;
+using Microsoft.Extensions.Configuration;
 
 namespace GymFlow.Api.BackgroundServices;
 
 public sealed class StudentImportCleanupService(
     IServiceScopeFactory scopeFactory,
-    ILogger<StudentImportCleanupService> logger) : BackgroundService
+    ILogger<StudentImportCleanupService> logger,
+    IConfiguration configuration) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        if (!configuration.GetValue<bool>("StudentImportCleanup:Enabled", true))
+        {
+            logger.LogInformation("Student import cleanup is disabled.");
+            return;
+        }
+
         using var timer = new PeriodicTimer(TimeSpan.FromHours(1));
         while (await timer.WaitForNextTickAsync(stoppingToken))
         {
