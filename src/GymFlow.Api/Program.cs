@@ -15,6 +15,7 @@ using GymFlow.Api.BackgroundServices;
 using GymFlow.Api.Platform;
 using GymFlow.Api.Services;
 using GymFlow.Api.Authorization;
+using GymFlow.Api.Maintenance;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -27,6 +28,7 @@ builder.Services.AddScoped<MigrationService>();
 builder.Services.AddScoped<ErpEnabledFilter>();
 builder.Services.AddScoped<ErpReportFilter>();
 builder.Services.AddScoped<ErpMetadataAccess>();
+builder.Services.AddScoped<GymMaintenanceService>();
 
 // Add services to the container.
 
@@ -411,6 +413,8 @@ app.UseRateLimiter();
 
 app.UseAuthentication();
 
+app.UseMiddleware<GymMaintenanceMiddleware>();
+
 app.UseAuthorization();
 
 app.MapControllers();
@@ -422,6 +426,24 @@ if (args.Contains("--bootstrap-platform-operator", StringComparer.Ordinal))
 {
     await PlatformBootstrap.RunAsync(app);
     return;
+}
+
+// The cutover process can require a tenant to be blocked before this process
+// starts accepting requests. A missing or inactive row aborts startup.
+var requiredMaintenance = app.Configuration.GetSection("Maintenance:RequiredAtStartup").Get<string[]>() ?? [];
+if (requiredMaintenance.Length > 0)
+{
+    await using var scope = app.Services.CreateAsyncScope();
+    var maintenance = scope.ServiceProvider.GetRequiredService<GymMaintenanceService>();
+    foreach (var raw in requiredMaintenance)
+    {
+        if (!Guid.TryParse(raw, out var gymId) || gymId == Guid.Empty)
+            throw new InvalidOperationException("Academia obrigatória não está em manutenção; inicialização recusada.");
+        var state = await maintenance.GetAsync(gymId);
+        if (state?.IsActive != true || state.AllowedAdminUserId is not { } adminId ||
+            !await maintenance.IsAllowedAsync(gymId, adminId))
+            throw new InvalidOperationException("Academia obrigatória não está em manutenção com Admin válido; inicialização recusada.");
+    }
 }
 
 app.Run();

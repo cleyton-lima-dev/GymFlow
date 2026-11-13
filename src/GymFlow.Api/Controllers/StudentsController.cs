@@ -5,6 +5,11 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
 using Microsoft.AspNetCore.RateLimiting;
+using GymFlow.Api.Maintenance;
+using GymFlow.Infrastructure.Data;
+using Microsoft.EntityFrameworkCore;
+using System.Security.Cryptography;
+using System.Text;
 
 
 namespace GymFlow.Api.Controllers;
@@ -17,15 +22,21 @@ public class StudentsController : ControllerBase
     private readonly StudentService _studentService;
     private readonly EnrollmentService _enrollmentService;
     private readonly ErpMetadataAccess _erpMetadata;
+    private readonly GymMaintenanceService _maintenance;
+    private readonly AppDbContext _db;
 
     public StudentsController(
     StudentService studentService,
     EnrollmentService enrollmentService,
-    ErpMetadataAccess erpMetadata)
+    ErpMetadataAccess erpMetadata,
+    GymMaintenanceService maintenance,
+    AppDbContext db)
     {
         _studentService = studentService;
         _enrollmentService = enrollmentService;
         _erpMetadata = erpMetadata;
+        _maintenance = maintenance;
+        _db = db;
     }
 
     [Authorize(Roles = "Admin")]
@@ -60,6 +71,8 @@ public class StudentsController : ControllerBase
     [HttpPost("app-activate/validate")]
     public async Task<IActionResult> ValidateAppInvite(ValidateStudentAppInviteRequest request)
     {
+        if (await InviteBlockedAsync(request.Token))
+            return StatusCode(503, new { code = "GYM_MAINTENANCE", message = "Academia temporariamente em manutenção." });
         Response.Headers.CacheControl = "no-store";
         var message = await _studentService.ValidateAppInviteAsync(request.Token);
         return message is null
@@ -72,12 +85,23 @@ public class StudentsController : ControllerBase
     [HttpPost("app-activate")]
     public async Task<IActionResult> ActivateApp(ActivateStudentAppRequest request)
     {
+        if (await InviteBlockedAsync(request.Token))
+            return StatusCode(503, new { code = "GYM_MAINTENANCE", message = "Academia temporariamente em manutenção." });
         try
         {
             return await _studentService.ActivateAppAsync(request.Token, request.Password)
                 ? NoContent() : BadRequest(new { message = "Convite inválido ou expirado." });
         }
         catch (ArgumentException ex) { return BadRequest(new { message = ex.Message }); }
+    }
+
+    private async Task<bool> InviteBlockedAsync(string token)
+    {
+        if (string.IsNullOrWhiteSpace(token) || token.Length != 64) return false;
+        var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(token)));
+        var gymId = await _db.Students.AsNoTracking().Where(x => x.AppInviteTokenHash == hash)
+            .Select(x => (Guid?)x.GymId).SingleOrDefaultAsync();
+        return gymId is { } id && (await _maintenance.GetAsync(id))?.IsActive == true;
     }
 
 

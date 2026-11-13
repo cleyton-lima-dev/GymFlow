@@ -4,6 +4,10 @@ using GymFlow.Application.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
+using GymFlow.Api.Maintenance;
+using GymFlow.Application.Interfaces.Security;
+using GymFlow.Infrastructure.Data;
+using Microsoft.EntityFrameworkCore;
 
 namespace GymFlow.Api.Controllers;
 
@@ -17,16 +21,25 @@ public class AccessAgentsController :
 
     private readonly AccessAgentPairingService
         _pairingService;
+    private readonly GymMaintenanceService _maintenance;
+    private readonly AppDbContext _db;
+    private readonly IAccessAgentPairingCodeService _codes;
 
     public AccessAgentsController(
         AccessAgentService accessAgentService,
-        AccessAgentPairingService pairingService)
+        AccessAgentPairingService pairingService,
+        GymMaintenanceService maintenance,
+        AppDbContext db,
+        IAccessAgentPairingCodeService codes)
     {
         _accessAgentService =
             accessAgentService;
 
         _pairingService =
             pairingService;
+        _maintenance = maintenance;
+        _db = db;
+        _codes = codes;
     }
 
     [Authorize(Roles = "Admin")]
@@ -64,6 +77,14 @@ public class AccessAgentsController :
     public async Task<IActionResult> Pair(
         PairAccessAgentRequest request)
     {
+        if (!string.IsNullOrWhiteSpace(request.Code))
+        {
+            var hash = _codes.Hash(request.Code);
+            var gym = await _db.AccessAgentPairingCodes.AsNoTracking().Where(x => x.CodeHash == hash)
+                .Select(x => (Guid?)x.GymId).SingleOrDefaultAsync();
+            if (gym is { } id && (await _maintenance.GetAsync(id))?.IsActive == true)
+                return StatusCode(503, new { code = "GYM_MAINTENANCE", message = "Academia temporariamente em manutenção." });
+        }
         PairAccessAgentResponse? result;
 
         try
@@ -101,6 +122,9 @@ public class AccessAgentsController :
         var result =
             await _accessAgentService
                 .LoginAsync(request);
+
+        if (result is not null && (await _maintenance.GetAsync(result.GymId))?.IsActive == true)
+            return StatusCode(503, new { code = "GYM_MAINTENANCE", message = "Academia temporariamente em manutenção." });
 
         if (result is null)
         {

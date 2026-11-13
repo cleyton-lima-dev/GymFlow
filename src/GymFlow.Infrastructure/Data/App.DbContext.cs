@@ -17,6 +17,8 @@ public class AppDbContext : DbContext
     public DbSet<GymOnboardingAuditLog> GymOnboardingAuditLogs => Set<GymOnboardingAuditLog>();
     public DbSet<GymSettings> GymSettings { get; set; }
     public DbSet<GymSettingsAuditLog> GymSettingsAuditLogs { get; set; }
+    public DbSet<GymMaintenanceState> GymMaintenanceStates => Set<GymMaintenanceState>();
+    public DbSet<GymMaintenanceAuditLog> GymMaintenanceAuditLogs => Set<GymMaintenanceAuditLog>();
     public DbSet<Student> Students { get; set; }
     public DbSet<StudentImportBatch> StudentImportBatches => Set<StudentImportBatch>();
     public DbSet<MigrationSession> MigrationSessions => Set<MigrationSession>();

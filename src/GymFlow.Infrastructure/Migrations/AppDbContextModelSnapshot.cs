@@ -485,6 +485,66 @@ namespace GymFlow.Infrastructure.Migrations
                     b.ToTable("FinancialAuditLogs", (string)null);
                 });
 
+            modelBuilder.Entity("GymFlow.Domain.Entities.GymMaintenanceAuditLog", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasMaxLength(12)
+                        .HasColumnType("character varying(12)");
+
+                    b.Property<Guid>("ActorPlatformOperatorId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("AllowedAdminUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("GymId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("OccurredAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ActorPlatformOperatorId");
+
+                    b.HasIndex("GymId", "OccurredAt");
+
+                    b.ToTable("GymMaintenanceAuditLogs", (string)null);
+                });
+
+            modelBuilder.Entity("GymFlow.Domain.Entities.GymMaintenanceState", b =>
+                {
+                    b.Property<Guid>("GymId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("AllowedAdminUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("bigint");
+
+                    b.HasKey("GymId");
+
+                    b.HasIndex("AllowedAdminUserId");
+
+                    b.ToTable("GymMaintenanceStates", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_GymMaintenanceStates_AllowedAdmin", "(\"IsActive\" AND \"AllowedAdminUserId\" IS NOT NULL) OR (NOT \"IsActive\" AND \"AllowedAdminUserId\" IS NULL)");
+                        });
+                });
+
             modelBuilder.Entity("GymFlow.Domain.Entities.GymOnboarding", b =>
                 {
                     b.Property<Guid>("GymId")
@@ -1664,6 +1724,29 @@ namespace GymFlow.Infrastructure.Migrations
                         .WithMany().HasForeignKey("CreatedByUserId").OnDelete(DeleteBehavior.Restrict).IsRequired();
                     b.HasOne("GymFlow.Domain.Entities.User", null)
                         .WithMany().HasForeignKey("ReleasedByUserId").OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("GymFlow.Domain.Entities.GymMaintenanceAuditLog", b =>
+                {
+                    b.HasOne("GymFlow.Domain.Entities.PlatformOperator", null)
+                        .WithMany()
+                        .HasForeignKey("ActorPlatformOperatorId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("GymFlow.Domain.Entities.GymMaintenanceState", null)
+                        .WithMany()
+                        .HasForeignKey("GymId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("GymFlow.Domain.Entities.GymMaintenanceState", b =>
+                {
+                    b.HasOne("GymFlow.Domain.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("AllowedAdminUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
                 });
 
             modelBuilder.Entity("GymFlow.Domain.Entities.GymOnboarding", b =>

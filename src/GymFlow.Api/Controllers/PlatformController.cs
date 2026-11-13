@@ -6,6 +6,11 @@ using GymFlow.Application.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
+using GymFlow.Api.Maintenance;
+using GymFlow.Infrastructure.Data;
+using Microsoft.EntityFrameworkCore;
+using System.Security.Cryptography;
+using System.Text;
 
 namespace GymFlow.Api.Controllers;
 
@@ -62,12 +67,21 @@ public sealed class PlatformController(PlatformOnboardingService service, IPlatf
 [ApiController]
 [Route("api/onboarding/admin-activation")]
 [ResponseCache(Location = ResponseCacheLocation.None, NoStore = true)]
-public sealed class AdminActivationController(PlatformOnboardingService service, PlatformAuthOptions options) : ControllerBase
+public sealed class AdminActivationController(PlatformOnboardingService service, PlatformAuthOptions options,
+    GymMaintenanceService maintenance, AppDbContext db) : ControllerBase
 {
     [AllowAnonymous, HttpPost, EnableRateLimiting("login")]
     public async Task<IActionResult> Activate(ActivateAdminRequest request)
     {
         if (!options.Enabled) return NotFound();
+        if (!string.IsNullOrWhiteSpace(request.Token))
+        {
+            var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(request.Token)));
+            var gym = await db.AdminActivationInvitations.AsNoTracking().Where(x => x.TokenHash == hash)
+                .Select(x => (Guid?)x.GymId).SingleOrDefaultAsync();
+            if (gym is { } id && (await maintenance.GetAsync(id))?.IsActive == true)
+                return StatusCode(503, new { code = "GYM_MAINTENANCE", message = "Academia temporariamente em manutenção." });
+        }
         try
         {
             return await service.ActivateAsync(request) ? NoContent() : BadRequest(new { message = "Convite inválido ou expirado." });

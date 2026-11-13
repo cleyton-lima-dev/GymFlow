@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
 using System.Security.Claims;
 using Microsoft.AspNetCore.RateLimiting;
+using GymFlow.Api.Maintenance;
 
 namespace GymFlow.Api.Controllers;
 
@@ -14,14 +15,17 @@ public class AuthController : ControllerBase
     private readonly AuthenticationService _authenticationService;
     private readonly ILogger<AuthController> _logger;
     private readonly StudentAccessService _studentAccessService;
+    private readonly GymMaintenanceService _maintenance;
 
     public AuthController(
     AuthenticationService authenticationService,
     StudentAccessService studentAccessService,
+    GymMaintenanceService maintenance,
     ILogger<AuthController> logger)
     {
         _authenticationService = authenticationService;
         _studentAccessService = studentAccessService;
+        _maintenance = maintenance;
         _logger = logger;
     }
 
@@ -42,6 +46,9 @@ public class AuthController : ControllerBase
                 message = "E-mail ou senha inválidos."
             });
         }
+
+        if (!await _maintenance.IsAllowedAsync(result.GymId, result.UserId))
+            return StatusCode(503, new { code = "GYM_MAINTENANCE", message = "Academia temporariamente em manutenção." });
 
         if (result.Role == "Student")
         {

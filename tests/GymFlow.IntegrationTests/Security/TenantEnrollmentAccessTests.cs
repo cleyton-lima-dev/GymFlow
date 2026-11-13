@@ -610,6 +610,8 @@ public partial class TenantEnrollmentAccessTests
         public Guid LegacyGym { get; } = Guid.NewGuid();
         public string EnabledFlag { get; init; } = "true";
         public string EnabledTimeZone { get; init; } = "UTC";
+        public bool EnablePlatform { get; init; }
+        public Guid? RequiredMaintenanceGymAtStartup { get; init; }
         public IGymErpPolicy? ErpPolicyOverride { get; init; }
         public Func<AppDbContext, Task>? BeforeNextAsyncSave { get; set; }
         public Func<AppDbContext, Task>? BeforeEveryAsyncSave { get; set; }
@@ -630,7 +632,7 @@ public partial class TenantEnrollmentAccessTests
         protected override IHost CreateHost(IHostBuilder builder)
         {
             // Host settings reach the minimal entry point before its startup validation.
-            builder.ConfigureHostConfiguration(config => config.AddInMemoryCollection(new Dictionary<string, string?>
+            var settings = new Dictionary<string, string?>
             {
                 ["environment"] = "Testing",
                 ["Jwt:Key"] = "synthetic-test-key-only-01234567890123456789",
@@ -641,6 +643,11 @@ public partial class TenantEnrollmentAccessTests
                     Enumerable.Repeat((byte)0xA7, 32).ToArray()),
                 ["ConnectionStrings:DefaultConnection"] = "Host=unused.invalid;Database=unused",
                 ["StudentLifecycle:Enabled"] = "false",
+                ["Platform:Enabled"] = EnablePlatform.ToString(),
+                ["Platform:Jwt:Key"] = "isolated-platform-test-key-01234567890123456789",
+                ["Platform:Jwt:Issuer"] = "isolated-platform-issuer",
+                ["Platform:Jwt:Audience"] = "isolated-platform-audience",
+                ["Platform:MfaEncryptionKey"] = Convert.ToBase64String(Enumerable.Repeat((byte)0xB3, 32).ToArray()),
                 // Even a legacy global true must have no effect.
                 ["EnrollmentAccess:EnforceStudentEnrollment"] = "true",
                 [$"GymFeatures:{EnabledGym:D}:ErpEnabled"] = EnabledFlag,
@@ -650,7 +657,10 @@ public partial class TenantEnrollmentAccessTests
                 [$"GymTimeZones:{LegacyGym:D}"] = "UTC",
                 [$"GymTimeZones:{EnabledGym:D}"] = EnabledTimeZone,
                 [$"GymTimeZones:{OtherEnabledGym:D}"] = "UTC"
-            }));
+            };
+            if (RequiredMaintenanceGymAtStartup is { } requiredGym)
+                settings["Maintenance:RequiredAtStartup:0"] = requiredGym.ToString("D");
+            builder.ConfigureHostConfiguration(config => config.AddInMemoryCollection(settings));
             return base.CreateHost(builder);
         }
 
