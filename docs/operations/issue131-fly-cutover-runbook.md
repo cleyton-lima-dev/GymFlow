@@ -21,44 +21,52 @@ only with explicit owner authorization, even if 48 hours have elapsed.
   `Maintenance__RequiredAtStartup__0` set to the owner-confirmed AC Power Gym
   GymId. Startup fails closed unless that tenant has active maintenance with
   the authorized Admin.
-- One Production Machine was reported: `48ed314fe04118` in `gru`. Private
+- One Production Machine was confirmed: `48ed314fe04118`, started in `gru`,
+  shared-cpu-1x / 512 MB. Its effective configuration has one public service
+  on 80/443, autostart enabled, autostop disabled, one check, restart on-failure,
+  process group `app`, and Fly Platform v2 metadata. Private
   `fly proxy` to its 6PN address and `GET /health` returned 200 on 2026-11-13.
-  This proves private reachability of the current image, not of a replacement.
+  This proves private reachability of the current image, not of the candidate.
 - Gate, migration, and in-process cutover tests passed locally. The gate commit
-  `94fbfd8` is not published. No Production Platform/MFA or Admin state is
-  established by this runbook.
+  `94fbfd8` is included in the candidate image already built in the registry.
+  No Production Platform/MFA or Admin state is established by this runbook.
 
-The Fly docs say that an app without services has no public Fly Proxy route,
-and Fly staff advise removing the service section and redeploying. This is
-configuration intent, **not proof** that the installed flyctl will reconcile
-the already persisted Machine's `config.services` to `[]` or that a replacement
-will lack services. The first Production change is blocked until an authorized
-rehearsal on an already existing non-Production app demonstrates those exact
-effects with the installed flyctl version. Inspect the effective Machine config
-after every deployment, not just the TOML or app-level service listing.
+The planned cutover uses a direct Machines API update of the **same Machine ID**,
+not `fly deploy rolling`. The API requires the complete effective Machine config:
+copy it from a fresh GET in protected operator memory, preserve every existing
+field, and change only the fields explicitly required for each phase. The TOMLs
+describe intended state; neither is a complete Machines API payload. Explicit
+`config.services=[]` removes public Fly Proxy routing while retaining the app's
+allocated IPs, subject to verification of the effective config and external
+probes. These API steps have **not** been exercised on this Production Machine.
 
 ## Preconditions, before closing ingress
 
 1. New authorization for the Production window; verified target GymId and
    designated active Admin UserId. Confirm Production PlatformOperator, MFA,
-   Platform JWT/MFA configuration, database privileges and a reviewed backup.
+   Platform JWT/MFA configuration, database privileges and a fresh, verified
+   pre-cutover backup of the existing Supabase PostgreSQL. Preserve Users,
+   Students, GymId, credentials, workouts and history; do not create a parallel
+   database or restore over new writes.
    Never print secret values. If any are absent, NO-GO.
-2. Prepare an immutable image built from an isolated, reviewed source tree;
-   never build from this dirty workspace. Record the current and candidate image
-   digests. The candidate must contain the maintenance commit and migration.
+2. Use the already built immutable candidate image; do not rebuild from this
+   dirty workspace. Record and verify the current and candidate image references
+   and digests. The candidate must contain the maintenance commit and migration.
    Confirm in that exact release image that `StudentImportCleanup:Enabled=false`
    is implemented and effective in both private and protected phases; the
    approved maintenance commit alone does not implement this switch. Check
    that no higher-precedence secret overrides the TOML value, without viewing
    secret values. Otherwise NO-GO before migration.
-3. Review both TOML files against the effective, **sanitized** Fly Machine
-   config. Preserve any required settings not represented locally. The private
-   config must yield zero public service entries. Confirm the existing process
-   group, release-command setting, and health-check behavior; these files define
-   no `[processes]` or release command, and private service checks disappear
-   with the public service. `--skip-release-command` prevents a configured
-   release command, while Fly's default smoke checks may still run. Resolve
-   any difference first.
+3. Obtain a fresh, private GET of the effective Machine config and `instance_id`
+   immediately before each update. Preserve `env`, `init`, `guest`, `metadata`,
+   `restart`, image, process settings and every other effective field, including
+   mounts/files if present. The observed config has 10 env entries, including
+   `FLY_PROCESS_GROUP` and `PRIMARY_REGION`; the TOMLs alone omit effective
+   fields. Do not print or persist the raw config, lease nonce or secret values.
+   Use fresh `instance_id` as `current_version`, never the historical value.
+   Resolve any missing field, image reference, check or precedence difference
+   before changing the Machine. Service-linked checks cease with `services=[]`;
+   use a private `/health` probe after explicit start.
 4. Schedule a full operational pause with Abrahão and obtain his confirmation
    that no administrative or financial operation is in progress before closing
    ingress. The owner accepts that a request or job still in progress may be
@@ -69,138 +77,154 @@ after every deployment, not just the TOML or app-level service listing.
    If it changes, enumerate every Machine and revise the commands; no wildcard
    action based on the historical ID.
 
-## Future sequence — commands are examples to execute only when authorized
+## Future sequence — planned Machines API operations, not yet proven in Production
 
-1. Announce the maintenance window. Cordon the confirmed old Machine:
+1. Announce the maintenance window. Confirm the current Machine ID and acquire
+   an exclusive Machine lease **before** cordon. Keep its nonce private, track
+   expiry, and renew it before the remaining lifetime becomes too short for
+   the next operation. The lease holder must supply `fly-machine-lease-nonce`
+   on applicable Machine API operations, including update and release; use
+   `current_version` from a fresh GET for each update. A failed/expired lease,
+   stale version or rejected operation is STOP/NO-GO; never retry a mutation
+   blindly. The lease may prevent proxy autostart while active, but propagation
+   is not instantaneous and neither lease nor cordon proves isolation alone.
+   Cordon the confirmed old Machine through the authorized API operation;
+   the historical CLI form below identifies the target only:
 
    `fly machine cordon 48ed314fe04118 --app gymflow-api-prod`
 
-   Confirm that public probes from outside no longer reach the API and prevent
-   application writes through the private 6PN path during the pause. Cordon
-   prevents new proxy routing to that Machine; it is **not** persistent ingress
-   policy for replacements. If public ingress remains open, NO-GO.
+   Confirm from outside that probes on the actual public hostname and allocated
+   IPv4/IPv6 no longer reach the API. Observe Machine events for proxy starts
+   and prevent application writes through private 6PN during the pause. Do not
+   assume an immediate proxy effect from `cordoned=true`. If public ingress
+   remains open, the lease lapses, or a proxy start occurs, STOP/NO-GO.
 
 2. Programmed pause: after public ingress is confirmed closed, wait at least
-   15 minutes with no new private writes. Reconfirm with Abrahão that no
+   15 minutes with no new private writes, maintaining the lease throughout.
+   Reconfirm with Abrahão that no
    administrative or financial operation is pending. Observe per-Machine
    concurrency, TCP connections and database transactions as supporting
    signals. An idle TCP connection is not an active request; zero connections
    does not prove zero requests; zero transactions does not prove that an HTTP
    operation or job has finished. If an active request, relevant transaction or
    job is known to persist, or Abrahão cannot confirm the pause, remain closed
-   and abort before migration. The residual risk of unobserved work remains
-   accepted by the owner; do not describe this wait as complete drainage.
+   and abort before migration. A fresh verified backup must already exist.
+   The residual risk of unobserved work remains accepted by the owner; do not
+   describe this wait as complete drainage or as the 48-hour maintenance window.
 
-3. Convert the *existing image* to a private config before migration. The
-   command form is documented, but the current image digest and an approved
-   private-config reconciliation are prerequisites:
+3. With the lease valid and public probes failing, stop the old API Machine
+   through the Machines API, supplying the nonce when required. Wait for the
+   exact instance to report `stopped`; inspect subsequent events for proxy
+   autostart. `fly machine stop --timeout 120`, if used in a future procedure,
+   means seconds before SIGKILL; `--wait-timeout` is the separate CLI wait for
+   the stopped state. Neither the stop response nor `cordoned=true` proves
+   isolation. Stopping may interrupt an unseen HTTP request or job; reconcile
+   any uncertain operation before reopening.
 
-   `fly deploy . --app gymflow-api-prod --config fly.issue131.private.toml --image <CURRENT_IMAGE_DIGEST> --strategy rolling --ha=false --update-only --no-public-ips --skip-release-command`
+   While still stopped, GET the same Machine again. Preserve the **complete**
+   effective config and current image, set only `config.services=[]`, and
+   update the same ID with `skip_launch=true`, fresh `current_version` and the
+   valid lease nonce. Do not use the private TOML as an API payload. GET again:
+   require the same logical Machine ID, `stopped`, expected old image,
+   `services=[]`, and all unrelated config fields unchanged. Confirm no other
+   Machine appeared, both allocated public IPs remain assigned to the app,
+   external public probes cannot reach the API, and no proxy start event or
+   relevant database transaction/session or write remains. Any failed check,
+   unexpected restart, lease expiry or ambiguous update response is STOP/NO-GO
+   **before migration**. Do not repeat update on an uncertain result.
 
-   Do not use `bluegreen` or `canary`; these can add Machines. `--ha=false`
-   suppresses a spare, `--update-only` only prevents creation for new process
-   groups, and `--no-public-ips` only prevents new IP allocation. Rolling may
-   replace the Machine; none of these flags guarantees zero transient Machines
-   or zero incremental cost. Do not proceed if the authorized rehearsal cannot
-   establish acceptable Machine count and cost behavior. The flags also do not
-   prove the reconciled Machine has no services. Verify every resulting
-   Machine's effective `config.services` is `[]`, that the app service
-   list has no public mapping, that neither public IP routes to the API, and
-   that private `/health` still works. IP allocations must remain unchanged.
-   Any unexpected public service is an immediate STOP/NO-GO; do not migrate.
-
-   After confirming private-only routing, stop the old API Machine and verify
-   it stays stopped before migration:
-
-   `fly machine stop <CURRENT_PRIVATE_MACHINE_ID> --app gymflow-api-prod --timeout 120`
-
-   Request the normal Machine shutdown and confirm it has fully stopped before
-   migration. `--timeout 120` is a CLI wait, not a 120-second application grace
-   period; the current `fly.toml` sets no `kill_timeout` (Fly default: 5 seconds).
-   Confirm through approved read-only database views that no relevant
-   transaction or session from the old API remains. If shutdown fails, the
-   Machine restarts, or relevant transactions/sessions cannot be ruled out,
-   remain closed and abort before migration. Use the current ID returned by
-   the private deployment; it may differ from the historical ID. Stopping can
-   interrupt an unobserved request or background job; reconcile its outcome
-   before reopening access. Affected operations may include more than workout
-   history.
-
-4. With ingress still closed and the old API stopped, execute the
+4. With ingress still closed, `services=[]`, the old API stopped and no
+   relevant write/transaction remaining, execute the
    separately reviewed migration against the verified Production database.
    Do not put migrations in a Fly release command. Confirm schema and existing
-   data integrity before starting the new API.
+   data integrity before starting the new API. Keep the lease valid until the
+   private configuration is verified; if that cannot be assured, pause before
+   migration.
 
-5. Deploy the candidate immutable image with the same private config:
+5. GET the stopped Machine again and, through the Machines API, update the
+   **same ID** with the already built candidate image, preserving the complete
+   effective config, `services=[]`, `skip_launch=true`, fresh
+   `current_version` and valid lease nonce. GET again to confirm `stopped`,
+   candidate image digest, `services=[]`, unchanged unrelated fields, no new
+   Machine and unchanged app IP allocations. Only then start that Machine
+   explicitly using the authorized API operation and nonce if required. Do
+   not release the lease until the no-service state and private path are
+   verified; coordinate release before a future public service relies on
+   proxy autostart. A direct update has not been proven on this Production
+   Machine and does not itself guarantee zero transient resource cost.
 
-   `fly deploy . --app gymflow-api-prod --config fly.issue131.private.toml --image <CANDIDATE_IMAGE_DIGEST> --strategy rolling --ha=false --update-only --no-public-ips --skip-release-command`
-
-   First inspect every resulting Machine's image and `config.services`
-   **before** starting a stopped Machine. If it remained stopped after deploy,
-   start only the verified private Machine using the documented `fly machine
-   start` operation. A stopped Machine is not assumed to restart merely
-   because a deploy completed. Then repeat the private-reachability checks.
-   Open a tunnel bound only to local loopback:
+   Repeat private-reachability checks. While the Machine is stopped for the
+   migration, private access is unavailable. After its explicit start, open
+   a tunnel bound only to local loopback:
 
    `fly proxy 18080:8080 --app gymflow-api-prod --select`
 
    Through that private Fly 6PN tunnel only, perform the official
    PlatformOperator login with MFA and PUT `/api/platform/gyms/{gymId}/maintenance`
-   with the verified
-   `AllowedAdminUserId`. Confirm active state and audit. Do not put passwords,
+   with the verified `AllowedAdminUserId`. Confirm active state, designated
+   active Admin and audit. Confirm the gate's private behavior for Student,
+   Professor and unauthorized Admin access before public exposure. Do not put passwords,
    MFA codes, JWTs, or invitation links in command lines, files, or logs.
    Confirm that the candidate image actually honors
    `StudentImportCleanup:Enabled=false` and that the job remains inactive;
    a TOML value alone is insufficient. If this cannot be confirmed, keep
    ingress closed and do not proceed to protected/public operation.
 
-6. Before the protected deploy, confirm the owner-approved AC Power Gym GymId
+6. Before restoring public service, confirm the owner-approved AC Power Gym GymId
    already in the TOML matches the active maintenance row and designated Admin
-   UserId. Do not infer tenant identity from the timezone key. If the GymId,
-   maintenance state or Admin does not match, NO-GO. Deploy with the same
-   immutable candidate image only after this confirmation:
+   UserId. Do not infer tenant identity from the timezone key. The protected
+   TOML is a reference, not a complete API payload. On the same Machine,
+   prepare the full effective config with the reviewed 80/443 service and
+   `Maintenance__RequiredAtStartup__0` effective **before** any public
+   routing is restored. The direct update may restart the Machine by default:
+   use an explicitly reviewed stopped/update/start sequence, with fresh
+   version and lease handling, and prove the startup gate through private 6PN
+   before enabling public routing. If maintenance/Admin validation fails,
+   startup must fail closed. Verify the resulting service, gate, IPs, public
+   Student/Professor/unauthorized Admin rejection, designated Admin access,
+   and unaffected tenants; `/health` alone is insufficient. Any mismatch is
+   NO-GO for protected opening. Only in this protected public phase can the
+   designated AC Power Gym Admin use the ERP normally during the planned
+   48-hour window; `services=[]` provides only private operator access.
 
-   `fly deploy . --app gymflow-api-prod --config fly.issue131.protected.toml --image <CANDIDATE_IMAGE_DIGEST> --strategy rolling --ha=false --update-only --no-public-ips --skip-release-command`
-
-   `Maintenance:RequiredAtStartup` must be effective
-   **before** `app.Run()`; if maintenance/Admin validation fails, startup must
-   fail. Confirm every resulting Machine has the intended service and startup
-   guard, then verify public Student rejection, designated Admin access, and
-   unaffected tenants. `/health` alone does not certify these conditions.
-
-7. Final release requires explicit owner approval; 48 hours do not trigger
-   automatic reopening. While maintenance is still
-   active, close ingress again and deploy the private config with the same
-   candidate image, removing `RequiredAtStartup` safely. Confirm private-only
-   state, deactivate maintenance through the official audited endpoint, then
-   deploy the reviewed normal public config with the approved immutable image
-   and independently reviewed settings. Confirm HTTP/tenant behavior and
+7. Final general release requires explicit owner approval; 48 hours do not
+   trigger automatic reopening. While maintenance is still active, close
+   ingress again and verify no services before removing `RequiredAtStartup`.
+   Deactivate maintenance only through the private official audited endpoint,
+   then restore the reviewed normal public service through a separate,
+   protected Machines API transition. Confirm HTTP/tenant behavior and
    unchanged IP allocations. Never deactivate maintenance while a public
    Machine still requires it at startup: a restart would fail closed.
 
 ## Abort and rollback boundary
 
-- Before migration: keep ingress closed; restore the prior image/config only
+- Before migration: if lease, cordon, stop or update has an uncertain outcome,
+  keep ingress closed and inspect Machine state, events and effective config.
+  Do not blindly retry mutations or release/expire the lease while a stopped
+  Machine still advertises public services. Restore the prior image/config only
   after confirming the old schema is intact and public routing is deliberate.
 - After migration and especially after financial writes: keep the private or
   protected maintenance state. Do not automatically run migration `Down` or
   restore an old database snapshot over new records. Repair forward or use a
   separately approved recovery plan.
-- Any replacement with public `config.services` before maintenance is active,
-  loss of 6PN access, unresolved active work, missing Platform/MFA state, or
-  mismatch of image/GymId/IPs, unexpected Machine creation/cost, or an effective
-  StudentImportCleanup job during the protected phase is NO-GO. Preserve closure
-  and diagnose; never uncordon merely to recover convenience.
+- Any public response before intended reopening, proxy start after stop,
+  failed/expired lease, stale `current_version`, `config.services` mismatch,
+  relevant new write, loss of 6PN after candidate start, unresolved active work,
+  missing Platform/MFA state, image/GymId/IP mismatch, unexpected Machine or
+  cost, or an effective StudentImportCleanup job during the protected phase is
+  NO-GO. Preserve closure and diagnose; never uncordon merely for convenience.
 
-## One remaining material validation
+## Remaining Production-only validation
 
-In a separately authorized window, rehearse a no-service deploy using the
-**installed flyctl version** on an already existing non-Production Fly app.
-Verify both an updated Machine and any replacement have `config.services=[]`,
-public routing is absent, private 6PN access survives, and the prior public
-service can be restored without changing IP allocations. Record peak and final
-Machine counts and any incremental cost. If no suitable
-existing app is available, the Production cutover remains NO-GO.
+No authorized Production transition has established that the lease blocks proxy
+autostart promptly, that cordon propagation completes before stop, or that the
+same-ID update with `skip_launch=true` leaves `services=[]` without transient
+public exposure, Machine replacement/cost or IP changes. These are mandatory
+observations during a separately authorized window, with STOP before migration
+on any failure. The later protected reopening also needs a proven ordering of
+startup guard and public service registration; do not infer safety from the
+TOML or a passing `/health`. Until authorization and these checkpoints pass,
+the cutover remains NO-GO.
 
 ## Sources
 
@@ -208,8 +232,9 @@ existing app is available, the Production cutover remains NO-GO.
 - Fly app services and 6PN: https://fly.io/docs/networking/app-services/
 - Fly deploy CLI: https://fly.io/docs/flyctl/deploy/
 - Fly Machine stop CLI: https://fly.io/docs/flyctl/machine-stop/
+- Fly Machines API update, lease, cordon: https://fly.io/docs/machines/api/machines-resource/
 - Fly proxy CLI: https://docs.fly.io/flyctl/cmd/fly_proxy
-- Fly staff on removing services and redeploying:
-  https://community.fly.io/t/how-can-i-remove-existing-app-from-public-network/11393
-- Fly staff on reading effective Machine config:
-  https://community.fly.io/t/secure-read-only-access-to-raw-fly-machine-configuration-without-exposing-credentials/29058
+- Fly report on delayed cordon/autostart propagation:
+  https://community.fly.io/t/stopped-machine-with-autostart-false-and-cordoned-is-started-by-fly-proxy/28720
+- Fly staff on active Machine lease and proxy autostart:
+  https://community.fly.io/t/how-to-honour-restart-attempt-limit/22774/8
