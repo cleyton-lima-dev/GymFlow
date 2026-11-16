@@ -66,7 +66,7 @@ foreach ($spec in $installerSpecs) {
         $text -notmatch '(?m)^function PrepareToInstall\(' -or
         $text -notmatch 'HasRequiredVCRuntime' -or
         $text -notmatch 'GetSHA256OfFile\(RedistPath\)' -or
-        $text -notmatch '(?m)^#if MicrosoftRedistributionRightsConfirmed != 1\s*$') {
+        $text -notmatch '(?m)^#if MicrosoftRedistributionRightsConfirmed != "1"\s*$') {
         throw ($spec.Name + ' installer does not include the guarded per-user prerequisite package flow.')
     }
 }

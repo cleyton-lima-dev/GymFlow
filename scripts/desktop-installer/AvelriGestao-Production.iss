@@ -36,7 +36,7 @@
 #ifndef MicrosoftRedistributionRightsConfirmed
   #error Licensed Microsoft Visual Studio redistribution rights must be explicitly confirmed.
 #endif
-#if MicrosoftRedistributionRightsConfirmed != 1
+#if MicrosoftRedistributionRightsConfirmed != "1"
   #error Microsoft Visual C++ redistribution is blocked until all applicable license requirements are met.
 #endif
 
