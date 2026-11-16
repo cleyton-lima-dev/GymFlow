@@ -25,6 +25,13 @@ if ([string]::IsNullOrWhiteSpace($InnoSetupCompiler)) {
 
 $expectedApiBaseUrl = 'https://gymflow-api-prod.fly.dev'
 $expectedProductionAppId = 'B46B7D1A-6E54-4C0A-A1E2-5F41C6D92837'
+$expectedMsvcToolsetVersion = '14.50.35717'
+$expectedMsvcCompilerVersion = '19.50.35740.0'
+$updateDownloadOrigin = 'https://avelri-gestao-downloads.pages.dev'
+$updateManifestUrl = $updateDownloadOrigin + '/updates/production/release.json'
+$updateSignatureUrl = $updateDownloadOrigin + '/updates/production/release.sig'
+$updateKeyId = 'avelri-gestao-prod-20261114-v1'
+$updatePublicKeyBase64 = 'EssnxwxKSm9+zqKPWSOcc0bxZrxNtMIJ4CDt0BUaFkE='
 $repoRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
 $productionIss = Join-Path $PSScriptRoot 'AvelriGestao-Production.iss'
 $homologationIss = Join-Path $PSScriptRoot 'AvelriGestao-Homologacao.iss'
@@ -57,6 +64,24 @@ if (-not (Test-Path -LiteralPath $FlutterExecutable -PathType Leaf)) {
 }
 if (-not (Test-Path -LiteralPath $InnoSetupCompiler -PathType Leaf)) {
     throw 'The explicitly configured Inno Setup compiler is unavailable.'
+}
+$programFilesX86 = [Environment]::GetEnvironmentVariable('ProgramFiles(x86)', 'Process')
+if ([string]::IsNullOrWhiteSpace($programFilesX86)) {
+    throw 'The Visual Studio Installer location is unavailable.'
+}
+$vsWherePath = Join-Path $programFilesX86 'Microsoft Visual Studio\Installer\vswhere.exe'
+if (-not (Test-Path -LiteralPath $vsWherePath -PathType Leaf)) {
+    throw 'Visual Studio Installer vswhere is unavailable.'
+}
+$msvcRelativePath = 'VC\Tools\MSVC\' + $expectedMsvcToolsetVersion + '\bin\Hostx64\x64\cl.exe'
+$msvcCandidates = @(& $vsWherePath -products '*' -prerelease -find $msvcRelativePath)
+if ($LASTEXITCODE -ne 0 -or $msvcCandidates.Count -ne 1) {
+    throw 'Expected exactly one installed MSVC 14.50 x64 compiler.'
+}
+$msvcCompiler = Get-Item -LiteralPath $msvcCandidates[0] -ErrorAction Stop
+$expectedMsvcCompilerPath = $msvcCompiler.FullName
+if ($msvcCompiler.VersionInfo.FileVersion -cne $expectedMsvcCompilerVersion) {
+    throw 'The pinned MSVC 14.50 compiler is missing or has an unexpected version.'
 }
 $productionIssText = [IO.File]::ReadAllText($productionIss)
 $homologationIssText = [IO.File]::ReadAllText($homologationIss)
@@ -94,7 +119,7 @@ foreach ($installerScript in @($productionIssText, $homologationIssText)) {
         $installerScript -notmatch 'GetSHA256OfFile\(RedistPath\)') {
         throw 'Both installer identities must carry the same fail-closed, per-user Visual C++ prerequisite flow.'
     }
-    if ($installerScript -notmatch '(?m)^#if MicrosoftRedistributionRightsConfirmed != 1\s*$') {
+    if ($installerScript -notmatch '(?m)^#if MicrosoftRedistributionRightsConfirmed != "1"\s*$') {
         throw 'Each installer requires a compile-time legal-redistribution attestation.'
     }
 }
@@ -151,6 +176,69 @@ if (-not [Uri]::TryCreate($expectedApiBaseUrl, [UriKind]::Absolute, [ref]$apiUri
     throw 'The configured Production API URL is not the explicitly approved HTTPS API origin.'
 }
 
+$updateOriginUri = $null
+if (-not [Uri]::TryCreate($updateDownloadOrigin, [UriKind]::Absolute, [ref]$updateOriginUri) -or
+    $updateOriginUri.Scheme -cne 'https' -or
+    $updateOriginUri.Host -cne 'avelri-gestao-downloads.pages.dev' -or
+    -not $updateOriginUri.IsDefaultPort -or
+    -not [string]::IsNullOrEmpty($updateOriginUri.UserInfo) -or
+    $updateOriginUri.AbsolutePath -cne '/' -or
+    -not [string]::IsNullOrEmpty($updateOriginUri.Query) -or
+    -not [string]::IsNullOrEmpty($updateOriginUri.Fragment) -or
+    $updateOriginUri.GetLeftPart([UriPartial]::Authority) -cne $updateDownloadOrigin) {
+    throw 'The signed updater download origin must be the approved HTTPS Pages origin.'
+}
+foreach ($updateFile in @(
+    @{ Url = $updateManifestUrl; Path = '/updates/production/release.json' },
+    @{ Url = $updateSignatureUrl; Path = '/updates/production/release.sig' }
+)) {
+    $updateUri = $null
+    if (-not [Uri]::TryCreate($updateFile.Url, [UriKind]::Absolute, [ref]$updateUri) -or
+        $updateUri.GetLeftPart([UriPartial]::Authority) -cne $updateDownloadOrigin -or
+        $updateUri.AbsolutePath -cne $updateFile.Path -or
+        -not [string]::IsNullOrEmpty($updateUri.UserInfo) -or
+        -not [string]::IsNullOrEmpty($updateUri.Query) -or
+        -not [string]::IsNullOrEmpty($updateUri.Fragment)) {
+        throw 'The signed updater manifest and signature must use the approved same-origin HTTPS Pages routes.'
+    }
+}
+if ($updateKeyId -cnotmatch '^[A-Za-z0-9._-]{1,64}$') {
+    throw 'The signed updater key ID does not meet the Desktop contract.'
+}
+try { $updatePublicKey = [Convert]::FromBase64String($updatePublicKeyBase64) }
+catch [FormatException] { throw 'The signed updater public key is not valid Base64.' }
+if ($updatePublicKey.Length -ne 32 -or
+    [Convert]::ToBase64String($updatePublicKey) -cne $updatePublicKeyBase64) {
+    throw 'The signed updater public key must be canonical Base64 of exactly 32 bytes.'
+}
+$updateConfigSource = (& git -C $repoRoot show ($SourceCommit + ':desktop/lib/core/update/update_distribution_config.dart')) -join "`n"
+if ($LASTEXITCODE -ne 0 -or
+    $updateConfigSource -cnotmatch [regex]::Escape($expectedProductionAppId)) {
+    throw 'The selected source commit lacks the approved Production signed-updater contract.'
+}
+foreach ($defineName in @(
+    'APP_ENV', 'AVELRI_UPDATES_ENABLED', 'AVELRI_UPDATE_APP_ID', 'AVELRI_UPDATE_CHANNEL',
+    'AVELRI_UPDATE_MANIFEST_URL', 'AVELRI_UPDATE_SIGNATURE_URL',
+    'AVELRI_UPDATE_DOWNLOAD_ORIGIN', 'AVELRI_UPDATE_KEY_ID',
+    'AVELRI_UPDATE_PUBLIC_KEY_BASE64'
+)) {
+    if ($updateConfigSource -cnotmatch ('fromEnvironment\(\s*''' + [regex]::Escape($defineName) + '''')) {
+        throw ('The selected source commit does not consume signed-updater define ' + $defineName + '.')
+    }
+}
+$flutterDartDefines = @(
+    '--dart-define=APP_ENV=production'
+    ('--dart-define=API_BASE_URL=' + $expectedApiBaseUrl)
+    '--dart-define=AVELRI_UPDATES_ENABLED=true'
+    ('--dart-define=AVELRI_UPDATE_APP_ID=' + $expectedProductionAppId)
+    '--dart-define=AVELRI_UPDATE_CHANNEL=production'
+    ('--dart-define=AVELRI_UPDATE_MANIFEST_URL=' + $updateManifestUrl)
+    ('--dart-define=AVELRI_UPDATE_SIGNATURE_URL=' + $updateSignatureUrl)
+    ('--dart-define=AVELRI_UPDATE_DOWNLOAD_ORIGIN=' + $updateDownloadOrigin)
+    ('--dart-define=AVELRI_UPDATE_KEY_ID=' + $updateKeyId)
+    ('--dart-define=AVELRI_UPDATE_PUBLIC_KEY_BASE64=' + $updatePublicKeyBase64)
+)
+
 $flutterVersionFile = Join-Path (Split-Path -Parent $FlutterExecutable) 'cache\flutter.version.json'
 if (-not (Test-Path -LiteralPath $flutterVersionFile -PathType Leaf)) {
     throw 'Flutter SDK version metadata is missing; build provenance cannot be recorded.'
@@ -162,11 +250,15 @@ if ([string]::IsNullOrWhiteSpace([string]$flutterVersionInfo.frameworkVersion) -
 }
 $flutterVersion = [string]$flutterVersionInfo.frameworkVersion
 $flutterRevision = [string]$flutterVersionInfo.frameworkRevision
-$isccFileVersion = [Diagnostics.FileVersionInfo]::GetVersionInfo($InnoSetupCompiler).FileVersion
-if ([string]::IsNullOrWhiteSpace($isccFileVersion)) {
-    throw 'Inno Setup executable does not expose a file version; build provenance cannot be recorded.'
+$isccVersionOutput = @(& $InnoSetupCompiler '--version' 2>&1)
+$isccVersionExitCode = $LASTEXITCODE
+$isccVersionText = (@($isccVersionOutput) | ForEach-Object { $_.ToString() }) -join "`n"
+$isccVersionMatch = [regex]::Match($isccVersionText,
+    '(?m)(?:Compiler engine version:\s*)?Inno Setup (?<version>\d+\.\d+\.\d+)\b')
+if ($isccVersionExitCode -ne 0 -or -not $isccVersionMatch.Success) {
+    throw 'Could not determine the Inno Setup compiler engine version from ISCC --version.'
 }
-$isccVersion = $isccFileVersion
+$isccVersion = $isccVersionMatch.Groups['version'].Value
 $timestamp = Get-Date -Format 'yyyyMMdd-HHmmss'
 $runId = [guid]::NewGuid().ToString('N')
 $outputRoot = 'C:\gf-i69-prod'
@@ -211,17 +303,22 @@ try {
         -not (Test-Path -LiteralPath $lockPath -PathType Leaf)) {
         throw 'The clean source archive lacks pubspec.yaml or pubspec.lock.'
     }
+    if (Test-Path -LiteralPath (Join-Path $desktopRoot 'build\windows')) {
+        throw 'The clean source archive contains a Windows CMake build tree.'
+    }
     $pubspecText = [IO.File]::ReadAllText($pubspecPath)
     $versionMatch = [regex]::Match($pubspecText, '(?m)^version:\s*(?<name>\d+\.\d+\.\d+)\+(?<number>\d+)\s*$')
     if (-not $versionMatch.Success) { throw 'Desktop version must be an explicit semantic version and build number.' }
     $appVersion = $versionMatch.Groups['name'].Value
     $buildNumber = $versionMatch.Groups['number'].Value
     $commitShort = $SourceCommit.Substring(0, 8)
+    $flutterBuildArgs = @('build', 'windows', '--release', '--no-pub',
+        ('--build-name=' + $appVersion), ('--build-number=' + $buildNumber)) + $flutterDartDefines
     $commandLines = @(
         'git archive --format=zip --output=<runRoot>\desktop-source.zip ' + $SourceCommit + ' desktop'
         'flutter pub get --offline'
-        ('flutter build windows --release --no-pub --build-name=' + $appVersion + ' --build-number=' + $buildNumber +
-            ' --dart-define=APP_ENV=production --dart-define=API_BASE_URL=' + $expectedApiBaseUrl)
+        ('VCToolsVersion=' + $expectedMsvcToolsetVersion)
+        ('flutter ' + ($flutterBuildArgs -join ' '))
         ('ISCC.exe /DAppSource=<ReleaseDir> /DBuildMetadata=<BuildInfo> /DInstallerOutput=<InstallerDir> /DAppVersion=' +
             $appVersion + ' /DBuildNumber=' + $buildNumber + ' /DCommitShort=' + $commitShort +
             ' /DVCRedistPath=<VerifiedOfflineRedistributable> AvelriGestao-Production.iss')
@@ -235,12 +332,15 @@ try {
         Add-ExitCodeEvidence -Stage 'flutter_pub_get' -ExitCode $pubExitCode
         if ($pubExitCode -ne 0) { throw "Flutter offline dependency resolution failed (exit $pubExitCode); see $pubLog." }
 
-        & $FlutterExecutable build windows --release --no-pub `
-            (('--build-name=' + $appVersion)) `
-            (('--build-number=' + $buildNumber)) `
-            '--dart-define=APP_ENV=production' `
-            ('--dart-define=API_BASE_URL=' + $expectedApiBaseUrl) *> $buildLog
-        $buildExitCode = $LASTEXITCODE
+        $previousVCToolsVersion = [Environment]::GetEnvironmentVariable('VCToolsVersion', 'Process')
+        try {
+            [Environment]::SetEnvironmentVariable('VCToolsVersion', $expectedMsvcToolsetVersion, 'Process')
+            & $FlutterExecutable @flutterBuildArgs *> $buildLog
+            $buildExitCode = $LASTEXITCODE
+        }
+        finally {
+            [Environment]::SetEnvironmentVariable('VCToolsVersion', $previousVCToolsVersion, 'Process')
+        }
         Add-ExitCodeEvidence -Stage 'flutter_build_windows_release' -ExitCode $buildExitCode
         if ($buildExitCode -ne 0) { throw "Flutter Release build failed (exit $buildExitCode); see $buildLog." }
     }
@@ -267,6 +367,12 @@ try {
         throw 'Windows Release C++ compiler is not a recognized MSVC v14 toolset.'
     }
     $msvcVersion = [Version]$msvcVersionMatch.Groups['version'].Value
+    $compilerPathMatch = [regex]::Match($compilerInfo, '(?m)^set\(CMAKE_CXX_COMPILER "(?<path>[^"]+)"\)\s*$')
+    if ($msvcVersion -ne [Version]$expectedMsvcCompilerVersion -or
+        -not $compilerPathMatch.Success -or
+        ($compilerPathMatch.Groups['path'].Value -replace '/', '\') -ine $expectedMsvcCompilerPath) {
+        throw 'Windows Release did not use the pinned MSVC 14.50 x64 compiler.'
+    }
     $minimumRuntimeForBuild = New-Object Version(14, $msvcVersion.Minor, $msvcVersion.Build, $msvcVersion.Revision)
     if ([Version]$vcRedistVersion -lt $minimumRuntimeForBuild) {
         throw ('Bundled Visual C++ Redistributable ' + $vcRedistVersion +
@@ -279,6 +385,14 @@ try {
         ('Version=' + $appVersion + '+' + $buildNumber)
         'APP_ENV=production'
         ('API_BASE_URL=' + $expectedApiBaseUrl)
+        'AVELRI_UPDATES_ENABLED=true'
+        ('AVELRI_UPDATE_APP_ID=' + $expectedProductionAppId)
+        'AVELRI_UPDATE_CHANNEL=production'
+        ('AVELRI_UPDATE_MANIFEST_URL=' + $updateManifestUrl)
+        ('AVELRI_UPDATE_SIGNATURE_URL=' + $updateSignatureUrl)
+        ('AVELRI_UPDATE_DOWNLOAD_ORIGIN=' + $updateDownloadOrigin)
+        ('AVELRI_UPDATE_KEY_ID=' + $updateKeyId)
+        ('AVELRI_UPDATE_PUBLIC_KEY_BASE64=' + $updatePublicKeyBase64)
         ('BuildScriptSHA256=' + (Get-FileHash -LiteralPath $MyInvocation.MyCommand.Path -Algorithm SHA256).Hash)
         ('InstallerScriptSHA256=' + (Get-FileHash -LiteralPath $productionIss -Algorithm SHA256).Hash)
         ('VCRedistHelperSHA256=' + (Get-FileHash -LiteralPath $vcRedistHelper -Algorithm SHA256).Hash)
@@ -286,6 +400,7 @@ try {
         ('VCRedistSHA256=' + $vcRedistActualHash)
         'VCRedistAuthenticode=Valid (Microsoft Corporation)'
         ('MSVCCompilerVersion=' + $msvcVersion)
+        ('MSVCToolsetVersion=' + $expectedMsvcToolsetVersion)
         ('FlutterSdkVersion=' + $flutterVersion)
         ('FlutterSdkRevision=' + $flutterRevision)
         ('InnoSetupCompiler=' + $isccVersion)
@@ -308,6 +423,13 @@ try {
     $compilerExitCode = $LASTEXITCODE
     Add-ExitCodeEvidence -Stage 'inno_setup_compile' -ExitCode $compilerExitCode
     if ($compilerExitCode -ne 0) { throw "Inno Setup compilation failed (exit $compilerExitCode); see $compilerLog." }
+    $compilerLogText = [IO.File]::ReadAllText($compilerLog)
+    $compiledIsccVersionMatch = [regex]::Match($compilerLogText,
+        '(?m)^Compiler engine version:\s*Inno Setup (?<version>\d+\.\d+\.\d+)\s*$')
+    if (-not $compiledIsccVersionMatch.Success -or
+        $compiledIsccVersionMatch.Groups['version'].Value -cne $isccVersion) {
+        throw 'The ISCC build log version does not match the recorded Inno Setup compiler version.'
+    }
 
     $installerPath = Join-Path $installerOutput ('AvelriGestao-Production-' + $appVersion + '+' +
         $buildNumber + '-' + $commitShort + '.exe')

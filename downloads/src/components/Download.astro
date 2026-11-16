@@ -1,5 +1,7 @@
 ---
 import { desktopRelease } from '../data/release';
+const downloadEnabled = desktopRelease.status === 'available';
+const officialHost = new URL(desktopRelease.downloadUrl).hostname;
 ---
 
 <section class="download-section section-space" id="download" aria-labelledby="download-title">
@@ -8,15 +10,20 @@ import { desktopRelease } from '../data/release';
       <div class="download-main">
         <p class="eyebrow">DOWNLOAD OFICIAL</p>
         <h2 id="download-title">Avelri Gestão<br /><span>para Windows.</span></h2>
-        <p>O instalador oficial ainda não está disponível neste portal. A publicação será habilitada quando versão, requisitos e arquivo forem confirmados.</p>
-        <button class="button button-disabled" type="button" disabled aria-describedby="download-status">Download indisponível</button>
-        <p class="download-status" id="download-status" role="status"><span class="status-dot" aria-hidden="true"></span> Aguardando publicação oficial</p>
+        <p>{downloadEnabled ? 'Baixe o instalador do Avelri Gestão para Windows pela origem oficial.' : 'O download pelo portal aguarda autorização para liberação pública.'}</p>
+        {downloadEnabled ? (
+          <a class="button button-primary" href={desktopRelease.downloadUrl} aria-describedby="download-status">Baixar para Windows</a>
+        ) : (
+          <button class="button button-disabled" type="button" disabled aria-describedby="download-status">Download indisponível</button>
+        )}
+        <p class="download-status" id="download-status" role="status"><span class="status-dot" aria-hidden="true"></span> {downloadEnabled ? 'Download oficial disponível' : 'Aguardando autorização de publicação'}</p>
       </div>
       <div class="download-details" aria-label="Informações da distribuição">
         <div class="download-detail"><span>Plataforma</span><strong>Windows Desktop</strong></div>
-        <div class="download-detail"><span>Versão</span><strong>{desktopRelease.version ?? 'A divulgar'}</strong></div>
-        <div class="download-detail"><span>Requisitos</span><strong>{desktopRelease.requirements ?? 'A confirmar'}</strong></div>
-        <div class="download-detail"><span>Instalação</span><strong>Instruções serão publicadas com o instalador.</strong></div>
+        <div class="download-detail"><span>Versão</span><strong>{desktopRelease.version}</strong></div>
+        <div class="download-detail"><span>Origem oficial</span><strong>{officialHost}</strong></div>
+        <div class="download-detail"><span>Tamanho</span><strong>{desktopRelease.sizeBytes.toLocaleString('pt-BR')} bytes</strong></div>
+        <div class="download-detail"><span>SHA-256 para conferência</span><code>{desktopRelease.sha256}</code></div>
       </div>
     </div>
   </div>
