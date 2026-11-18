@@ -43,20 +43,26 @@ probes. These API steps have **not** been exercised on this Production Machine.
 ## Preconditions, before closing ingress
 
 1. New authorization for the Production window; verified target GymId and
-   designated active Admin UserId. Confirm Production PlatformOperator, MFA,
-   Platform JWT/MFA configuration, database privileges and a fresh, verified
-   pre-cutover backup of the existing Supabase PostgreSQL. Preserve Users,
-   Students, GymId, credentials, workouts and history; do not create a parallel
-   database or restore over new writes.
-   Never print secret values. If any are absent, NO-GO.
+   designated active Admin UserId. Confirm the reviewed Production provisioner
+   from commit `43307a3` is available, an authorized SQL credential has
+   sufficient privileges for the separately reviewed migrations and the
+   first-operator insert, and the owner can recover the Platform MFA encryption
+   key and a separate Platform JWT key. Do not require or assume an existing
+   Production PlatformOperator before migrations. Confirm a fresh, verified
+   pre-cutover backup of the existing Supabase PostgreSQL at the cutover point.
+   Preserve Users, Students, GymId, credentials, workouts and history; do not
+   create a parallel database or restore over new writes. Never print secret
+   values. If any prerequisite is absent, NO-GO.
 2. Use the already built immutable candidate image; do not rebuild from this
    dirty workspace. Record and verify the current and candidate image references
    and digests. The candidate must contain the maintenance commit and migration.
-   Confirm in that exact release image that `StudentImportCleanup:Enabled=false`
-   is implemented and effective in both private and protected phases; the
-   approved maintenance commit alone does not implement this switch. Check
-   that no higher-precedence secret overrides the TOML value, without viewing
-   secret values. Otherwise NO-GO before migration.
+   Confirm from the exact image build provenance that the
+   `StudentImportCleanup:Enabled=false` switch is implemented and configured
+   for both private and protected phases; the approved maintenance commit alone
+   does not implement it. Check that no higher-precedence secret overrides the
+   TOML value, without viewing secret values. If image provenance or planned
+   configuration is uncertain, STOP before migration. Confirm the effective
+   runtime setting after private start and before protected/public opening.
 3. Obtain a fresh, private GET of the effective Machine config and `instance_id`
    immediately before each update. Preserve `env`, `init`, `guest`, `metadata`,
    `restart`, image, process settings and every other effective field, including
@@ -133,7 +139,20 @@ probes. These API steps have **not** been exercised on this Production Machine.
    unexpected restart, lease expiry or ambiguous update response is STOP/NO-GO
    **before migration**. Do not repeat update on an uncertain result.
 
-4. With ingress still closed, `services=[]`, the old API stopped and no
+4. Only after the old API is stopped, `services=[]` is confirmed and public
+   probes fail, configure `Platform__MfaEncryptionKey` and
+   `Platform__Jwt__Key` through a separately reviewed, controlled secret
+   procedure. Do not use a command that deploys, starts or restarts the old
+   API. Keep both values out of commands, logs, Git and reports. The MFA key
+   supplied later to the provisioner must be exactly the one effective in the
+   candidate API; the Platform JWT key must be different. If secret staging
+   can alter the Machine, require a fresh GET, event review and external probes
+   before continuing. Any Machine change, restart, public route, lease failure
+   or ambiguous result is STOP/NO-GO before migration until separately
+   reviewed. Reconfirm the same stopped Machine, `services=[]`, unchanged IPs
+   and no relevant writes before proceeding.
+
+5. With ingress still closed, `services=[]`, the old API stopped and no
    relevant write/transaction remaining, execute the
    separately reviewed migration against the verified Production database.
    Do not put migrations in a Fly release command. Confirm schema and existing
@@ -141,12 +160,28 @@ probes. These API steps have **not** been exercised on this Production Machine.
    private configuration is verified; if that cannot be assured, pause before
    migration.
 
-5. GET the stopped Machine again and, through the Machines API, update the
-   **same ID** with the already built candidate image, preserving the complete
-   effective config, `services=[]`, `skip_launch=true`, fresh
-   `current_version` and valid lease nonce. GET again to confirm `stopped`,
-   candidate image digest, `services=[]`, unchanged unrelated fields, no new
-   Machine and unchanged app IP allocations. Only then start that Machine
+6. After the migrations and data integrity are verified, run the published
+   Production provisioner in its explicit Production mode, with its fixed
+   Project Ref and required interactive human confirmations. Supply the
+   authorized SQL credential and the same owner-held MFA encryption key staged
+   for the candidate API; do not expose values in command lines, files or logs.
+   The provisioner must reject an unexpected database or migration baseline
+   and an existing operator. Confirm exactly one active PlatformOperator after
+   its committed insert, without assuming one existed beforehand. If
+   provisioning, identity, key continuity or the one-active-operator check is
+   uncertain, keep ingress closed and STOP/NO-GO before starting the candidate
+   or activating maintenance.
+
+7. GET the stopped Machine again and, through the Machines API, update the
+   **same ID** with the already built candidate image and reviewed private
+   environment gates: `Platform__Enabled=true`,
+   `StudentLifecycle__Enabled=false` and
+   `StudentImportCleanup__Enabled=false`. Preserve the complete effective
+   config and every unrelated field, retain `services=[]`, and use
+   `skip_launch=true`, fresh `current_version` and valid lease nonce. GET again
+   to confirm `stopped`, candidate image digest, `services=[]`, the reviewed
+   private gate values, unchanged unrelated fields, no new Machine and
+   unchanged app IP allocations. Only then start that Machine
    explicitly using the authorized API operation and nonce if required. Do
    not release the lease until the no-service state and private path are
    verified; coordinate release before a future public service relies on
@@ -159,24 +194,34 @@ probes. These API steps have **not** been exercised on this Production Machine.
 
    `fly proxy 18080:8080 --app gymflow-api-prod --select`
 
-   Through that private Fly 6PN tunnel only, perform the official
-   PlatformOperator login with MFA and PUT `/api/platform/gyms/{gymId}/maintenance`
-   with the verified `AllowedAdminUserId`. Confirm active state, designated
-   active Admin and audit. Confirm the gate's private behavior for Student,
-   Professor and unauthorized Admin access before public exposure. Do not put passwords,
-   MFA codes, JWTs, or invitation links in command lines, files, or logs.
-   Confirm that the candidate image actually honors
-   `StudentImportCleanup:Enabled=false` and that the job remains inactive;
-   a TOML value alone is insufficient. If this cannot be confirmed, keep
-   ingress closed and do not proceed to protected/public operation.
+   Confirm the candidate started privately with `Platform__MfaEncryptionKey`
+   and `Platform__Jwt__Key` effective, distinct and without a
+   higher-precedence override. Use the same owner-held MFA key supplied to the
+   provisioner; the private MFA login below is the end-to-end check of key
+   continuity. If the keys are missing, mismatched or uncertain, keep ingress
+   closed and STOP/NO-GO.
 
-6. Before restoring public service, confirm the owner-approved AC Power Gym GymId
+8. Through that private Fly 6PN tunnel only, perform the official
+   PlatformOperator login with MFA. Only after it succeeds, PUT
+   `/api/platform/gyms/{gymId}/maintenance` with the verified
+   `AllowedAdminUserId`. Confirm active state, designated active Admin and
+   audit. Confirm the gate's private behavior for Student, Professor and
+   unauthorized Admin access before public exposure. Do not put passwords,
+   MFA codes, JWTs, encryption keys or invitation links in command lines,
+   files or logs. Confirm that the candidate image actually honors
+   `StudentImportCleanup:Enabled=false` and that the job remains inactive;
+   a TOML value alone is insufficient. If any check fails, keep ingress closed
+   and do not proceed to protected/public operation.
+
+9. Before restoring public service, confirm the owner-approved AC Power Gym GymId
    already in the TOML matches the active maintenance row and designated Admin
    UserId. Do not infer tenant identity from the timezone key. The protected
    TOML is a reference, not a complete API payload. On the same Machine,
    prepare the full effective config with the reviewed 80/443 service and
    `Maintenance__RequiredAtStartup__0` effective **before** any public
-   routing is restored. The direct update may restart the Machine by default:
+   routing is restored. Retain the verified private Platform, StudentLifecycle
+   and StudentImportCleanup settings and effective Platform secrets. The direct
+   update may restart the Machine by default:
    use an explicitly reviewed stopped/update/start sequence, with fresh
    version and lease handling, and prove the startup gate through private 6PN
    before enabling public routing. If maintenance/Admin validation fails,
@@ -187,7 +232,7 @@ probes. These API steps have **not** been exercised on this Production Machine.
    designated AC Power Gym Admin use the ERP normally during the planned
    48-hour window; `services=[]` provides only private operator access.
 
-7. Final general release requires explicit owner approval; 48 hours do not
+10. Final general release requires explicit owner approval; 48 hours do not
    trigger automatic reopening. While maintenance is still active, close
    ingress again and verify no services before removing `RequiredAtStartup`.
    Deactivate maintenance only through the private official audited endpoint,
@@ -198,15 +243,18 @@ probes. These API steps have **not** been exercised on this Production Machine.
 
 ## Abort and rollback boundary
 
-- Before migration: if lease, cordon, stop or update has an uncertain outcome,
-  keep ingress closed and inspect Machine state, events and effective config.
+- Before migration: if lease, cordon, stop, update or secret staging has an
+  uncertain outcome, keep ingress closed and inspect Machine state, events and
+  effective config.
   Do not blindly retry mutations or release/expire the lease while a stopped
   Machine still advertises public services. Restore the prior image/config only
   after confirming the old schema is intact and public routing is deliberate.
-- After migration and especially after financial writes: keep the private or
-  protected maintenance state. Do not automatically run migration `Down` or
-  restore an old database snapshot over new records. Repair forward or use a
-  separately approved recovery plan.
+- After migration, a failed provisioner, missing or mismatched Platform key,
+  failed private MFA login or unverified maintenance gate keeps ingress closed.
+  Especially after financial writes, keep the private or protected maintenance
+  state. Do not automatically run migration `Down` or restore an old database
+  snapshot over new records. Repair forward or use a separately approved
+  recovery plan.
 - Any public response before intended reopening, proxy start after stop,
   failed/expired lease, stale `current_version`, `config.services` mismatch,
   relevant new write, loss of 6PN after candidate start, unresolved active work,
