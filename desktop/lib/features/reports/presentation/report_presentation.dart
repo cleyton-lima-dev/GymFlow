@@ -84,7 +84,7 @@ String reportCellLabel(String column, String value) {
 String reportExplanation(String kind, String view) => switch (kind) {
   'students' => 'Matrícula vigente hoje e situação do último contrato são informações diferentes: um contrato futuro pode coexistir com uma matrícula vigente. Matrícula vigente não significa liberação da catraca.',
   'financial' when view == 'payments' || view == 'revenue' => 'Valores efetivamente recebidos, considerando a data do pagamento e os descontos registrados.',
-  'financial' => 'Cobranças com vencimento no período. O total líquido exclui canceladas. O recebido corresponde a essas cobranças, mesmo quando pago em outra data.',
+  'financial' => 'Cobranças com vencimento no período. O total líquido exclui canceladas e financeiro não verificado. O recebido corresponde às cobranças verificadas, mesmo quando pagas em outra data.',
   'enrollments' => 'Contratos que vencem no período. A situação considera a data atual da academia; a vigência termina na data de vencimento.',
   'attendance' => 'Presenças registradas. Registro manual não comprova passagem pela catraca; acesso autorizado, sozinho, não conta como presença.',
   _ => 'Tentativas de acesso e suas decisões. A confirmação de passagem é exibida apenas quando registrada; não comprova homologação da catraca.',

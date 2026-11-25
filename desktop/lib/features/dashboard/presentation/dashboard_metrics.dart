@@ -41,12 +41,12 @@ class _Metrics extends StatelessWidget {
         _Metric(
           title: 'Receita prevista no mês',
           value: money.format(financialData.expectedRevenue!),
-          description: 'Cobranças por vencimento, líquidas de descontos; exclui canceladas.',
+          description: 'Cobranças verificadas por vencimento, líquidas de descontos; exclui canceladas e financeiro não verificado.',
         ),
         _Metric(
-          title: 'Receita recebida no mês',
+          title: 'Receita recebida no Avelri no mês',
           value: money.format(financialData.receivedRevenue!),
-          description: 'Valores pagos por data de pagamento, inclusive vencimentos de outros meses.',
+          description: 'Valores recebidos no Avelri por data de pagamento; exclui recebimentos históricos do Actuar.',
           onTap: () => context.go(
             Uri(
               path: '/finance',
@@ -62,7 +62,7 @@ class _Metrics extends StatelessWidget {
           title: 'Cobranças vencidas',
           value:
               '${financialData.overdueCharges!} • ${money.format(financialData.overdueAmount!)}',
-          description: 'Saldo de cobranças em atraso, de todos os períodos.',
+          description: 'Saldo verificado de cobranças em atraso, de todos os períodos.',
           alert: financialData.overdueCharges! > 0,
           onTap: () => context.go('/finance?status=overdue'),
         ),

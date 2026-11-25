@@ -16,6 +16,40 @@ import 'package:http/testing.dart';
 import 'package:provider/provider.dart';
 
 void main() {
+  testWidgets('Historical unverified charge is visible without payment action',
+      (tester) async {
+    final api = ApiClient(
+      baseUrl: 'https://synthetic.invalid',
+      client: MockClient((_) async => http.Response(jsonEncode([
+        {..._charge, 'verificationStatus': 1, 'paymentOrigin': 2}
+      ]), 200)),
+    );
+    addTearDown(api.close);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    tester.view.physicalSize = const Size(1280, 720);
+    tester.view.devicePixelRatio = 1;
+    await tester.pumpWidget(_financeHarness(api, acPowerGymBranding));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Financeiro não verificado'), findsWidgets);
+    await tester.tap(find.byTooltip('Ações'));
+    await tester.pumpAndSettle();
+    expect(find.text('Confirmar pagamento'), findsNothing);
+    await tester.tap(find.text('Ver detalhes'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Nenhum pagamento foi confirmado no Avelri'), findsOneWidget);
+    await tester.tap(find.text('Fechar'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Pendentes'));
+    await tester.pumpAndSettle();
+    expect(find.text('Nenhuma cobrança encontrada para este filtro.'), findsOneWidget);
+    await tester.tap(find.text('Financeiro não verificado').first);
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('charges-responsive-table')), findsOneWidget);
+  });
+
   testWidgets(
     'Financeiro fits desktop widths and switches to cards on narrow windows',
     (tester) async {

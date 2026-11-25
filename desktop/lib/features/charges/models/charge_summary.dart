@@ -17,6 +17,17 @@ enum ChargeStatus {
   }
 }
 
+enum ChargeVerificationStatus {
+  verified(0),
+  unverified(1);
+
+  const ChargeVerificationStatus(this.value);
+  final int value;
+
+  static ChargeVerificationStatus fromValue(int value) =>
+      ChargeVerificationStatus.values.firstWhere((item) => item.value == value);
+}
+
 class ChargeSummary {
   const ChargeSummary({
     required this.id,
@@ -30,6 +41,8 @@ class ChargeSummary {
     required this.paymentMethod,
     required this.dueDate,
     required this.status,
+    required this.paymentOrigin,
+    required this.verificationStatus,
     required this.paidAt,
     required this.createdAt,
     required this.updatedAt,
@@ -46,6 +59,10 @@ class ChargeSummary {
   final PaymentMethod? paymentMethod;
   final DateTime dueDate;
   final ChargeStatus status;
+  final int paymentOrigin;
+  final ChargeVerificationStatus verificationStatus;
+  bool get isFinancialUnverified =>
+      verificationStatus == ChargeVerificationStatus.unverified;
   final DateTime? paidAt;
   final DateTime createdAt;
   final DateTime? updatedAt;
@@ -74,6 +91,10 @@ class ChargeSummary {
       dueDate: DateTime.parse(json['dueDate'] as String),
       status: ChargeStatus.fromValue(
         json['status'] as int,
+      ),
+      paymentOrigin: (json['paymentOrigin'] as int?) ?? 0,
+      verificationStatus: ChargeVerificationStatus.fromValue(
+        (json['verificationStatus'] as int?) ?? 0,
       ),
       paidAt: paidAtValue == null
           ? null

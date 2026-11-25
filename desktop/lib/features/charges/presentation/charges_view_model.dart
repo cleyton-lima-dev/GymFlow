@@ -7,7 +7,7 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:avelri_gestao/features/charges/models/payment_details.dart';
 
-enum ChargesStatusFilter { all, pending, paid, overdue, cancelled }
+enum ChargesStatusFilter { all, pending, paid, overdue, cancelled, unverified }
 
 class ChargesViewModel extends ChangeNotifier {
   ChargesViewModel(
@@ -40,15 +40,21 @@ class ChargesViewModel extends ChangeNotifier {
       return charges;
     }
 
+    if (_statusFilter == ChargesStatusFilter.unverified) {
+      return _charges.where((charge) => charge.isFinancialUnverified).toList();
+    }
+
     final status = switch (_statusFilter) {
       ChargesStatusFilter.pending => ChargeStatus.pending,
       ChargesStatusFilter.paid => ChargeStatus.paid,
       ChargesStatusFilter.overdue => ChargeStatus.overdue,
       ChargesStatusFilter.cancelled => ChargeStatus.cancelled,
+      ChargesStatusFilter.unverified => throw StateError('Filtro inválido.'),
       ChargesStatusFilter.all => throw StateError('Filtro inválido.'),
     };
 
-    return _charges.where((charge) => charge.status == status).toList();
+    return _charges.where((charge) =>
+        !charge.isFinancialUnverified && charge.status == status).toList();
   }
 
   Future<void> updateStatusFilter(ChargesStatusFilter filter) async {
@@ -87,6 +93,11 @@ class ChargesViewModel extends ChangeNotifier {
     ChargeSummary charge,
     PaymentDetails payment,
   ) async {
+    if (charge.isFinancialUnverified) {
+      _errorMessage = 'Concilie o financeiro histórico antes de confirmar um pagamento.';
+      _notifySafely();
+      return false;
+    }
     try {
       await _chargesService.confirmPayment(
         chargeId: charge.id,

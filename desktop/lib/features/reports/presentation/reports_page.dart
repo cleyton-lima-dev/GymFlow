@@ -66,6 +66,7 @@ class _ReportsViewState extends State<_ReportsView> {
       'overdue': 'Vencida',
       'paid': 'Paga',
       'cancelled': 'Cancelada',
+      'unverified': 'Financeiro não verificado',
     },
     'enrollments': {
       'active': 'Vigente',

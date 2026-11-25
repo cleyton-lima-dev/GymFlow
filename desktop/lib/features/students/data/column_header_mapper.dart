@@ -153,6 +153,11 @@ class ColumnHeaderMapper {
       'vencimento cobranca',
       'vencimento cobrança',
     ],
+    'historicalEvidenceSha256': [
+      'historical evidence sha256',
+      'sha256 evidencia historica',
+      'sha-256 da evidencia historica',
+    ],
   };
 
   static ColumnHeaderSuggestion suggest(List<String> headers, String field) {

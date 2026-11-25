@@ -18,6 +18,8 @@ class StudentFinancialHistoryItem {
     required this.paymentMethod,
     required this.dueDate,
     required this.chargeStatus,
+    this.verificationStatus,
+    this.paymentOrigin,
     required this.paidAt,
     required this.createdAt,
   });
@@ -41,9 +43,17 @@ class StudentFinancialHistoryItem {
 
   final DateTime? dueDate;
   final ChargeStatus? chargeStatus;
+  final ChargeVerificationStatus? verificationStatus;
+  final int? paymentOrigin;
   final DateTime? paidAt;
 
   final DateTime createdAt;
+
+  bool get isFinancialUnverified =>
+      verificationStatus == ChargeVerificationStatus.unverified;
+
+  bool get isHistoricalPayment =>
+      !isFinancialUnverified && chargeStatus == ChargeStatus.paid && paymentOrigin == 1;
 
   factory StudentFinancialHistoryItem.fromJson(
       Map<String, dynamic> json,
@@ -59,6 +69,7 @@ class StudentFinancialHistoryItem {
 
     final chargeStatusValue =
     json['chargeStatus'] as int?;
+    final verificationStatusValue = json['verificationStatus'] as int?;
 
     return StudentFinancialHistoryItem(
       enrollmentId:
@@ -112,6 +123,10 @@ class StudentFinancialHistoryItem {
           : ChargeStatus.fromValue(
         chargeStatusValue,
       ),
+      verificationStatus: verificationStatusValue == null
+          ? null
+          : ChargeVerificationStatus.fromValue(verificationStatusValue),
+      paymentOrigin: json['paymentOrigin'] as int?,
       paidAt:
       paidAtValue == null
           ? null

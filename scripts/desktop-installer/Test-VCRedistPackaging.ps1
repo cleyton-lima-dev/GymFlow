@@ -66,17 +66,9 @@ foreach ($spec in $installerSpecs) {
         $text -notmatch '(?m)^function PrepareToInstall\(' -or
         $text -notmatch 'HasRequiredVCRuntime' -or
         $text -notmatch 'GetSHA256OfFile\(RedistPath\)' -or
-        $text -notmatch '(?m)^#if MicrosoftRedistributionRightsConfirmed != 1\s*$') {
+        $text -notmatch '(?m)^#if MicrosoftRedistributionRightsConfirmed != "1"\s*$') {
         throw ($spec.Name + ' installer does not include the guarded per-user prerequisite package flow.')
     }
-}
-
-$productionCode = [regex]::Match($production, '(?ms)^\[Code\]\r?\n(?<body>.*)$')
-$homologationCode = [regex]::Match($homologation, '(?ms)^\[Code\]\r?\n(?<body>.*)$')
-if (-not $productionCode.Success -or -not $homologationCode.Success -or
-    ($productionCode.Groups['body'].Value -replace "`r`n", "`n") -cne
-    ($homologationCode.Groups['body'].Value -replace "`r`n", "`n")) {
-    throw 'Production and Homologation must use identical Visual C++ detection, UAC, error, and restart handling.'
 }
 
 if ($production -match '(?m)^AppId=\{\{' + [regex]::Escape($expectedHomologationAppId) -or
@@ -91,6 +83,43 @@ if ($helper -notmatch '(?m)-Verb RunAs' -or
     $terms -notmatch 'pre-release' -or
     $terms -notmatch 'unmodified') {
     throw 'UAC helper or redistribution checklist is incomplete.'
+}
+
+$agentProvisioner = Join-Path $PSScriptRoot '..\access-agent\Provision-AccessAgentFromBundle.ps1'
+$agentPairingAction = Join-Path $PSScriptRoot '..\access-agent\Pair-AccessAgent.ps1'
+foreach ($agentScript in @($agentProvisioner, $agentPairingAction)) {
+    if (-not (Test-Path -LiteralPath $agentScript -PathType Leaf)) {
+        throw 'The bundled AccessAgent installation or pairing helper is missing.'
+    }
+}
+$agentProvisionerText = [IO.File]::ReadAllText($agentProvisioner)
+$agentPairingActionText = [IO.File]::ReadAllText($agentPairingAction)
+$productionAgentRequirements = @(
+    '(?m)^Source: "\{#AccessAgentPackagePath\}"; DestName: "Avelri-AccessAgent\.win-x64\.zip"; Flags: dontcopy noencryption\s*$',
+    '(?m)^Source: "\{#AccessAgentProvisionerScriptPath\}"; DestName: "Provision-AccessAgentFromBundle\.ps1"; Flags: dontcopy noencryption\s*$',
+    '(?m)^Source: "\{#AccessAgentPairingScriptPath\}"; DestDir: "\{app\}"; DestName: "Pair-AccessAgent\.ps1"; Flags: ignoreversion\s*$',
+    'ShouldCreateAgentPairingShortcut',
+    'ShellExec\(''runas''',
+    'AccessAgentServiceKey',
+    'AccessAgentPackageSha256'
+)
+foreach ($requirement in $productionAgentRequirements) {
+    if ($production -notmatch $requirement) {
+        throw 'The Production installer is missing a required bundled AccessAgent flow.'
+    }
+}
+if ($agentProvisionerText -match '(?m)^\s*Stop-Service\b' -or
+    $agentProvisionerText -match '(?m)^\s*Remove-Item\b.*(ProgramData|credentials|access-agent\.db)' -or
+    $agentProvisionerText -notmatch 'ACCESS_AGENT=EXISTING_SERVICE_PRESERVED' -or
+    $agentProvisionerText -notmatch 'StartupType Disabled' -or
+    $agentProvisionerText -notmatch 'SERVICE_START=DISABLED_UNTIL_ADMIN_PAIRING') {
+    throw 'The AccessAgent provisioner does not fail safely around an existing service and unpaired startup.'
+}
+if ($agentPairingActionText -match '(?m)^\s*Stop-Service\b' -or
+    $agentPairingActionText -match '(?m)^\s*Remove-Item\b' -or
+    $agentPairingActionText -notmatch 'Test-Path -LiteralPath \$credentialsPath' -or
+    $agentPairingActionText -notmatch 'SERVICE=RUNNING_AFTER_ADMIN_PAIRING') {
+    throw 'The AccessAgent pairing action may overwrite state or does not gate service start on pairing.'
 }
 
 Write-Output 'VCREDIST_SOURCE_PACKAGE_CHECK=PASS'

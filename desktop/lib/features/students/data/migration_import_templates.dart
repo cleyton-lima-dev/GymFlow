@@ -53,6 +53,7 @@ const migrationImportTemplates = <MigrationImportTemplate>[
       'enrollmentExternalId',
       'chargeExternalId',
       'chargeState',
+      'historicalEvidenceSha256',
     ],
   ),
 ];

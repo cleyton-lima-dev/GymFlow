@@ -1,2 +1,2 @@
-externalId,studentExternalId,enrollmentExternalId,chargeExternalId,chargeState
-EXEMPLO-FINANCEIRO-001,EXEMPLO-ALUNO-001,EXEMPLO-MATRICULA-001,,Pending
+externalId,studentExternalId,enrollmentExternalId,chargeExternalId,chargeState,historicalEvidenceSha256
+EXEMPLO-FINANCEIRO-001,EXEMPLO-ALUNO-001,EXEMPLO-MATRICULA-001,,Pending,

@@ -161,7 +161,10 @@ class _FinancialHistoryCard extends StatelessWidget {
                 ),
               ),
               _StatusBadge(
-                label: _enrollmentStatusLabel(item.enrollmentStatus),
+                label: item.isFinancialUnverified &&
+                        item.enrollmentStatus == EnrollmentStatus.pendingPayment
+                    ? 'Matrícula pendente'
+                    : _enrollmentStatusLabel(item.enrollmentStatus),
                 color: _enrollmentStatusColor(
                   item.enrollmentStatus,
                   primaryColor,
@@ -206,7 +209,17 @@ class _FinancialHistoryCard extends StatelessWidget {
                     ),
                   ),
                 ),
-                if (item.chargeStatus != null)
+                if (item.isFinancialUnverified)
+                  _StatusBadge(
+                    label: 'Financeiro não verificado',
+                    color: colorScheme.onSurfaceVariant,
+                  )
+                else if (item.isHistoricalPayment)
+                  const _StatusBadge(
+                    label: 'Recebimento histórico',
+                    color: AvelriSemanticColors.success,
+                  )
+                else if (item.chargeStatus != null)
                   _StatusBadge(
                     label: _chargeStatusLabel(item.chargeStatus!),
                     color: _chargeStatusColor(item.chargeStatus!, primaryColor),

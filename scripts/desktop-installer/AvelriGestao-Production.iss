@@ -22,6 +22,18 @@
 #ifndef VCRedistPath
   #error VCRedistPath must point to the verified Microsoft x64 redistributable.
 #endif
+#ifndef AccessAgentPackagePath
+  #error AccessAgentPackagePath must point to the validated self-contained win-x64 package.
+#endif
+#ifndef AccessAgentPackageSha256
+  #error AccessAgentPackageSha256 must pin the validated AccessAgent package.
+#endif
+#ifndef AccessAgentProvisionerScriptPath
+  #error AccessAgentProvisionerScriptPath must point to the bundled service provisioner.
+#endif
+#ifndef AccessAgentPairingScriptPath
+  #error AccessAgentPairingScriptPath must point to the bundled Admin pairing action.
+#endif
 
 #define AppName "Avelri Gestão"
 #define AppExecutable "avelri_gestao.exe"
@@ -32,11 +44,12 @@
 #define VCRedistRevision 0
 #define VCRedistSha256 "9C02C9ED120F671B900E6B9471D890E3B2414117A7E53F4AE2E855466FA2B7C9"
 #define VCHelperSha256 GetSHA256OfFile(SourcePath + "\Install-VCRedistElevated.ps1")
+#define AccessAgentProvisionerSha256 GetSHA256OfFile(AccessAgentProvisionerScriptPath)
 
 #ifndef MicrosoftRedistributionRightsConfirmed
   #error Licensed Microsoft Visual Studio redistribution rights must be explicitly confirmed.
 #endif
-#if MicrosoftRedistributionRightsConfirmed != 1
+#if MicrosoftRedistributionRightsConfirmed != "1"
   #error Microsoft Visual C++ redistribution is blocked until all applicable license requirements are met.
 #endif
 
@@ -80,12 +93,16 @@ Name: "desktopicon"; Description: "Criar atalho na Área de Trabalho"; GroupDesc
 [Files]
 Source: "{#VCRedistPath}"; DestName: "vc_redist.x64.exe"; Flags: dontcopy noencryption
 Source: "Install-VCRedistElevated.ps1"; Flags: dontcopy noencryption
+Source: "{#AccessAgentPackagePath}"; DestName: "Avelri-AccessAgent.win-x64.zip"; Flags: dontcopy noencryption
+Source: "{#AccessAgentProvisionerScriptPath}"; DestName: "Provision-AccessAgentFromBundle.ps1"; Flags: dontcopy noencryption
+Source: "{#AccessAgentPairingScriptPath}"; DestDir: "{app}"; DestName: "Pair-AccessAgent.ps1"; Flags: ignoreversion
 Source: "{#AppSource}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs; Excludes: "*.pdb,*.ilk,*.obj,*.exp,*.lib,*.map"
 Source: "{#BuildMetadata}"; DestDir: "{app}"; DestName: "Avelri-Build-Info.txt"; Flags: ignoreversion
 
 [Icons]
 Name: "{autoprograms}\Avelri Gestão"; Filename: "{app}\{#AppExecutable}"
 Name: "{autodesktop}\Avelri Gestão"; Filename: "{app}\{#AppExecutable}"; Tasks: desktopicon
+Name: "{autoprograms}\Parear Avelri AccessAgent"; Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoExit -NoProfile -ExecutionPolicy Bypass -File ""{app}\Pair-AccessAgent.ps1"" -ApiBaseUrl ""https://gymflow-api-prod.fly.dev"""; WorkingDir: "{app}"; IconFilename: "{app}\{#AppExecutable}"
 
 ; No [Run] or [UninstallDelete]: setup never launches the app and uninstall
 ; does not remove application-support files or credentials outside {app}.
@@ -93,6 +110,12 @@ Name: "{autodesktop}\Avelri Gestão"; Filename: "{app}\{#AppExecutable}"; Tasks:
 [Code]
 const
   VCRuntimeKey = 'SOFTWARE\Microsoft\VisualStudio\14.0\VC\Runtimes\x64';
+  AccessAgentServiceKey = 'SYSTEM\CurrentControlSet\Services\AvelriAccessAgent';
+
+function IsAccessAgentServiceRegistered: Boolean;
+begin
+  Result := RegKeyExists(HKLM64, AccessAgentServiceKey);
+end;
 
 function HasRequiredVCRuntime: Boolean;
 var
@@ -117,53 +140,111 @@ end;
 function PrepareToInstall(var NeedsRestart: Boolean): String;
 var
   RedistPath, HelperPath, Parameters: String;
+  AgentArchivePath, AgentProvisionerPath: String;
   ExitCode: Integer;
 begin
   Result := '';
   if HasRequiredVCRuntime then
+    Result := ''
+  else
+  begin
+    try
+      ExtractTemporaryFile('vc_redist.x64.exe');
+      ExtractTemporaryFile('Install-VCRedistElevated.ps1');
+      RedistPath := ExpandConstant('{tmp}\vc_redist.x64.exe');
+      HelperPath := ExpandConstant('{tmp}\Install-VCRedistElevated.ps1');
+      if (CompareText(GetSHA256OfFile(RedistPath), '{#VCRedistSha256}') <> 0) or
+         (CompareText(GetSHA256OfFile(HelperPath), '{#VCHelperSha256}') <> 0) then
+      begin
+        Result := 'O pré-requisito Microsoft Visual C++ x64 não passou na verificação de integridade. Nenhum arquivo do Avelri Gestão foi instalado.';
+        Exit;
+      end;
+    except
+      Result := 'Não foi possível extrair ou verificar o pré-requisito Microsoft Visual C++ x64. Nenhum arquivo do Avelri Gestão foi instalado.';
+      Exit;
+    end;
+
+    Parameters := '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' +
+      HelperPath + '" -RedistributablePath "' + RedistPath + '"';
+    if not Exec(ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'),
+        Parameters, '', SW_HIDE, ewWaitUntilTerminated, ExitCode) then
+    begin
+      Result := 'Não foi possível iniciar o instalador do pré-requisito Microsoft Visual C++ x64 (erro ' + IntToStr(ExitCode) + ').';
+      Exit;
+    end;
+
+    if (ExitCode = 3010) or (ExitCode = 1641) then
+    begin
+      NeedsRestart := True;
+      Result := 'O Microsoft Visual C++ x64 foi instalado, mas o Windows precisa reiniciar antes da instalação do Avelri Gestão. Reinicie e execute este instalador novamente.';
+      Exit;
+    end;
+    if (ExitCode = 1223) or (ExitCode = 1602) then
+    begin
+      Result := 'A autorização administrativa ou a instalação do Microsoft Visual C++ x64 foi cancelada. O Avelri Gestão não foi instalado.';
+      Exit;
+    end;
+    if ExitCode <> 0 then
+    begin
+      Result := 'A instalação do Microsoft Visual C++ x64 falhou (código ' + IntToStr(ExitCode) + '). O Avelri Gestão não foi instalado.';
+      Exit;
+    end;
+    if not HasRequiredVCRuntime then
+    begin
+      Result := 'O Microsoft Visual C++ x64 não foi confirmado após a instalação. O Avelri Gestão não foi instalado.';
+      Exit;
+    end;
+  end;
+
+  if IsAccessAgentServiceRegistered then
+  begin
+    Log('AccessAgent existente detectado; serviço, credenciais, configuração, cache e fila serão preservados sem atualização ou reinício.');
     Exit;
+  end;
 
   try
-    ExtractTemporaryFile('vc_redist.x64.exe');
-    ExtractTemporaryFile('Install-VCRedistElevated.ps1');
-    RedistPath := ExpandConstant('{tmp}\vc_redist.x64.exe');
-    HelperPath := ExpandConstant('{tmp}\Install-VCRedistElevated.ps1');
-    if (CompareText(GetSHA256OfFile(RedistPath), '{#VCRedistSha256}') <> 0) or
-       (CompareText(GetSHA256OfFile(HelperPath), '{#VCHelperSha256}') <> 0) then
+    ExtractTemporaryFile('Avelri-AccessAgent.win-x64.zip');
+    ExtractTemporaryFile('Provision-AccessAgentFromBundle.ps1');
+    AgentArchivePath := ExpandConstant('{tmp}\Avelri-AccessAgent.win-x64.zip');
+    AgentProvisionerPath := ExpandConstant('{tmp}\Provision-AccessAgentFromBundle.ps1');
+    if CompareText(GetSHA256OfFile(AgentArchivePath), '{#AccessAgentPackageSha256}') <> 0 then
     begin
-      Result := 'O pré-requisito Microsoft Visual C++ x64 não passou na verificação de integridade. Nenhum arquivo do Avelri Gestão foi instalado.';
+      Result := 'O pacote AccessAgent integrado não passou na verificação SHA-256. Nenhum arquivo do Desktop foi instalado.';
+      Exit;
+    end;
+    if CompareText(GetSHA256OfFile(AgentProvisionerPath), '{#AccessAgentProvisionerSha256}') <> 0 then
+    begin
+      Result := 'O provisionador AccessAgent integrado falhou na verificação de integridade. Nenhum arquivo do Desktop foi instalado.';
       Exit;
     end;
   except
-    Result := 'Não foi possível extrair ou verificar o pré-requisito Microsoft Visual C++ x64. Nenhum arquivo do Avelri Gestão foi instalado.';
+    Result := 'Não foi possível extrair ou verificar o pacote AccessAgent integrado. Nenhum arquivo do Desktop foi instalado.';
     Exit;
   end;
 
   Parameters := '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' +
-    HelperPath + '" -RedistributablePath "' + RedistPath + '"';
-  if not Exec(ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'),
-      Parameters, '', SW_HIDE, ewWaitUntilTerminated, ExitCode) then
+    AgentProvisionerPath + '" -PackageArchivePath "' + AgentArchivePath +
+    '" -ExpectedPackageSha256 "{#AccessAgentPackageSha256}"';
+  if not ShellExec('runas', ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'),
+      Parameters, '', SW_SHOWNORMAL, ewWaitUntilTerminated, ExitCode) then
   begin
-    Result := 'Não foi possível iniciar o instalador do pré-requisito Microsoft Visual C++ x64 (erro ' + IntToStr(ExitCode) + ').';
+    Result := 'A autorização administrativa para provisionar o AccessAgent foi cancelada. O Desktop não foi instalado.';
     Exit;
   end;
-
-  if (ExitCode = 3010) or (ExitCode = 1641) then
+  if ExitCode = 10 then
   begin
-    NeedsRestart := True;
-    Result := 'O Microsoft Visual C++ x64 foi instalado, mas o Windows precisa reiniciar antes da instalação do Avelri Gestão. Reinicie e execute este instalador novamente.';
-    Exit;
-  end;
-  if (ExitCode = 1223) or (ExitCode = 1602) then
-  begin
-    Result := 'A autorização administrativa ou a instalação do Microsoft Visual C++ x64 foi cancelada. O Avelri Gestão não foi instalado.';
+    Log('Um serviço AccessAgent apareceu durante o preflight; o agente existente foi preservado sem alterações.');
     Exit;
   end;
   if ExitCode <> 0 then
   begin
-    Result := 'A instalação do Microsoft Visual C++ x64 falhou (código ' + IntToStr(ExitCode) + '). O Avelri Gestão não foi instalado.';
+    Result := 'O AccessAgent não pôde ser provisionado com segurança (código ' + IntToStr(ExitCode) + '). Nenhum arquivo do Desktop foi instalado.';
     Exit;
   end;
-  if not HasRequiredVCRuntime then
-    Result := 'O Microsoft Visual C++ x64 não foi confirmado após a instalação. O Avelri Gestão não foi instalado.';
+  if not IsAccessAgentServiceRegistered then
+  begin
+    Result := 'O serviço AccessAgent não foi confirmado após o provisionamento. Nenhum arquivo do Desktop foi instalado.';
+    Exit;
+  end;
+
 end;

@@ -10,12 +10,10 @@ import 'package:avelri_gestao/app/router/app_router.dart';
 import 'package:avelri_gestao/app/session/session_controller.dart';
 import 'package:avelri_gestao/app/session/erp_feature_controller.dart';
 import 'package:avelri_gestao/app/session/session_status.dart';
-import 'package:avelri_gestao/app/theme/ac_power_gym_branding.dart';
 import 'package:avelri_gestao/app/theme/branding_controller.dart';
 import 'package:avelri_gestao/app/theme/branding_preview.dart';
 import 'package:avelri_gestao/app/theme/default_branding.dart';
 import 'package:avelri_gestao/app/theme/local_branding_repository.dart';
-import 'package:avelri_gestao/app/theme/space_branding.dart';
 import 'package:avelri_gestao/core/network/api_client.dart';
 import 'package:avelri_gestao/core/storage/token_storage.dart';
 import 'package:avelri_gestao/features/auth/data/auth_service.dart';
@@ -25,6 +23,9 @@ void main() {
 
   final config = AppConfig.fromEnvironment();
   const requestedBrandingPreview = String.fromEnvironment('BRANDING_PREVIEW');
+  const homologationAcGymId = String.fromEnvironment(
+    'HOMOLOGATION_AC_BRANDING_GYM_ID',
+  );
   final brandingPreview = BrandingPreview.resolve(
     requestedBrandingPreview,
     isDevelopment: config.isDevelopment,
@@ -51,10 +52,10 @@ void main() {
 
   apiClient.setUnauthorizedHandler(sessionController.invalidateSession);
 
-  const brandingRepository = LocalBrandingRepository({
-    '11111111-1111-1111-1111-111111111111': acPowerGymBranding,
-    '91f3fdb7-22b9-43ee-8a10-5e411c44cfbe': spaceBranding,
-  });
+  final brandingRepository = LocalBrandingRepository.forApplication(
+    allowHomologationBinding: config.isDevelopment,
+    acPowerHomologationGymId: homologationAcGymId,
+  );
 
   final brandingController = BrandingController(
     brandingRepository,

@@ -122,6 +122,15 @@ class _ChargesView extends StatelessWidget {
                         },
                       ),
                       AppFilterButton(
+                        label: 'Financeiro não verificado',
+                        selected: viewModel.statusFilter ==
+                            ChargesStatusFilter.unverified,
+                        color: primaryColor,
+                        onPressed: () => viewModel.updateStatusFilter(
+                          ChargesStatusFilter.unverified,
+                        ),
+                      ),
+                      AppFilterButton(
                         label: 'Pagas',
                         selected:
                             viewModel.statusFilter == ChargesStatusFilter.paid,
@@ -450,10 +459,14 @@ class _ChargesTableState extends State<_ChargesTable> {
                   '${dateFormat.format(charge.dueDate)}',
                 ),
                 const SizedBox(height: 10),
-                Text('Status: ${_statusLabel(charge.status)}'),
+                Text('Status: ${_statusLabel(charge)}'),
                 const SizedBox(height: 10),
                 Text(
-                  charge.paidAt == null
+                  charge.isFinancialUnverified
+                      ? 'Financeiro histórico não verificado; requer conciliação. Nenhum pagamento foi confirmado no Avelri.'
+                      : charge.status == ChargeStatus.paid && charge.paymentOrigin == 1
+                      ? 'Recebimento histórico no Actuar; não integra a receita do Avelri.'
+                      : charge.paidAt == null
                       ? 'Pagamento: Não confirmado'
                       : 'Pago em: '
                             '${dateTimeFormat.format(charge.paidAt!.toLocal())}',
@@ -516,8 +529,9 @@ class _ChargesTableState extends State<_ChargesTable> {
                 amount: Text(currency.format(charge.amount)),
                 dueDate: Text(dateFormat.format(charge.dueDate)),
                 status: _ChargeStatusBadge(
-                  label: _statusLabel(charge.status),
+                  label: _statusLabel(charge),
                   status: charge.status,
+                  unverified: charge.isFinancialUnverified,
                 ),
                 actions: _buildActions(context, charge),
               ),
@@ -616,8 +630,9 @@ class _ChargesTableState extends State<_ChargesTable> {
               contentPadding: EdgeInsets.zero,
             ),
           ),
-          if (charge.status == ChargeStatus.pending ||
-              charge.status == ChargeStatus.overdue)
+          if (!charge.isFinancialUnverified &&
+              (charge.status == ChargeStatus.pending ||
+                  charge.status == ChargeStatus.overdue))
             const PopupMenuItem(
               value: 'confirm',
               child: ListTile(
@@ -673,8 +688,9 @@ class _ChargesTableState extends State<_ChargesTable> {
               Text('Valor: ${currency.format(charge.amount)}'),
               Text('Vencimento: ${dateFormat.format(charge.dueDate)}'),
               _ChargeStatusBadge(
-                label: _statusLabel(charge.status),
+                label: _statusLabel(charge),
                 status: charge.status,
+                unverified: charge.isFinancialUnverified,
               ),
             ],
           ),
@@ -683,8 +699,9 @@ class _ChargesTableState extends State<_ChargesTable> {
     );
   }
 
-  String _statusLabel(ChargeStatus status) {
-    return switch (status) {
+  String _statusLabel(ChargeSummary charge) {
+    if (charge.isFinancialUnverified) return 'Financeiro não verificado';
+    return switch (charge.status) {
       ChargeStatus.pending => 'Pendente',
       ChargeStatus.paid => 'Pago',
       ChargeStatus.overdue => 'Em atraso',
@@ -694,14 +711,15 @@ class _ChargesTableState extends State<_ChargesTable> {
 }
 
 class _ChargeStatusBadge extends StatelessWidget {
-  const _ChargeStatusBadge({required this.label, required this.status});
+  const _ChargeStatusBadge({required this.label, required this.status, required this.unverified});
 
   final String label;
   final ChargeStatus status;
+  final bool unverified;
 
   @override
   Widget build(BuildContext context) {
-    final color = switch (status) {
+    final color = unverified ? Theme.of(context).colorScheme.onSurfaceVariant : switch (status) {
       ChargeStatus.paid => AvelriSemanticColors.success,
       ChargeStatus.pending => AvelriSemanticColors.warning,
       ChargeStatus.overdue => AvelriSemanticColors.error,

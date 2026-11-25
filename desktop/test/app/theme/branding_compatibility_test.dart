@@ -138,6 +138,60 @@ void main() {
     },
   );
 
+  test(
+    'homologation AC branding is restricted to its exact synthetic GymId',
+    () async {
+      const syntheticGymId = 'f014de8a-46c8-4b40-97d6-0a8beaa72ced';
+      final repository = LocalBrandingRepository.forApplication(
+        allowHomologationBinding: true,
+        acPowerHomologationGymId: syntheticGymId,
+      );
+
+      expect(await repository.getByGymId(syntheticGymId), acPowerGymBranding);
+      expect(
+        await repository.getByGymId('00000000-0000-4000-8000-000000000002'),
+        isNull,
+      );
+      expect(
+        await repository.getByGymId('91f3fdb7-22b9-43ee-8a10-5e411c44cfbe'),
+        spaceBranding,
+      );
+    },
+  );
+
+  test(
+    'homologation branding binding is ignored outside development',
+    () async {
+      const syntheticGymId = 'f014de8a-46c8-4b40-97d6-0a8beaa72ced';
+      final repository = LocalBrandingRepository.forApplication(
+        allowHomologationBinding: false,
+        acPowerHomologationGymId: syntheticGymId,
+      );
+
+      expect(await repository.getByGymId(syntheticGymId), isNull);
+      expect(
+        await repository.getByGymId('11111111-1111-1111-1111-111111111111'),
+        acPowerGymBranding,
+      );
+    },
+  );
+
+  test('homologation binding rejects malformed and existing GymIds', () {
+    for (final gymId in [
+      'not-a-guid',
+      '11111111-1111-1111-1111-111111111111',
+      '91f3fdb7-22b9-43ee-8a10-5e411c44cfbe',
+    ]) {
+      expect(
+        () => LocalBrandingRepository.forApplication(
+          allowHomologationBinding: true,
+          acPowerHomologationGymId: gymId,
+        ),
+        throwsArgumentError,
+      );
+    }
+  });
+
   test('unknown GymId uses the neutral Avelri fallback', () async {
     final controller = BrandingController(
       const LocalBrandingRepository({}),

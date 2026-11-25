@@ -321,6 +321,7 @@ class _MigrationWizardPageState extends State<MigrationWizardPage> {
     'endDate': 'Data final',
     'chargeState': 'Situação da cobrança',
     'chargeDueDate': 'Vencimento da cobrança',
+    'historicalEvidenceSha256': 'SHA-256 do recebimento original',
   };
 
   String _fieldLabel(String field) => _fieldLabels[field] ?? field;
@@ -615,7 +616,7 @@ class _MigrationWizardPageState extends State<MigrationWizardPage> {
                   ],
                 ),
                 const Text(
-                  'Prepare alunos, planos, matrículas e situação financeira atual em arquivos separados. Os dados só entram em operação após liberação do Admin. Situações financeiras importadas não geram receita no Avelri.',
+                  'Prepare alunos, planos, matrículas e situação financeira atual em arquivos separados. Para recebimentos pagos no Actuar, informe no lote financeiro o SHA-256 da evidência original verificada para o título e período. Os dados só entram em operação após liberação do Admin. Situações financeiras importadas não geram receita no Avelri.',
                 ),
                 if (_error != null)
                   Padding(
