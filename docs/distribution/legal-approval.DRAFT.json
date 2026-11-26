@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "status": "DRAFT",
+  "commercialUseApproved": false,
+  "licensorIdentityCompleted": false,
+  "technicalValidityApproved": false,
+  "revision": "1.0",
+  "language": "pt-BR",
+  "termsFile": "Avelri-Gestao-Terms-DRAFT.pt-BR.txt",
+  "termsSha256": "35D38DC8FFF65556E588AE85EF06F63B377F1E78799592BB716349398A62A6EC",
+  "thirdPartyNoticesDirectory": "desktop-1.0.1+2",
+  "proposedTechnicalValidityMonths": 12,
+  "supportEmail": "avelriapp@gmail.com"
+}

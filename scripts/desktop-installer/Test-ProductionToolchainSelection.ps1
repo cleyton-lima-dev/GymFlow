@@ -90,6 +90,11 @@ try {
         ('set(CMAKE_CXX_COMPILER "' + $fixtureCompilerPath + '")')
     ) -join "`r`n"
     [IO.File]::WriteAllText($compilerInfoPath, $fixtureCompilerInfo + "`r`n", (New-Object Text.UTF8Encoding($false)))
+    $fixtureProjectPath = Join-Path $buildRoot 'runner\avelri_gestao.vcxproj'
+    New-Item -ItemType Directory -Path (Split-Path -Parent $fixtureProjectPath) | Out-Null
+    $fixturePropsPath = Join-Path $toolchain.VisualStudioRoot 'VC\Auxiliary\Build\14.50\Microsoft.VCToolsVersion.14.50.props'
+    $fixtureProject = '<Project><Import Project="' + [Security.SecurityElement]::Escape($fixturePropsPath) + '"/><PropertyGroup><PlatformToolset>v145</PlatformToolset></PropertyGroup></Project>'
+    [IO.File]::WriteAllText($fixtureProjectPath, $fixtureProject)
     $null = Assert-AvelriCMakeProvenance `
         -CMakeCachePath $cachePath `
         -CompilerInfoPath $compilerInfoPath `

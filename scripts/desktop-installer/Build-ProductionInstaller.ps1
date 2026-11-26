@@ -18,12 +18,18 @@ param(
     [ValidatePattern('^[0-9A-Fa-f]{64}$')]
     [string]$ExpectedAccessAgentPackageSha256,
 
-    [switch]$MicrosoftRedistributionRightsConfirmed
+    [switch]$MicrosoftRedistributionRightsConfirmed,
+    [string]$DistributionLegalApprovalPath = (Join-Path $PSScriptRoot '..\..\docs\distribution\legal-approval.DRAFT.json')
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
+Import-Module (Join-Path $PSScriptRoot 'DistributionLegal.psm1') -Force
+$distributionLegal = Get-AvelriApprovedDistributionLegalInputs -ApprovalPath $DistributionLegalApprovalPath
+if ($distributionLegal.NoticesSourceCommit -cne $SourceCommit) {
+    throw 'The third-party notice inventory must correspond to the selected SourceCommit.'
+}
 Import-Module (Join-Path $PSScriptRoot 'ProductionToolchain.psm1') -Force
 $visualStudioInstance = Resolve-AvelriStableVisualStudio
 $stableToolchain = Get-AvelriStableToolchain -VisualStudioInstance $visualStudioInstance
@@ -371,6 +377,7 @@ $sourceRoot = Join-Path $runRoot 'source'
 New-Item -ItemType Directory -Path $sourceRoot | Out-Null
 $desktopRoot = Join-Path $sourceRoot 'desktop'
 $cmakeBuildRoot = Join-Path $desktopRoot 'build\windows'
+$cmakeToolchainFile = Join-Path $runRoot 'StableToolchain.cmake'
 $configureLog = Join-Path $runRoot 'flutter-configure.log'
 $buildLog = Join-Path $runRoot 'flutter-build.log'
 $pubLog = Join-Path $runRoot 'flutter-pub-get.log'
@@ -416,6 +423,7 @@ try {
         ('CMAKE_GENERATOR=' + $cmakeEnvironment.CMAKE_GENERATOR)
         ('CMAKE_GENERATOR_INSTANCE=' + $cmakeEnvironment.CMAKE_GENERATOR_INSTANCE)
         ('CMAKE_GENERATOR_TOOLSET=' + $cmakeEnvironment.CMAKE_GENERATOR_TOOLSET)
+        ('CMAKE_TOOLCHAIN_FILE=' + $cmakeToolchainFile)
         ('flutter ' + ($flutterConfigureArgs -join ' '))
         ('flutter ' + ($flutterBuildArgs -join ' '))
         ('ISCC.exe /DAppSource=<ReleaseDir> /DBuildMetadata=<BuildInfo> /DInstallerOutput=<InstallerDir> /DAppVersion=' +
@@ -431,48 +439,17 @@ try {
         Add-ExitCodeEvidence -Stage 'flutter_pub_get' -ExitCode $pubExitCode
         if ($pubExitCode -ne 0) { throw "Flutter offline dependency resolution failed (exit $pubExitCode); see $pubLog." }
 
-        if (Test-Path -LiteralPath $cmakeBuildRoot) {
-            throw 'The isolated CMake build tree appeared before configuration; refusing to reuse a cache.'
-        }
-        $previousCMakeEnvironment = @{}
-        foreach ($environmentName in $cmakeEnvironment.Keys) {
-            $previousCMakeEnvironment[$environmentName] = [Environment]::GetEnvironmentVariable($environmentName, 'Process')
-        }
-        try {
-            foreach ($environmentName in $cmakeEnvironment.Keys) {
-                [Environment]::SetEnvironmentVariable($environmentName, [string]$cmakeEnvironment[$environmentName], 'Process')
-            }
+        $configuration = Invoke-AvelriWindowsReleaseConfiguration `
+            -Toolchain $stableToolchain -DesktopRoot $desktopRoot `
+            -ToolchainFilePath $cmakeToolchainFile -FlutterExecutable $FlutterExecutable `
+            -FlutterBuildArguments $flutterBuildArgs -ConfigureLogPath $configureLog -ExitCodePath $exitCodePath
+        $configuredCMakeCachePath = $configuration.CachePath
+        $configuredCompilerInfoPath = $configuration.CompilerInfoPath
 
-            & $FlutterExecutable @flutterConfigureArgs *> $configureLog
-            $configureExitCode = $LASTEXITCODE
-            Add-ExitCodeEvidence -Stage 'flutter_windows_configure_release' -ExitCode $configureExitCode
-            if ($configureExitCode -ne 0) {
-                throw "Flutter Windows Release CMake configuration failed (exit $configureExitCode); see $configureLog."
-            }
-
-            $cmakeCacheFiles = @(Get-ChildItem -LiteralPath $cmakeBuildRoot -Filter 'CMakeCache.txt' -File -Recurse -ErrorAction SilentlyContinue)
-            $compilerInfoFiles = @(Get-ChildItem -LiteralPath $cmakeBuildRoot -Filter 'CMakeCXXCompiler.cmake' -File -Recurse -ErrorAction SilentlyContinue)
-            if ($cmakeCacheFiles.Count -ne 1 -or $compilerInfoFiles.Count -ne 1) {
-                throw 'CMake configuration did not produce exactly one isolated cache and C++ compiler provenance file.'
-            }
-            $configuredCMakeCachePath = $cmakeCacheFiles[0].FullName
-            $configuredCompilerInfoPath = $compilerInfoFiles[0].FullName
-            $null = Assert-AvelriCMakeProvenance `
-                -CMakeCachePath $configuredCMakeCachePath `
-                -CompilerInfoPath $configuredCompilerInfoPath `
-                -FreshBuildRoot $cmakeBuildRoot `
-                -Toolchain $stableToolchain
-
-            & $FlutterExecutable @flutterBuildArgs *> $buildLog
-            $buildExitCode = $LASTEXITCODE
-            Add-ExitCodeEvidence -Stage 'flutter_build_windows_release' -ExitCode $buildExitCode
-            if ($buildExitCode -ne 0) { throw "Flutter Release build failed (exit $buildExitCode); see $buildLog." }
-        }
-        finally {
-            foreach ($environmentName in $cmakeEnvironment.Keys) {
-                [Environment]::SetEnvironmentVariable($environmentName, $previousCMakeEnvironment[$environmentName], 'Process')
-            }
-        }
+        & $FlutterExecutable @flutterBuildArgs *> $buildLog
+        $buildExitCode = $LASTEXITCODE
+        Add-ExitCodeEvidence -Stage 'flutter_build_windows_release' -ExitCode $buildExitCode
+        if ($buildExitCode -ne 0) { throw "Flutter Release build failed (exit $buildExitCode); see $buildLog." }
     }
     finally { Pop-Location }
 
@@ -495,7 +472,10 @@ try {
         -CMakeCachePath $cmakeCacheFiles[0].FullName `
         -CompilerInfoPath $compilerInfoFiles[0].FullName `
         -FreshBuildRoot $cmakeBuildRoot `
-        -Toolchain $stableToolchain
+        -Toolchain $stableToolchain -RequireReleaseBuildEvidence
+    if ((Get-FileHash -LiteralPath $cmakeToolchainFile -Algorithm SHA256).Hash -cne $configuration.ToolchainFileSHA256) {
+        throw 'The pinned CMake toolchain file changed during the Windows Release build.'
+    }
     $msvcVersion = [Version]$buildCMakeProvenance.CompilerVersion
     $minimumRuntimeForBuild = New-Object Version(14, $msvcVersion.Minor, $msvcVersion.Build, $msvcVersion.Revision)
     if ([Version]$vcRedistVersion -lt $minimumRuntimeForBuild) {
@@ -518,6 +498,10 @@ try {
         ('AVELRI_UPDATE_KEY_ID=' + $updateKeyId)
         ('AVELRI_UPDATE_PUBLIC_KEY_BASE64=' + $updatePublicKeyBase64)
         ('BuildScriptSHA256=' + (Get-FileHash -LiteralPath $MyInvocation.MyCommand.Path -Algorithm SHA256).Hash)
+        ('TermsRevision=' + $distributionLegal.Revision)
+        ('TermsSHA256=' + $distributionLegal.SHA256)
+        ('LegalApprovalSHA256=' + $distributionLegal.ApprovalSHA256)
+        ('ThirdPartyNoticesInventorySHA256=' + $distributionLegal.NoticesInventorySHA256)
         ('InstallerScriptSHA256=' + (Get-FileHash -LiteralPath $productionIss -Algorithm SHA256).Hash)
         ('VCRedistHelperSHA256=' + (Get-FileHash -LiteralPath $vcRedistHelper -Algorithm SHA256).Hash)
         ('VCRedistVersion=' + $vcRedistVersion)
@@ -533,6 +517,10 @@ try {
         ('CMakeCompilerPath=' + $buildCMakeProvenance.Compiler)
         ('CMakeCompilerInfoSHA256=' + (Get-FileHash -LiteralPath $compilerInfoFiles[0].FullName -Algorithm SHA256).Hash)
         ('CMakeCacheSHA256=' + (Get-FileHash -LiteralPath $cmakeCacheFiles[0].FullName -Algorithm SHA256).Hash)
+        ('CMakeToolchainFileSHA256=' + $configuration.ToolchainFileSHA256)
+        ('CMakeToolsetPropsSHA256=' + (Get-FileHash -LiteralPath $buildCMakeProvenance.ToolsetPropsPath -Algorithm SHA256).Hash)
+        ('CMakeAppProjectSHA256=' + $buildCMakeProvenance.AppProjectSHA256)
+        ('MSVCReleaseBuildStateSHA256=' + (Get-FileHash -LiteralPath $buildCMakeProvenance.ReleaseBuildStatePath -Algorithm SHA256).Hash)
         ('ProductionToolchainModuleSHA256=' + (Get-FileHash -LiteralPath (Join-Path $PSScriptRoot 'ProductionToolchain.psm1') -Algorithm SHA256).Hash)
         ('MSVCCompilerVersion=' + $msvcVersion)
         ('MSVCToolsetVersion=' + $expectedMsvcToolsetVersion)
@@ -565,6 +553,11 @@ try {
         ('/DAccessAgentPackageSha256="' + $accessAgentPackageHash + '"') `
         ('/DAccessAgentProvisionerScriptPath="' + $accessAgentProvisioner + '"') `
         ('/DAccessAgentPairingScriptPath="' + $accessAgentPairingAction + '"') `
+        ('/DAvelriTermsFile="' + $distributionLegal.TermsPath + '"') `
+        ('/DAvelriTermsRevision="' + $distributionLegal.Revision + '"') `
+        ('/DAvelriTermsSha256="' + $distributionLegal.SHA256 + '"') `
+        ('/DAvelriThirdPartyNoticesDir="' + $distributionLegal.NoticesDirectory + '"') `
+        '/DAvelriTermsApproved=1' `
         '/DMicrosoftRedistributionRightsConfirmed=1' `
         $productionIss *> $compilerLog
     $compilerExitCode = $LASTEXITCODE

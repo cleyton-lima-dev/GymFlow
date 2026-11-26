@@ -1,5 +1,6 @@
 ; Production Windows installer for the Flutter Desktop Release folder.
 ; Build only from the exact reviewed Git commit using Build-ProductionInstaller.ps1.
+#include "ProductionLegalInputs.iss"
 
 #ifndef AppSource
   #error AppSource must point to the clean Flutter Windows Release directory.
@@ -83,6 +84,7 @@ SolidCompression=yes
 WizardStyle=modern
 CloseApplications=yes
 RestartApplications=no
+LicenseFile={#AvelriTermsFile}
 
 [Languages]
 Name: "brazilianportuguese"; MessagesFile: "compiler:Languages\BrazilianPortuguese.isl"
@@ -98,10 +100,17 @@ Source: "{#AccessAgentProvisionerScriptPath}"; DestName: "Provision-AccessAgentF
 Source: "{#AccessAgentPairingScriptPath}"; DestDir: "{app}"; DestName: "Pair-AccessAgent.ps1"; Flags: ignoreversion
 Source: "{#AppSource}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs; Excludes: "*.pdb,*.ilk,*.obj,*.exp,*.lib,*.map"
 Source: "{#BuildMetadata}"; DestDir: "{app}"; DestName: "Avelri-Build-Info.txt"; Flags: ignoreversion
+Source: "{#AvelriTermsFile}"; DestDir: "{app}\legal"; DestName: "AVELRI-LICENSE.pt-BR.txt"; Flags: ignoreversion
+Source: "{#AvelriThirdPartyNoticesDir}\THIRD-PARTY-NOTICES.txt"; DestDir: "{app}\legal"; Flags: ignoreversion
+Source: "{#AvelriThirdPartyNoticesDir}\COMPONENT-LICENSES.txt"; DestDir: "{app}\legal"; Flags: ignoreversion
+Source: "{#AvelriThirdPartyNoticesDir}\FLUTTER-ENGINE-LICENSE.txt"; DestDir: "{app}\legal"; Flags: ignoreversion
+Source: "{#AvelriThirdPartyNoticesDir}\inventory.json"; DestDir: "{app}\legal"; Flags: ignoreversion
 
 [Icons]
 Name: "{autoprograms}\Avelri Gestão"; Filename: "{app}\{#AppExecutable}"
 Name: "{autodesktop}\Avelri Gestão"; Filename: "{app}\{#AppExecutable}"; Tasks: desktopicon
+Name: "{autoprograms}\Termos do Avelri Gestão"; Filename: "{app}\legal\AVELRI-LICENSE.pt-BR.txt"
+Name: "{autoprograms}\Avisos de terceiros do Avelri Gestão"; Filename: "{app}\legal\THIRD-PARTY-NOTICES.txt"
 Name: "{autoprograms}\Parear Avelri AccessAgent"; Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoExit -NoProfile -ExecutionPolicy Bypass -File ""{app}\Pair-AccessAgent.ps1"" -ApiBaseUrl ""https://gymflow-api-prod.fly.dev"""; WorkingDir: "{app}"; IconFilename: "{app}\{#AppExecutable}"
 
 ; No [Run] or [UninstallDelete]: setup never launches the app and uninstall
@@ -111,6 +120,33 @@ Name: "{autoprograms}\Parear Avelri AccessAgent"; Filename: "{sys}\WindowsPowerS
 const
   VCRuntimeKey = 'SOFTWARE\Microsoft\VisualStudio\14.0\VC\Runtimes\x64';
   AccessAgentServiceKey = 'SYSTEM\CurrentControlSet\Services\AvelriAccessAgent';
+
+#include "LicenseAcceptance.iss"
+
+function InitializeSetup: Boolean;
+begin
+  Result := AvelriLegalInitializeSetup;
+end;
+
+procedure InitializeWizard;
+begin
+  AvelriLegalInitializeWizard;
+end;
+
+function ShouldSkipPage(PageID: Integer): Boolean;
+begin
+  Result := AvelriLegalShouldSkipPage(PageID);
+end;
+
+function NextButtonClick(CurPageID: Integer): Boolean;
+begin
+  Result := AvelriLegalNextButtonClick(CurPageID);
+end;
+
+procedure CurStepChanged(CurStep: TSetupStep);
+begin
+  if CurStep = ssDone then AvelriLegalRecordSuccessfulInstall;
+end;
 
 function IsAccessAgentServiceRegistered: Boolean;
 begin
@@ -143,7 +179,8 @@ var
   AgentArchivePath, AgentProvisionerPath: String;
   ExitCode: Integer;
 begin
-  Result := '';
+  Result := AvelriLegalPrepareToInstall;
+  if Result <> '' then Exit;
   if HasRequiredVCRuntime then
     Result := ''
   else

@@ -193,6 +193,111 @@ function Get-AvelriPinnedCMakeEnvironment {
     }
 }
 
+function New-AvelriCMakeToolchainFile {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)][object]$Toolchain,
+        [Parameter(Mandatory = $true)][string]$Path
+    )
+
+    # Flutter passes -G explicitly, so CMake's generator environment defaults
+    # alone do not select the instance/toolset. Initialize them before detection.
+    $instance = (Get-AvelriFullPath $Toolchain.VisualStudioRoot).Replace('\', '/')
+    if ($instance -match '[";$\r\n]') { throw 'Unsafe Visual Studio path for the CMake toolchain file.' }
+    $text = @(
+        '# Generated build input; never changes a previously configured tree.'
+        ('set(CMAKE_GENERATOR_INSTANCE "' + $instance + '" CACHE INTERNAL "Approved Stable instance")')
+        ('set(CMAKE_GENERATOR_TOOLSET "' + $script:AvelriExpectedGeneratorToolset + '" CACHE INTERNAL "Approved MSVC toolset")')
+    ) -join "`n"
+    # CreateNew prevents accidentally overwriting evidence from an earlier run.
+    $stream = [IO.File]::Open($Path, [IO.FileMode]::CreateNew, [IO.FileAccess]::Write, [IO.FileShare]::None)
+    try {
+        $bytes = [Text.UTF8Encoding]::new($false).GetBytes($text + "`n")
+        $stream.Write($bytes, 0, $bytes.Length)
+    }
+    finally { $stream.Dispose() }
+    return Get-AvelriFullPath $Path
+}
+
+function Invoke-AvelriWindowsReleaseConfiguration {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)][object]$Toolchain,
+        [Parameter(Mandatory = $true)][string]$DesktopRoot,
+        [Parameter(Mandatory = $true)][string]$ToolchainFilePath,
+        [Parameter(Mandatory = $true)][string]$FlutterExecutable,
+        [Parameter(Mandatory = $true)][string[]]$FlutterBuildArguments,
+        [Parameter(Mandatory = $true)][string]$ConfigureLogPath,
+        [Parameter(Mandatory = $true)][string]$ExitCodePath
+    )
+
+    $buildRoot = Join-Path $DesktopRoot 'build\windows'
+    if (Test-Path -LiteralPath $buildRoot) {
+        throw 'The isolated CMake build tree already exists; refusing to reuse a cache.'
+    }
+    if ($FlutterBuildArguments.Count -lt 4 -or
+        $FlutterBuildArguments[0] -cne 'build' -or $FlutterBuildArguments[1] -cne 'windows' -or
+        $FlutterBuildArguments -cnotcontains '--release' -or
+        $FlutterBuildArguments -cnotcontains '--no-pub' -or
+        $FlutterBuildArguments -ccontains '--config-only') {
+        throw 'The configuration stage requires the Windows Release build arguments without config-only.'
+    }
+    $toolchainFile = New-AvelriCMakeToolchainFile -Toolchain $Toolchain -Path $ToolchainFilePath
+    $environment = Get-AvelriPinnedCMakeEnvironment -Toolchain $Toolchain
+    $environment['CMAKE_TOOLCHAIN_FILE'] = $toolchainFile
+    $previous = @{}
+    foreach ($name in $environment.Keys) {
+        $previous[$name] = [Environment]::GetEnvironmentVariable($name, 'Process')
+    }
+    try {
+        foreach ($name in $environment.Keys) {
+            [Environment]::SetEnvironmentVariable($name, [string]$environment[$name], 'Process')
+        }
+        Push-Location $DesktopRoot
+        try {
+            $configureArguments = @($FlutterBuildArguments) + '--config-only'
+            & $FlutterExecutable @configureArguments *> $ConfigureLogPath
+            $configureExitCode = $LASTEXITCODE
+        }
+        finally { Pop-Location }
+        [IO.File]::AppendAllText($ExitCodePath, ('flutter_windows_configure_release=' + $configureExitCode + "`r`n"), [Text.UTF8Encoding]::new($false))
+        if ($configureExitCode -ne 0) {
+            throw ('Flutter Windows Release CMake configuration failed (exit ' + $configureExitCode + '); see ' + $ConfigureLogPath)
+        }
+    }
+    finally {
+        foreach ($name in $environment.Keys) {
+            if ($null -eq $previous[$name]) {
+                [Environment]::SetEnvironmentVariable($name, [NullString]::Value, 'Process')
+            }
+            else {
+                [Environment]::SetEnvironmentVariable($name, [string]$previous[$name], 'Process')
+            }
+        }
+    }
+
+    $caches = @(Get-ChildItem -LiteralPath $buildRoot -Filter CMakeCache.txt -File -Recurse)
+    $infos = @(Get-ChildItem -LiteralPath $buildRoot -Filter CMakeCXXCompiler.cmake -File -Recurse)
+    if ($caches.Count -ne 1 -or $infos.Count -ne 1) {
+        throw 'CMake configuration did not produce exactly one cache and C++ compiler provenance file.'
+    }
+    $cache = [IO.File]::ReadAllText($caches[0].FullName)
+    $actualToolchainFile = Get-AvelriCMakeCacheValue -CacheText $cache -Name 'CMAKE_TOOLCHAIN_FILE'
+    if ([string]::IsNullOrWhiteSpace($actualToolchainFile) -or
+        -not (Test-AvelriPathEqual $actualToolchainFile $toolchainFile)) {
+        throw 'CMake did not use the newly generated pinned toolchain file.'
+    }
+    $provenance = Assert-AvelriCMakeProvenance -CMakeCachePath $caches[0].FullName `
+        -CompilerInfoPath $infos[0].FullName -FreshBuildRoot $buildRoot -Toolchain $Toolchain
+    return [pscustomobject]@{
+        CachePath = $caches[0].FullName
+        CompilerInfoPath = $infos[0].FullName
+        ToolchainFilePath = $toolchainFile
+        ToolchainFileSHA256 = (Get-FileHash -LiteralPath $toolchainFile -Algorithm SHA256).Hash
+        Provenance = $provenance
+    }
+}
+
 function Get-AvelriCMakeCacheValue {
     param(
         [Parameter(Mandatory = $true)][string]$CacheText,
@@ -211,7 +316,8 @@ function Assert-AvelriCMakeProvenance {
         [Parameter(Mandatory = $true)][string]$CMakeCachePath,
         [Parameter(Mandatory = $true)][string]$CompilerInfoPath,
         [Parameter(Mandatory = $true)][string]$FreshBuildRoot,
-        [Parameter(Mandatory = $true)][object]$Toolchain
+        [Parameter(Mandatory = $true)][object]$Toolchain,
+        [switch]$RequireReleaseBuildEvidence
     )
 
     foreach ($path in @($CMakeCachePath, $CompilerInfoPath)) {
@@ -231,8 +337,6 @@ function Assert-AvelriCMakeProvenance {
         CMAKE_GENERATOR_INSTANCE = [string]$Toolchain.VisualStudioRoot
         CMAKE_GENERATOR_TOOLSET = $script:AvelriExpectedGeneratorToolset
         CMAKE_GENERATOR_PLATFORM = 'x64'
-        CMAKE_VS_PLATFORM_TOOLSET = 'v145'
-        CMAKE_VS_PLATFORM_TOOLSET_VERSION = $script:AvelriExpectedToolsetVersion
     }
     foreach ($name in $expectedCacheValues.Keys) {
         $actual = Get-AvelriCMakeCacheValue -CacheText $cache -Name $name
@@ -256,13 +360,50 @@ function Assert-AvelriCMakeProvenance {
     }
 
     $actualCompilerPath = $pathMatch.Groups['value'].Value -replace '/', '\'
+    # CMAKE_VS_PLATFORM_TOOLSET_VERSION is a derived variable, not a cache
+    # contract; CMake can use the 14.50 alias. Resolve the actual MSBuild import.
+    $propsPath = Join-Path $Toolchain.VisualStudioRoot 'VC\Auxiliary\Build\14.50\Microsoft.VCToolsVersion.14.50.props'
+    [xml]$props = [IO.File]::ReadAllText($propsPath)
+    $versions = @($props.SelectNodes('//*[local-name()="VCToolsVersion"]'))
+    if ($versions.Count -ne 1) { throw 'Stable MSVC props does not resolve exactly one toolset version.' }
+    $resolvedToolset = $versions[0].InnerText.Trim()
     Assert-AvelriCompilerIdentity `
         -ExpectedCompilerPath $Toolchain.CompilerPath `
         -ActualCompilerPath $actualCompilerPath `
         -ExpectedCompilerVersion $script:AvelriExpectedCompilerVersion `
         -ActualCompilerVersion $versionMatch.Groups['value'].Value `
         -ExpectedToolsetVersion $script:AvelriExpectedToolsetVersion `
-        -ActualToolsetVersion ([string]$expectedCacheValues['CMAKE_VS_PLATFORM_TOOLSET_VERSION'])
+        -ActualToolsetVersion $resolvedToolset
+
+    $appProject = Join-Path (Split-Path -Parent $CMakeCachePath) 'runner\avelri_gestao.vcxproj'
+    if (-not (Test-Path -LiteralPath $appProject -PathType Leaf)) {
+        throw 'The generated application project is missing from the isolated build tree.'
+    }
+    [xml]$project = [IO.File]::ReadAllText($appProject)
+    $imports = @($project.SelectNodes('//*[local-name()="Import"]') | Where-Object {
+        $_.GetAttribute('Project') -like '*Microsoft.VCToolsVersion.*.props'
+    })
+    if ($imports.Count -ne 1 -or
+        -not (Test-AvelriPathEqual $imports[0].GetAttribute('Project') $propsPath)) {
+        throw 'The generated application does not import the pinned Stable MSVC props.'
+    }
+    $platformToolsets = @($project.SelectNodes('//*[local-name()="PlatformToolset"]'))
+    if ($platformToolsets.Count -eq 0 -or @($platformToolsets | Where-Object { $_.InnerText -cne 'v145' }).Count -gt 0) {
+        throw 'The generated application uses an unexpected platform toolset.'
+    }
+
+    $buildStatePath = $null
+    if ($RequireReleaseBuildEvidence) {
+        $buildStatePath = Join-Path (Split-Path -Parent $CMakeCachePath) 'runner\avelri_gestao.dir\Release\avelri_gestao.tlog\avelri_gestao.lastbuildstate'
+        if (-not (Test-Path -LiteralPath $buildStatePath -PathType Leaf)) { throw 'The application Release compiler build record is missing.' }
+        $buildState = [IO.File]::ReadAllText($buildStatePath)
+        if ($buildState -cnotmatch '(?m)^PlatformToolSet=v145:' -or
+            $buildState -cnotmatch 'VCToolsVersion=14\.50\.35717:' -or
+            $buildState -cnotmatch 'VCServicingVersionCompilers=14\.50\.35740:' -or
+            $buildState -cnotmatch '(?m)^Release\|x64\|') {
+            throw 'The application was not compiled as Release x64 with the pinned MSVC version.'
+        }
+    }
 
     return [pscustomobject]@{
         Generator = $script:AvelriExpectedGenerator
@@ -271,6 +412,11 @@ function Assert-AvelriCMakeProvenance {
         Compiler = (Get-AvelriFullPath $actualCompilerPath)
         CompilerVersion = $versionMatch.Groups['value'].Value
         BuildRoot = (Get-AvelriFullPath $FreshBuildRoot)
+        ResolvedToolsetVersion = $resolvedToolset
+        ToolsetPropsPath = $propsPath
+        AppProjectPath = $appProject
+        AppProjectSHA256 = (Get-FileHash -LiteralPath $appProject -Algorithm SHA256).Hash
+        ReleaseBuildStatePath = $buildStatePath
     }
 }
 
@@ -281,5 +427,7 @@ Export-ModuleMember -Function @(
     'Assert-AvelriCompilerIdentity',
     'Get-AvelriStableToolchain',
     'Get-AvelriPinnedCMakeEnvironment',
+    'New-AvelriCMakeToolchainFile',
+    'Invoke-AvelriWindowsReleaseConfiguration',
     'Assert-AvelriCMakeProvenance'
 )
