@@ -1,0 +1,502 @@
+{
+  "candidate_source_commit": "77ae94a280554ae4006c2c611a54df322e5a94d0",
+  "reference_archive_sha256": "4204750233E9AC59997D6BDD7134873AFC41CC20A791A8883C89B29D2A2176A2",
+  "scope": "internal technical candidate; no commercial redistribution attestation",
+  "package_count": 42,
+  "packages": [
+    {
+      "package": "Microsoft.NETCore.App.Runtime.win-x64",
+      "version": "10.0.15",
+      "status": "LICENSE_TEXT_INCLUDED",
+      "license": "MIT",
+      "copyright": "© Microsoft Corporation. All rights reserved.",
+      "repository": "https://github.com/dotnet/dotnet",
+      "source_revision": "8e0f8ed2312954727f8919d7d1c2f78b483b4ee7",
+      "license_text": "dotnet-runtime-LICENSE-MIT.txt",
+      "notice_text": "dotnet-THIRD-PARTY-NOTICES.txt"
+    },
+    {
+      "package": "Enums.NET",
+      "version": "5.0.0",
+      "status": "LICENSE_TEXT_INCLUDED",
+      "license": "MIT",
+      "copyright": "Copyright © Tyler Brinkley 2016",
+      "repository": "https://github.com/TylerBrinkley/Enums.NET",
+      "source_revision": "1ce2a8836bc40c16fc99cb6ca4f4ceceba713724",
+      "license_text": "Enums.NET-LICENSE-MIT.md",
+      "notice_text": null
+    },
+    {
+      "package": "Microsoft.Data.Sqlite",
+      "version": "10.0.12",
+      "status": "LICENSE_TEXT_INCLUDED",
+      "license": "MIT",
+      "copyright": "© Microsoft Corporation. All rights reserved.",
+      "repository": "https://github.com/dotnet/dotnet",
+      "source_revision": "95017c711e6afc1085133d440e42b4bd78155701",
+      "license_text": "dotnet-libraries-LICENSE-MIT.txt",
+      "notice_text": null
+    },
+    {
+      "package": "Microsoft.Data.Sqlite.Core",
+      "version": "10.0.12",
+      "status": "LICENSE_TEXT_INCLUDED",
+      "license": "MIT",
+      "copyright": "© Microsoft Corporation. All rights reserved.",
+      "repository": "https://github.com/dotnet/dotnet",
+      "source_revision": "95017c711e6afc1085133d440e42b4bd78155701",
+      "license_text": "dotnet-libraries-LICENSE-MIT.txt",
+      "notice_text": null
+    },
+    {
+      "package": "Microsoft.Extensions.Configuration",
+      "version": "10.0.12",
+      "status": "LICENSE_TEXT_INCLUDED",
+      "license": "MIT",
+      "copyright": "© Microsoft Corporation. All rights reserved.",
+      "repository": "https://github.com/dotnet/dotnet",
+      "source_revision": "95017c711e6afc1085133d440e42b4bd78155701",
+      "license_text": "dotnet-libraries-LICENSE-MIT.txt",
+      "notice_text": "dotnet-THIRD-PARTY-NOTICES.txt"
+    },
+    {
+      "package": "Microsoft.Extensions.Configuration.Abstractions",
+      "version": "10.0.12",
+      "status": "LICENSE_TEXT_INCLUDED",
+      "license": "MIT",
+      "copyright": "© Microsoft Corporation. All rights reserved.",
+      "repository": "https://github.com/dotnet/dotnet",
+      "source_revision": "95017c711e6afc1085133d440e42b4bd78155701",
+      "license_text": "dotnet-libraries-LICENSE-MIT.txt",
+      "notice_text": "dotnet-THIRD-PARTY-NOTICES.txt"
+    },
+    {
+      "package": "Microsoft.Extensions.Configuration.Binder",
+      "version": "10.0.12",
+      "status": "LICENSE_TEXT_INCLUDED",
+      "license": "MIT",
+      "copyright": "© Microsoft Corporation. All rights reserved.",
+      "repository": "https://github.com/dotnet/dotnet",
+      "source_revision": "95017c711e6afc1085133d440e42b4bd78155701",
+      "license_text": "dotnet-libraries-LICENSE-MIT.txt",
+      "notice_text": "dotnet-THIRD-PARTY-NOTICES.txt"
+    },
+    {
+      "package": "Microsoft.Extensions.Configuration.CommandLine",
+      "version": "10.0.12",
+      "status": "LICENSE_TEXT_INCLUDED",
+      "license": "MIT",
+      "copyright": "© Microsoft Corporation. All rights reserved.",
+      "repository": "https://github.com/dotnet/dotnet",
+      "source_revision": "95017c711e6afc1085133d440e42b4bd78155701",
+      "license_text": "dotnet-libraries-LICENSE-MIT.txt",
+      "notice_text": "dotnet-THIRD-PARTY-NOTICES.txt"
+    },
+    {
+      "package": "Microsoft.Extensions.Configuration.EnvironmentVariables",
+      "version": "10.0.12",
+      "status": "LICENSE_TEXT_INCLUDED",
+      "license": "MIT",
+      "copyright": "© Microsoft Corporation. All rights reserved.",
+      "repository": "https://github.com/dotnet/dotnet",
+      "source_revision": "95017c711e6afc1085133d440e42b4bd78155701",
+      "license_text": "dotnet-libraries-LICENSE-MIT.txt",
+      "notice_text": "dotnet-THIRD-PARTY-NOTICES.txt"
+    },
+    {
+      "package": "Microsoft.Extensions.Configuration.FileExtensions",
+      "version": "10.0.12",
+      "status": "LICENSE_TEXT_INCLUDED",
+      "license": "MIT",
+      "copyright": "© Microsoft Corporation. All rights reserved.",
+      "repository": "https://github.com/dotnet/dotnet",
+      "source_revision": "95017c711e6afc1085133d440e42b4bd78155701",
+      "license_text": "dotnet-libraries-LICENSE-MIT.txt",
+      "notice_text": "dotnet-THIRD-PARTY-NOTICES.txt"
+    },
+    {
+      "package": "Microsoft.Extensions.Configuration.Json",
+      "version": "10.0.12",
+      "status": "LICENSE_TEXT_INCLUDED",
+      "license": "MIT",
+      "copyright": "© Microsoft Corporation. All rights reserved.",
+      "repository": "https://github.com/dotnet/dotnet",
+      "source_revision": "95017c711e6afc1085133d440e42b4bd78155701",
+      "license_text": "dotnet-libraries-LICENSE-MIT.txt",
+      "notice_text": "dotnet-THIRD-PARTY-NOTICES.txt"
+    },
+    {
+      "package": "Microsoft.Extensions.Configuration.UserSecrets",
+      "version": "10.0.12",
+      "status": "LICENSE_TEXT_INCLUDED",
+      "license": "MIT",
+      "copyright": "© Microsoft Corporation. All rights reserved.",
+      "repository": "https://github.com/dotnet/dotnet",
+      "source_revision": "95017c711e6afc1085133d440e42b4bd78155701",
+      "license_text": "dotnet-libraries-LICENSE-MIT.txt",
+      "notice_text": "dotnet-THIRD-PARTY-NOTICES.txt"
+    },
+    {
+      "package": "Microsoft.Extensions.DependencyInjection",
+      "version": "10.0.12",
+      "status": "LICENSE_TEXT_INCLUDED",
+      "license": "MIT",
+      "copyright": "© Microsoft Corporation. All rights reserved.",
+      "repository": "https://github.com/dotnet/dotnet",
+      "source_revision": "95017c711e6afc1085133d440e42b4bd78155701",
+      "license_text": "dotnet-libraries-LICENSE-MIT.txt",
+      "notice_text": "dotnet-THIRD-PARTY-NOTICES.txt"
+    },
+    {
+      "package": "Microsoft.Extensions.DependencyInjection.Abstractions",
+      "version": "10.0.12",
+      "status": "LICENSE_TEXT_INCLUDED",
+      "license": "MIT",
+      "copyright": "© Microsoft Corporation. All rights reserved.",
+      "repository": "https://github.com/dotnet/dotnet",
+      "source_revision": "95017c711e6afc1085133d440e42b4bd78155701",
+      "license_text": "dotnet-libraries-LICENSE-MIT.txt",
+      "notice_text": "dotnet-THIRD-PARTY-NOTICES.txt"
+    },
+    {
+      "package": "Microsoft.Extensions.Diagnostics",
+      "version": "10.0.12",
+      "status": "LICENSE_TEXT_INCLUDED",
+      "license": "MIT",
+      "copyright": "© Microsoft Corporation. All rights reserved.",
+      "repository": "https://github.com/dotnet/dotnet",
+      "source_revision": "95017c711e6afc1085133d440e42b4bd78155701",
+      "license_text": "dotnet-libraries-LICENSE-MIT.txt",
+      "notice_text": "dotnet-THIRD-PARTY-NOTICES.txt"
+    },
+    {
+      "package": "Microsoft.Extensions.Diagnostics.Abstractions",
+      "version": "10.0.12",
+      "status": "LICENSE_TEXT_INCLUDED",
+      "license": "MIT",
+      "copyright": "© Microsoft Corporation. All rights reserved.",
+      "repository": "https://github.com/dotnet/dotnet",
+      "source_revision": "95017c711e6afc1085133d440e42b4bd78155701",
+      "license_text": "dotnet-libraries-LICENSE-MIT.txt",
+      "notice_text": "dotnet-THIRD-PARTY-NOTICES.txt"
+    },
+    {
+      "package": "Microsoft.Extensions.FileProviders.Abstractions",
+      "version": "10.0.12",
+      "status": "LICENSE_TEXT_INCLUDED",
+      "license": "MIT",
+      "copyright": "© Microsoft Corporation. All rights reserved.",
+      "repository": "https://github.com/dotnet/dotnet",
+      "source_revision": "95017c711e6afc1085133d440e42b4bd78155701",
+      "license_text": "dotnet-libraries-LICENSE-MIT.txt",
+      "notice_text": "dotnet-THIRD-PARTY-NOTICES.txt"
+    },
+    {
+      "package": "Microsoft.Extensions.FileProviders.Physical",
+      "version": "10.0.12",
+      "status": "LICENSE_TEXT_INCLUDED",
+      "license": "MIT",
+      "copyright": "© Microsoft Corporation. All rights reserved.",
+      "repository": "https://github.com/dotnet/dotnet",
+      "source_revision": "95017c711e6afc1085133d440e42b4bd78155701",
+      "license_text": "dotnet-libraries-LICENSE-MIT.txt",
+      "notice_text": "dotnet-THIRD-PARTY-NOTICES.txt"
+    },
+    {
+      "package": "Microsoft.Extensions.FileSystemGlobbing",
+      "version": "10.0.12",
+      "status": "LICENSE_TEXT_INCLUDED",
+      "license": "MIT",
+      "copyright": "© Microsoft Corporation. All rights reserved.",
+      "repository": "https://github.com/dotnet/dotnet",
+      "source_revision": "95017c711e6afc1085133d440e42b4bd78155701",
+      "license_text": "dotnet-libraries-LICENSE-MIT.txt",
+      "notice_text": "dotnet-THIRD-PARTY-NOTICES.txt"
+    },
+    {
+      "package": "Microsoft.Extensions.Hosting",
+      "version": "10.0.12",
+      "status": "LICENSE_TEXT_INCLUDED",
+      "license": "MIT",
+      "copyright": "© Microsoft Corporation. All rights reserved.",
+      "repository": "https://github.com/dotnet/dotnet",
+      "source_revision": "95017c711e6afc1085133d440e42b4bd78155701",
+      "license_text": "dotnet-libraries-LICENSE-MIT.txt",
+      "notice_text": "dotnet-THIRD-PARTY-NOTICES.txt"
+    },
+    {
+      "package": "Microsoft.Extensions.Hosting.Abstractions",
+      "version": "10.0.12",
+      "status": "LICENSE_TEXT_INCLUDED",
+      "license": "MIT",
+      "copyright": "© Microsoft Corporation. All rights reserved.",
+      "repository": "https://github.com/dotnet/dotnet",
+      "source_revision": "95017c711e6afc1085133d440e42b4bd78155701",
+      "license_text": "dotnet-libraries-LICENSE-MIT.txt",
+      "notice_text": "dotnet-THIRD-PARTY-NOTICES.txt"
+    },
+    {
+      "package": "Microsoft.Extensions.Hosting.WindowsServices",
+      "version": "10.0.12",
+      "status": "LICENSE_TEXT_INCLUDED",
+      "license": "MIT",
+      "copyright": "© Microsoft Corporation. All rights reserved.",
+      "repository": "https://github.com/dotnet/dotnet",
+      "source_revision": "95017c711e6afc1085133d440e42b4bd78155701",
+      "license_text": "dotnet-libraries-LICENSE-MIT.txt",
+      "notice_text": "dotnet-THIRD-PARTY-NOTICES.txt"
+    },
+    {
+      "package": "Microsoft.Extensions.Http",
+      "version": "10.0.12",
+      "status": "LICENSE_TEXT_INCLUDED",
+      "license": "MIT",
+      "copyright": "© Microsoft Corporation. All rights reserved.",
+      "repository": "https://github.com/dotnet/dotnet",
+      "source_revision": "95017c711e6afc1085133d440e42b4bd78155701",
+      "license_text": "dotnet-libraries-LICENSE-MIT.txt",
+      "notice_text": "dotnet-THIRD-PARTY-NOTICES.txt"
+    },
+    {
+      "package": "Microsoft.Extensions.Logging",
+      "version": "10.0.12",
+      "status": "LICENSE_TEXT_INCLUDED",
+      "license": "MIT",
+      "copyright": "© Microsoft Corporation. All rights reserved.",
+      "repository": "https://github.com/dotnet/dotnet",
+      "source_revision": "95017c711e6afc1085133d440e42b4bd78155701",
+      "license_text": "dotnet-libraries-LICENSE-MIT.txt",
+      "notice_text": "dotnet-THIRD-PARTY-NOTICES.txt"
+    },
+    {
+      "package": "Microsoft.Extensions.Logging.Abstractions",
+      "version": "10.0.12",
+      "status": "LICENSE_TEXT_INCLUDED",
+      "license": "MIT",
+      "copyright": "© Microsoft Corporation. All rights reserved.",
+      "repository": "https://github.com/dotnet/dotnet",
+      "source_revision": "95017c711e6afc1085133d440e42b4bd78155701",
+      "license_text": "dotnet-libraries-LICENSE-MIT.txt",
+      "notice_text": "dotnet-THIRD-PARTY-NOTICES.txt"
+    },
+    {
+      "package": "Microsoft.Extensions.Logging.Configuration",
+      "version": "10.0.12",
+      "status": "LICENSE_TEXT_INCLUDED",
+      "license": "MIT",
+      "copyright": "© Microsoft Corporation. All rights reserved.",
+      "repository": "https://github.com/dotnet/dotnet",
+      "source_revision": "95017c711e6afc1085133d440e42b4bd78155701",
+      "license_text": "dotnet-libraries-LICENSE-MIT.txt",
+      "notice_text": "dotnet-THIRD-PARTY-NOTICES.txt"
+    },
+    {
+      "package": "Microsoft.Extensions.Logging.Console",
+      "version": "10.0.12",
+      "status": "LICENSE_TEXT_INCLUDED",
+      "license": "MIT",
+      "copyright": "© Microsoft Corporation. All rights reserved.",
+      "repository": "https://github.com/dotnet/dotnet",
+      "source_revision": "95017c711e6afc1085133d440e42b4bd78155701",
+      "license_text": "dotnet-libraries-LICENSE-MIT.txt",
+      "notice_text": "dotnet-THIRD-PARTY-NOTICES.txt"
+    },
+    {
+      "package": "Microsoft.Extensions.Logging.Debug",
+      "version": "10.0.12",
+      "status": "LICENSE_TEXT_INCLUDED",
+      "license": "MIT",
+      "copyright": "© Microsoft Corporation. All rights reserved.",
+      "repository": "https://github.com/dotnet/dotnet",
+      "source_revision": "95017c711e6afc1085133d440e42b4bd78155701",
+      "license_text": "dotnet-libraries-LICENSE-MIT.txt",
+      "notice_text": "dotnet-THIRD-PARTY-NOTICES.txt"
+    },
+    {
+      "package": "Microsoft.Extensions.Logging.EventLog",
+      "version": "10.0.12",
+      "status": "LICENSE_TEXT_INCLUDED",
+      "license": "MIT",
+      "copyright": "© Microsoft Corporation. All rights reserved.",
+      "repository": "https://github.com/dotnet/dotnet",
+      "source_revision": "95017c711e6afc1085133d440e42b4bd78155701",
+      "license_text": "dotnet-libraries-LICENSE-MIT.txt",
+      "notice_text": "dotnet-THIRD-PARTY-NOTICES.txt"
+    },
+    {
+      "package": "Microsoft.Extensions.Logging.EventSource",
+      "version": "10.0.12",
+      "status": "LICENSE_TEXT_INCLUDED",
+      "license": "MIT",
+      "copyright": "© Microsoft Corporation. All rights reserved.",
+      "repository": "https://github.com/dotnet/dotnet",
+      "source_revision": "95017c711e6afc1085133d440e42b4bd78155701",
+      "license_text": "dotnet-libraries-LICENSE-MIT.txt",
+      "notice_text": "dotnet-THIRD-PARTY-NOTICES.txt"
+    },
+    {
+      "package": "Microsoft.Extensions.Options",
+      "version": "10.0.12",
+      "status": "LICENSE_TEXT_INCLUDED",
+      "license": "MIT",
+      "copyright": "© Microsoft Corporation. All rights reserved.",
+      "repository": "https://github.com/dotnet/dotnet",
+      "source_revision": "95017c711e6afc1085133d440e42b4bd78155701",
+      "license_text": "dotnet-libraries-LICENSE-MIT.txt",
+      "notice_text": "dotnet-THIRD-PARTY-NOTICES.txt"
+    },
+    {
+      "package": "Microsoft.Extensions.Options.ConfigurationExtensions",
+      "version": "10.0.12",
+      "status": "LICENSE_TEXT_INCLUDED",
+      "license": "MIT",
+      "copyright": "© Microsoft Corporation. All rights reserved.",
+      "repository": "https://github.com/dotnet/dotnet",
+      "source_revision": "95017c711e6afc1085133d440e42b4bd78155701",
+      "license_text": "dotnet-libraries-LICENSE-MIT.txt",
+      "notice_text": "dotnet-THIRD-PARTY-NOTICES.txt"
+    },
+    {
+      "package": "Microsoft.Extensions.Primitives",
+      "version": "10.0.12",
+      "status": "LICENSE_TEXT_INCLUDED",
+      "license": "MIT",
+      "copyright": "© Microsoft Corporation. All rights reserved.",
+      "repository": "https://github.com/dotnet/dotnet",
+      "source_revision": "95017c711e6afc1085133d440e42b4bd78155701",
+      "license_text": "dotnet-libraries-LICENSE-MIT.txt",
+      "notice_text": "dotnet-THIRD-PARTY-NOTICES.txt"
+    },
+    {
+      "package": "SQLitePCLRaw.bundle_e_sqlite3",
+      "version": "2.1.12",
+      "status": "LICENSE_TEXT_INCLUDED",
+      "license": "Apache-2.0",
+      "copyright": "Copyright 2014-2024 SourceGear, LLC",
+      "repository": "https://github.com/ericsink/SQLitePCL.raw",
+      "source_revision": "",
+      "license_text": "SQLitePCLRaw-LICENSE-Apache-2.0.txt",
+      "notice_text": "SQLitePCLRaw-NOTICE.txt"
+    },
+    {
+      "package": "SQLitePCLRaw.core",
+      "version": "2.1.12",
+      "status": "LICENSE_TEXT_INCLUDED",
+      "license": "Apache-2.0",
+      "copyright": "Copyright 2014-2024 SourceGear, LLC",
+      "repository": "https://github.com/ericsink/SQLitePCL.raw",
+      "source_revision": "",
+      "license_text": "SQLitePCLRaw-LICENSE-Apache-2.0.txt",
+      "notice_text": "SQLitePCLRaw-NOTICE.txt"
+    },
+    {
+      "package": "SQLitePCLRaw.lib.e_sqlite3",
+      "version": "2.1.12",
+      "status": "LICENSE_TEXT_INCLUDED",
+      "license": "Apache-2.0",
+      "copyright": "Copyright 2014-2024 SourceGear, LLC",
+      "repository": "https://github.com/ericsink/SQLitePCL.raw",
+      "source_revision": "",
+      "license_text": "SQLitePCLRaw-LICENSE-Apache-2.0.txt",
+      "notice_text": "SQLitePCLRaw-NOTICE.txt"
+    },
+    {
+      "package": "SQLitePCLRaw.provider.e_sqlite3",
+      "version": "2.1.12",
+      "status": "LICENSE_TEXT_INCLUDED",
+      "license": "Apache-2.0",
+      "copyright": "Copyright 2014-2024 SourceGear, LLC",
+      "repository": "https://github.com/ericsink/SQLitePCL.raw",
+      "source_revision": "",
+      "license_text": "SQLitePCLRaw-LICENSE-Apache-2.0.txt",
+      "notice_text": "SQLitePCLRaw-NOTICE.txt"
+    },
+    {
+      "package": "System.Diagnostics.EventLog",
+      "version": "10.0.12",
+      "status": "LICENSE_TEXT_INCLUDED",
+      "license": "MIT",
+      "copyright": "© Microsoft Corporation. All rights reserved.",
+      "repository": "https://github.com/dotnet/dotnet",
+      "source_revision": "95017c711e6afc1085133d440e42b4bd78155701",
+      "license_text": "dotnet-libraries-LICENSE-MIT.txt",
+      "notice_text": "dotnet-THIRD-PARTY-NOTICES.txt"
+    },
+    {
+      "package": "System.Security.Cryptography.ProtectedData",
+      "version": "10.0.12",
+      "status": "LICENSE_TEXT_INCLUDED",
+      "license": "MIT",
+      "copyright": "© Microsoft Corporation. All rights reserved.",
+      "repository": "https://github.com/dotnet/dotnet",
+      "source_revision": "95017c711e6afc1085133d440e42b4bd78155701",
+      "license_text": "dotnet-libraries-LICENSE-MIT.txt",
+      "notice_text": "dotnet-THIRD-PARTY-NOTICES.txt"
+    },
+    {
+      "package": "System.ServiceProcess.ServiceController",
+      "version": "10.0.12",
+      "status": "LICENSE_TEXT_INCLUDED",
+      "license": "MIT",
+      "copyright": "© Microsoft Corporation. All rights reserved.",
+      "repository": "https://github.com/dotnet/dotnet",
+      "source_revision": "95017c711e6afc1085133d440e42b4bd78155701",
+      "license_text": "dotnet-libraries-LICENSE-MIT.txt",
+      "notice_text": "dotnet-THIRD-PARTY-NOTICES.txt"
+    },
+    {
+      "package": "Toletus.LiteNet2",
+      "version": "8.30.1",
+      "status": "PERMISSIONS_NOT_DEMONSTRATED",
+      "license": null,
+      "copyright": null,
+      "repository": "https://github.com/Toletus/LiteNet2Board-Package.git",
+      "source_revision": "1e33b608e9287b4a0999ba18f50a34d63f1faf3d",
+      "license_text": null,
+      "notice_text": null
+    },
+    {
+      "package": "Toletus.SM25",
+      "version": "8.6.1",
+      "status": "PERMISSIONS_NOT_DEMONSTRATED",
+      "license": null,
+      "copyright": null,
+      "repository": "https://github.com/Toletus/SM25BiometricReader-Package.git",
+      "source_revision": "eec1057957e27e35cfb78fe4c71f5c1bf665db8b",
+      "license_text": null,
+      "notice_text": null
+    }
+  ],
+  "original_texts": [
+    {
+      "file": "Enums.NET-LICENSE-MIT.md",
+      "sha256": "CA33AA7EBF14DC1A97B4D73070552C04981CD3E0F07F7F8FEBA4CAEF2B1DCD1B",
+      "source": "https://raw.githubusercontent.com/TylerBrinkley/Enums.NET/1ce2a8836bc40c16fc99cb6ca4f4ceceba713724/LICENSE.md"
+    },
+    {
+      "file": "SQLitePCLRaw-LICENSE-Apache-2.0.txt",
+      "sha256": "CFC7749B96F63BD31C3C42B5C471BF756814053E847C10F3EB003417BC523D30",
+      "source": "https://raw.githubusercontent.com/ericsink/SQLitePCL.raw/v2.1.12/LICENSE.TXT"
+    },
+    {
+      "file": "SQLitePCLRaw-NOTICE.txt",
+      "sha256": "485B276B3D2BFAA26DF348E1E5C84DF3648981E09B88531A6A53006F0705C24B",
+      "source": "https://raw.githubusercontent.com/ericsink/SQLitePCL.raw/v2.1.12/NOTICE.TXT"
+    },
+    {
+      "file": "dotnet-libraries-LICENSE-MIT.txt",
+      "sha256": "AE48DF11A335DC1A615F4F938B69CBA73BCF4485C4F97AF49B38EFB0F216353B",
+      "source": "https://raw.githubusercontent.com/dotnet/dotnet/95017c711e6afc1085133d440e42b4bd78155701/LICENSE.TXT"
+    },
+    {
+      "file": "dotnet-runtime-LICENSE-MIT.txt",
+      "sha256": "D7A68596AB69B06F51CA278A6545148E4269A9381C26D597C13DF5D88E08CF5B",
+      "source": "Original de Microsoft.NETCore.App.Runtime.win-x64 10.0.15 (NuGet)"
+    },
+    {
+      "file": "dotnet-THIRD-PARTY-NOTICES.txt",
+      "sha256": "6D15E10A101C6BFFF2AB4429ED061BF76C456FC4B23AD6B03E0D0F8377148A21",
+      "source": "Original de Microsoft.NETCore.App.Runtime.win-x64 10.0.15 (NuGet)"
+    }
+  ]
+}

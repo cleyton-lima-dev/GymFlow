@@ -1,0 +1,19 @@
+# Reconstrução controlada do AccessAgent
+
+Procedimento da Issue #69 para execução após autorização específica. O objetivo é ligar um novo ZIP a um snapshot e ao processo que o produziu. O histórico já recuperado comprova a publicação anterior, mas não identifica o executável do SDK usado naquele processo.
+
+## Entradas da futura execução
+
+- Selecionar um SHA completo aprovado que contenha o código e os scripts do AccessAgent. Exportar esse snapshot para uma árvore nova fora do worktree de desenvolvimento e registrar o SHA e o hash do snapshot. Aprovar separadamente qualquer alteração necessária para registrar a compilação.
+- Selecionar um SDK .NET GA compatível com `net10.0-windows`. Registrar a versão exata, o caminho absoluto de `dotnet.exe`, o SHA-256 do instalador do SDK ou da distribuição usada e a saída de `dotnet --info` executada na árvore isolada. Fixar a seleção com `global.json` na árvore de compilação, com `rollForward: disable` e `allowPrerelease: false`. Conferir `dotnet --version` usando o mesmo executável e diretório do build.
+- Preparar um feed local ao qual somente os pacotes aprovados tenham sido copiados. Registrar ID, versão, origem autorizada e hash do `.nupkg` para as dependências transitivas e o runtime. Usar uma configuração NuGet exclusiva com as fontes herdadas limpas. Se ainda não houver lockfile, resolver o grafo nessa árvore, conferir as versões e os hashes contra o inventário revisado e congelar esse lockfile antes do restore definitivo. Solicitar confirmação se o grafo divergir ou se faltar um pacote. As permissões de uso e redistribuição de Toletus continuam pendentes.
+
+## Captura da compilação
+
+1. Criar um diretório de evidências e escolher uma pasta de saída ainda inexistente, diferente de todos os diretórios históricos. O script de publicação atual remove uma saída existente. Abortar se o destino existir ou resolver fora da raiz isolada.
+2. Restaurar `GymFlow.AccessAgent.csproj` para `win-x64` com o executável fixado, o arquivo de configuração do feed local e `--locked-mode`. Registrar comando, código de saída e log. Guardar o lockfile, `project.assets.json` e a relação de pacotes efetivamente resolvidos.
+3. Publicar `Release`, `win-x64`, autocontido, com `--no-restore`, sem arquivo único e sem símbolos, conforme `Publish-AccessAgent.ps1`. Capturar binlog MSBuild e log textual em diretório separado. Manter os parâmetros equivalentes a `PublishSingleFile=false`, `DebugType=None` e `DebugSymbols=false`. Na execução futura, revisar a forma de expor o executável do SDK, o modo sem restore e o binlog no script existente antes de usá-lo como entrada.
+4. Reutilizar o empacotamento existente para copiar os scripts operacionais, excluir `appsettings.Development.json` e calcular `SHA256SUMS.txt` sobre todos os arquivos finais. Conferir a configuração operacional sem credenciais, com confirmação física desativada, e comparar `.deps.json`, `.runtimeconfig.json` e os binários nativos com o inventário da compilação. Associar os avisos e as licenças comprovadas à composição efetiva antes de qualquer distribuição.
+5. Gerar um ZIP candidato de nome exclusivo. Ler o ZIP para verificar a lista de entradas e o manifesto de hashes. Registrar o SHA-256 do ZIP e o inventário de licenças. Guardar snapshot, seleção do SDK, grafo/lockfile, logs e hashes juntos. Revisar os binlogs antes de compartilhar, pois podem conter caminhos e propriedades locais.
+
+O ZIP original `Avelri-AccessAgent-2026.11.24-win-x64.zip`, SHA-256 `4204750233E9AC59997D6BDD7134873AFC41CC20A791A8883C89B29D2A2176A2`, deve permanecer intacto. O novo ZIP é um candidato separado e não corrige retroativamente a proveniência do anterior. A adoção do novo SHA no empacotador exige revisão posterior. A reconstrução não concede licenças Toletus, não aprova a redistribuição Microsoft e não autoriza publicação comercial.
