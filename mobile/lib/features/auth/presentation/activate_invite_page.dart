@@ -26,6 +26,7 @@ class _ActivateInvitePageState extends State<ActivateInvitePage> {
   final _formKey = GlobalKey<FormState>();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
+  late final String _token;
   bool _isValidating = true;
   bool _isSubmitting = false;
   bool _isValid = false;
@@ -37,6 +38,7 @@ class _ActivateInvitePageState extends State<ActivateInvitePage> {
   @override
   void initState() {
     super.initState();
+    _token = captureActivationToken(widget.token);
     clearActivationTokenFromAddressBar();
     unawaited(_validateInvite());
   }
@@ -55,7 +57,7 @@ class _ActivateInvitePageState extends State<ActivateInvitePage> {
         _errorMessage = null;
       });
     }
-    if (widget.token.trim().isEmpty) {
+    if (_token.trim().isEmpty) {
       setState(() {
         _isValidating = false;
         _errorMessage = _unavailableMessage;
@@ -64,7 +66,7 @@ class _ActivateInvitePageState extends State<ActivateInvitePage> {
     }
 
     try {
-      await widget.authService.validateStudentAppInvite(widget.token);
+      await widget.authService.validateStudentAppInvite(_token);
       if (!mounted) return;
       setState(() {
         _isValidating = false;
@@ -107,7 +109,7 @@ class _ActivateInvitePageState extends State<ActivateInvitePage> {
     });
     try {
       await widget.authService.activateStudentApp(
-        widget.token,
+        _token,
         _passwordController.text,
       );
       if (!mounted) return;
