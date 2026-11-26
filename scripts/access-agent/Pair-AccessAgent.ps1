@@ -8,10 +8,8 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $serviceName = 'AvelriAccessAgent'
-$installDirectory = Join-Path $env:ProgramFiles 'Avelri\AccessAgent'
 $dataDirectory = Join-Path $env:ProgramData 'Avelri\AccessAgent'
 $credentialsPath = Join-Path $dataDirectory 'credentials.dat'
-$executablePath = Join-Path $installDirectory 'GymFlow.AccessAgent.exe'
 
 function Get-NormalizedApiBaseUrl([string]$Value) {
     $uri = $null
@@ -60,13 +58,23 @@ if ($service.Status -ne 'Stopped') {
 if (Test-Path -LiteralPath $credentialsPath) {
     throw 'Já existe credencial do AccessAgent. Nenhuma credencial ou dado foi substituído.'
 }
-if (-not (Test-Path -LiteralPath $executablePath -PathType Leaf)) {
-    throw 'O executável AccessAgent instalado não foi encontrado.'
-}
-
 $serviceInfo = Get-CimInstance -ClassName Win32_Service -Filter "Name='$serviceName'"
 if ($null -eq $serviceInfo -or $serviceInfo.StartMode -ne 'Disabled') {
     throw 'O serviço não está no estado inicial desativado; o pareamento foi bloqueado.'
+}
+
+# Accept the registered image from either supported install directory.
+$executablePath = $null
+foreach ($root in @($env:ProgramW6432, [Environment]::GetEnvironmentVariable('ProgramFiles(x86)'))) {
+    if ([string]::IsNullOrWhiteSpace($root)) { continue }
+    $candidate = Join-Path $root 'Avelri\AccessAgent\GymFlow.AccessAgent.exe'
+    if ($serviceInfo.PathName -ieq $candidate -or $serviceInfo.PathName -ieq ('"' + $candidate + '"')) {
+        $executablePath = $candidate
+        break
+    }
+}
+if ($null -eq $executablePath -or -not (Test-Path -LiteralPath $executablePath -PathType Leaf)) {
+    throw 'O executável registrado do AccessAgent não foi encontrado em um diretório de instalação suportado.'
 }
 
 Write-Host 'Pareamento do Avelri AccessAgent'

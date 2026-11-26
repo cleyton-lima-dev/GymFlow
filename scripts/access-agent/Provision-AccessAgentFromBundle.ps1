@@ -13,7 +13,11 @@ $ErrorActionPreference = 'Stop'
 
 $serviceName = 'AvelriAccessAgent'
 $displayName = 'Avelri Access Agent'
-$installParent = Join-Path $env:ProgramFiles 'Avelri'
+$nativeProgramFiles = $env:ProgramW6432
+if ([string]::IsNullOrWhiteSpace($nativeProgramFiles)) {
+    throw 'O diretório nativo Program Files de 64 bits não está disponível.'
+}
+$installParent = Join-Path $nativeProgramFiles 'Avelri'
 $installDirectory = Join-Path $installParent 'AccessAgent'
 $dataDirectory = Join-Path $env:ProgramData 'Avelri\AccessAgent'
 
@@ -134,6 +138,10 @@ Assert-NoReparsePoint -Path $dataDirectory
 
 if (Test-Path -LiteralPath $installDirectory) {
     throw 'Já existe uma pasta de instalação do AccessAgent sem o serviço esperado; os arquivos foram preservados e a instalação foi bloqueada.'
+}
+$legacyProgramFiles = [Environment]::GetEnvironmentVariable('ProgramFiles(x86)')
+if ($legacyProgramFiles -and (Test-Path -LiteralPath (Join-Path $legacyProgramFiles 'Avelri\AccessAgent'))) {
+    throw 'Já existe uma pasta legada do AccessAgent em Program Files (x86) sem o serviço esperado; os arquivos foram preservados e a instalação foi bloqueada.'
 }
 if (Test-Path -LiteralPath $dataDirectory) {
     $existingState = @(Get-ChildItem -LiteralPath $dataDirectory -Force -Recurse)
