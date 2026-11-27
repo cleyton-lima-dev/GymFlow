@@ -1,9 +1,13 @@
+---
+import { desktopRelease } from '../data/release';
+const downloadEnabled = desktopRelease.status === 'available';
+---
 <footer class="site-footer">
   <div class="container footer-inner">
     <div>
       <span class="footer-brand"><img src="/brand/avelri-icon-192.png" width="30" height="30" alt="" loading="lazy" decoding="async" />Avelri</span>
       <p>Avelri Gestão Desktop</p>
     </div>
-    <span class="footer-meta">Portal oficial de downloads · Em preparação</span>
+    <span class="footer-meta">Portal oficial de downloads · {downloadEnabled ? 'Download disponível' : 'Liberação pendente'}</span>
   </div>
 </footer>
