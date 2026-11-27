@@ -263,7 +263,7 @@ begin
     AgentProvisionerPath + '" -PackageArchivePath "' + AgentArchivePath +
     '" -ExpectedPackageSha256 "{#AccessAgentPackageSha256}"';
   if not ShellExec('runas', ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'),
-      Parameters, '', SW_SHOWNORMAL, ewWaitUntilTerminated, ExitCode) then
+      Parameters, '', SW_HIDE, ewWaitUntilTerminated, ExitCode) then
   begin
     Result := 'A autorização administrativa para provisionar o AccessAgent foi cancelada. O Desktop não foi instalado.';
     Exit;
